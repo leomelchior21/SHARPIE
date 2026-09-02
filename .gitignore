@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vite/
+TestResults/
+**/bin/
+**/obj/
+.env
+.DS_Store
+*.user
+*.suo
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

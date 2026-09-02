@@ -1,0 +1,21 @@
+services:
+  runner-image:
+    image: sharpie-csharp-runner:latest
+    build:
+      context: ./server/Sharpie.Runner
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
+  sharpie:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      SHARPIE_RUNNER_IMAGE: sharpie-csharp-runner:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      runner-image:
+        condition: service_completed_successfully
+    restart: unless-stopped
