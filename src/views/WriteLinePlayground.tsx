@@ -43,8 +43,9 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
   const [completed, setCompleted] = useState<number[]>(session.getCompleted());
+  const [visited, setVisited] = useState<number[]>(() => [...new Set([...session.getVisited(), ...session.getCompleted()])]);
   const [runPulse, setRunPulse] = useState(0);
-  const [completionFeedback, setCompletionFeedback] = useState<{ challengeId: number; nextId: number | null } | null>(null);
+  const [completionFeedback, setCompletionFeedback] = useState<{ challengeId: number } | null>(null);
   const [hintIndex, setHintIndex] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -53,6 +54,15 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const abortRef = useRef<AbortController | null>(null);
 
   const extensions = useMemo(() => [StreamLanguage.define(csharp)], []);
+
+  useEffect(() => {
+    setVisited((current) => {
+      if (current.includes(challengeId)) return current;
+      const next = [...current, challengeId].sort((a, b) => a - b);
+      session.setVisited(next);
+      return next;
+    });
+  }, [challengeId]);
 
   useEffect(() => {
     let active = true;
@@ -118,10 +128,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           session.setCompleted(next);
           return next;
         });
-        setCompletionFeedback({
-          challengeId: challenge.id,
-          nextId: challenge.id < challenges.length ? challenge.id + 1 : null,
-        });
+        setCompletionFeedback({ challengeId: challenge.id });
       }
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
@@ -144,10 +151,10 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   }, [challenge, code, isRunning, name, runtimeStatus]);
 
   useEffect(() => {
-    if (!completionFeedback?.nextId || completionFeedback.challengeId !== challengeId) return;
-    const timer = window.setTimeout(() => selectChallenge(completionFeedback.nextId!), 1450);
+    if (!completionFeedback || completionFeedback.challengeId !== challengeId) return;
+    const timer = window.setTimeout(() => setCompletionFeedback(null), 1450);
     return () => window.clearTimeout(timer);
-  }, [challengeId, completionFeedback, selectChallenge]);
+  }, [challengeId, completionFeedback]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
@@ -211,6 +218,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
 
   const revealHint = () => setHintIndex((current) => Math.min(current + 1, challenge.hints.length - 1));
   const isChallengeComplete = completed.includes(challenge.id);
+  const isChallengeVisited = visited.includes(challenge.id);
   const writeLineCount = (code.match(/Console\s*\.\s*Write(?:Line)?/g) ?? []).length;
   const successNote = result?.success
     ? hasRun
@@ -347,7 +355,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         {completionFeedback?.challengeId === challenge.id && (
           <div className="challenge-success-feedback" role="status">
             <span><Check size={16} /> ACTIVITY COMPLETE</span>
-            <strong>{completionFeedback.nextId ? "NEXT SIGNAL INCOMING" : "ALL 8 SIGNALS COMPLETE"}</strong>
+            <strong>CHOOSE YOUR NEXT TASK</strong>
           </div>
         )}
         <div className="challenge-copy">
@@ -381,12 +389,12 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             {challenges.map((item) => (
               <button
                 key={item.id}
-                className={`${item.id === challengeId ? "current" : ""} ${completed.includes(item.id) ? "complete" : ""}`}
+                className={`${item.id === challengeId ? "current" : ""} ${visited.includes(item.id) ? "visited" : ""} ${completed.includes(item.id) ? "complete" : ""}`}
                 onClick={() => selectChallenge(item.id)}
-                aria-label={`Challenge ${item.id}${completed.includes(item.id) ? ", complete" : ""}`}
+                aria-label={`Challenge ${item.id}${visited.includes(item.id) ? ", opened" : ""}${completed.includes(item.id) ? ", complete" : ""}`}
                 aria-current={item.id === challengeId ? "step" : undefined}
               >
-                {completed.includes(item.id) ? <Check size={11} /> : item.id}
+                {visited.includes(item.id) ? <Check size={15} /> : item.id}
               </button>
             ))}
           </div>
@@ -396,8 +404,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             disabled={challengeId === 8}
             aria-label="Next challenge"
           ><ChevronRight size={18} /></button>
-          <span className={`done-label ${isChallengeComplete ? "is-done" : ""}`}>
-            <Check size={13} /> {isChallengeComplete ? "DONE" : "OPEN"}
+          <span className={`done-label ${isChallengeVisited ? "is-visited" : ""} ${isChallengeComplete ? "is-done" : ""}`}>
+            <Check size={14} /> {isChallengeComplete ? "DONE" : isChallengeVisited ? "OPENED" : "OPEN"}
           </span>
         </nav>
       </section>

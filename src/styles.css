@@ -859,7 +859,20 @@ button.module-card { cursor: pointer; }
   overflow: auto;
   font-family: var(--mono);
   line-height: 1.75;
+  scrollbar-color: rgba(91, 112, 159, 0.72) #05091a;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
+
+.editor-wrap .cm-scroller::-webkit-scrollbar { width: 7px; height: 7px; }
+.editor-wrap .cm-scroller::-webkit-scrollbar-track { background: #05091a; }
+.editor-wrap .cm-scroller::-webkit-scrollbar-thumb {
+  border: 2px solid #05091a;
+  border-radius: 999px;
+  background: rgba(91, 112, 159, 0.72);
+}
+.editor-wrap .cm-scroller::-webkit-scrollbar-thumb:hover { background: rgba(112, 145, 211, 0.88); }
+.editor-wrap .cm-scroller::-webkit-scrollbar-corner { background: #05091a; }
 
 .editor-wrap .cm-content { padding: 16px 0; caret-color: #8fc9ff; }
 .editor-wrap .cm-line { padding: 0 16px 0 10px; }
@@ -1270,33 +1283,45 @@ button.module-card { cursor: pointer; }
 .challenge-dots {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
 }
 
 .challenge-nav button {
   display: grid;
-  width: 27px;
-  height: 27px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
   border: 1px solid rgba(107, 128, 184, 0.13);
-  border-radius: 5px;
+  border-radius: 7px;
   padding: 0;
   place-items: center;
   cursor: pointer;
   color: #56627e;
   background: rgba(8, 13, 29, 0.62);
   font-family: var(--mono);
-  font-size: 0.48rem;
-  transition: border 160ms, color 160ms, background 160ms;
+  font-size: 0.56rem;
+  transition: border 160ms, color 160ms, background 160ms, box-shadow 160ms, transform 160ms;
 }
 
-.challenge-nav button:hover:not(:disabled) { color: #c7d6f8; border-color: rgba(95, 139, 241, 0.34); }
+.challenge-nav button:hover:not(:disabled) { color: #dfffee; border-color: rgba(79, 225, 162, 0.5); transform: translateY(-1px); }
 .challenge-nav button.current {
   color: white;
   border-color: rgba(101, 153, 255, 0.68);
   background: #285ad2;
   box-shadow: 0 0 14px rgba(48, 102, 230, 0.28);
 }
-.challenge-nav button.complete:not(.current) { color: #78a6ff; border-color: rgba(86, 133, 234, 0.27); }
+.challenge-nav button.visited {
+  color: #d9fff0;
+  border-color: rgba(80, 230, 165, 0.5);
+  background: rgba(24, 117, 82, 0.72);
+  box-shadow: inset 0 0 15px rgba(71, 238, 171, 0.08), 0 0 15px rgba(38, 200, 137, 0.12);
+}
+.challenge-nav button.current.visited {
+  border-color: rgba(112, 255, 196, 0.86);
+  background: #168357;
+  box-shadow: inset 0 0 16px rgba(108, 255, 199, 0.11), 0 0 19px rgba(42, 224, 151, 0.24);
+}
+.challenge-nav button.complete { box-shadow: inset 0 0 16px rgba(108, 255, 199, 0.15), 0 0 20px rgba(42, 224, 151, 0.3); }
 .challenge-nav button:disabled { cursor: default; opacity: 0.22; }
 .challenge-nav .nav-arrow { border-color: transparent; background: transparent; }
 
@@ -1313,7 +1338,8 @@ button.module-card { cursor: pointer; }
   letter-spacing: 0.06em;
 }
 
-.done-label.is-done { color: #79a8ff; }
+.done-label.is-visited { color: #62c99e; }
+.done-label.is-done { color: #82f4c1; }
 
 /* Dialogs */
 
@@ -1473,10 +1499,10 @@ button.module-card { cursor: pointer; }
   .module-grid { grid-template-columns: minmax(280px, 0.78fr) minmax(470px, 1.22fr); }
   .active-module { padding-left: 27px; padding-right: 27px; }
   .module-enter { left: 27px; }
-  .challenge-bar { grid-template-columns: minmax(270px, 1fr) minmax(210px, 0.8fr) auto; gap: 17px; }
+  .challenge-bar { padding-left: 12px; padding-right: 12px; grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.7fr) auto; gap: 10px; }
   .hint-zone { padding-left: 14px; }
-  .challenge-nav, .challenge-dots { gap: 3px; }
-  .challenge-nav button { width: 24px; height: 25px; }
+  .challenge-nav, .challenge-dots { gap: 5px; }
+  .challenge-nav button { width: 34px; height: 34px; flex-basis: 34px; }
 }
 
 @media (max-height: 780px) {
@@ -1504,7 +1530,8 @@ button.module-card { cursor: pointer; }
   .future-module .module-content small { display: none; }
   .challenge-number { display: none; }
   .challenge-copy { min-width: 190px; }
-  .challenge-bar { grid-template-columns: minmax(190px, 0.75fr) minmax(210px, 0.8fr) auto; }
+  .challenge-bar { grid-template-columns: minmax(190px, 1fr) auto; }
+  .hint-zone { display: none; }
   .playground-identity > div:last-child { display: none; }
   .header-divider { display: none; }
 }
@@ -1512,16 +1539,20 @@ button.module-card { cursor: pointer; }
 @media (max-width: 700px) {
   .hub { overflow: auto; }
   .module-grid { grid-template-columns: 1fr; grid-template-rows: 330px 420px; }
-  .playground { grid-template-rows: 54px minmax(0, 1fr) 116px; }
+  .playground { grid-template-rows: 54px minmax(0, 1fr) 150px; }
   .workspace { grid-template-columns: 1fr 1fr; }
   .editor-footer span:nth-child(2),
   .editor-footer span:nth-child(3),
   .student-chip,
   .icon-text-button span { display: none; }
   .icon-text-button { width: 34px; padding: 0; justify-content: center; }
-  .challenge-bar { grid-template-columns: 1fr auto; }
+  .challenge-bar { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
   .hint-zone { display: none; }
-  .challenge-dots button:nth-child(n+6) { display: none; }
+  .challenge-nav { width: 100%; justify-content: center; }
+  .challenge-dots { min-width: 0; max-width: 100%; overflow-x: auto; padding: 2px; scrollbar-width: none; }
+  .challenge-dots::-webkit-scrollbar { display: none; }
+  .challenge-nav .nav-arrow,
+  .challenge-nav .done-label { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

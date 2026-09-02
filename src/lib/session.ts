@@ -2,6 +2,7 @@ const keys = {
   name: "sharpie:name",
   challenge: "sharpie:v3:challenge",
   completed: "sharpie:v3:completed",
+  visited: "sharpie:v3:visited",
   codes: "sharpie:v3:codes",
 } as const;
 
@@ -28,6 +29,17 @@ export const session = {
   },
   setCompleted: (ids: number[]) =>
     available() && sessionStorage.setItem(keys.completed, JSON.stringify(ids)),
+  getVisited: (): number[] => {
+    if (!available()) return [];
+    try {
+      const value = JSON.parse(sessionStorage.getItem(keys.visited) ?? "[]");
+      return Array.isArray(value) ? value.filter((id) => Number.isInteger(id)) : [];
+    } catch {
+      return [];
+    }
+  },
+  setVisited: (ids: number[]) =>
+    available() && sessionStorage.setItem(keys.visited, JSON.stringify(ids)),
   getCodes: (): Record<string, string> => {
     if (!available()) return {};
     try {
