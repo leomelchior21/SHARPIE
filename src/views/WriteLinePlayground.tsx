@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { challenges, getRunNote } from "../data/challenges";
-import { executeCSharp } from "../lib/runner";
+import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
 import type { RunResult } from "../types";
 
@@ -41,6 +41,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [result, setResult] = useState<RunResult | null>(challengeId === 1 ? defaultResult : null);
   const [hasRun, setHasRun] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
   const [completed, setCompleted] = useState<number[]>(session.getCompleted());
   const [hintIndex, setHintIndex] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
@@ -51,8 +52,31 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
 
   const extensions = useMemo(() => [StreamLanguage.define(csharp)], []);
 
+  useEffect(() => {
+    let active = true;
+    prepareCSharp()
+      .then(() => {
+        if (active) setRuntimeStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRuntimeStatus("error");
+        setResult({
+          success: false,
+          output: "",
+          durationMs: 0,
+          error: {
+            title: "C# COULD NOT LOAD",
+            message: "The browser could not start its C# engine yet.",
+            compiler: error instanceof Error ? error.message : "Refresh the page and try again.",
+          },
+        });
+      });
+    return () => { active = false; };
+  }, []);
+
   const run = useCallback(async () => {
-    if (isRunning || !code.trim()) return;
+    if (isRunning || runtimeStatus === "loading" || !code.trim()) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -60,6 +84,11 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     setResult(null);
 
     try {
+      if (runtimeStatus !== "ready") {
+        setRuntimeStatus("loading");
+        await prepareCSharp();
+        setRuntimeStatus("ready");
+      }
       const nextResult = await executeCSharp(code, controller.signal);
       setResult(nextResult);
       setHasRun(true);
@@ -74,14 +103,15 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
       }
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
+        setRuntimeStatus("error");
         setResult({
           success: false,
           output: "",
           durationMs: 0,
           error: {
-            title: "RUNNER OFFLINE",
-            message: error instanceof Error ? error.message : "C# could not start.",
-            compiler: "Your code is safe. The execution service could not be reached.",
+            title: "C# COULD NOT LOAD",
+            message: "The browser could not start its C# engine yet.",
+            compiler: error instanceof Error ? error.message : "Refresh the page and try again.",
           },
         });
         setHasRun(true);
@@ -89,7 +119,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     } finally {
       setIsRunning(false);
     }
-  }, [challenge, code, isRunning, name]);
+  }, [challenge, code, isRunning, name, runtimeStatus]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
@@ -240,20 +270,20 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </div>
           <footer className="editor-footer">
             <span>{code.split("\n").length} LINES</span>
-            <span>TOP-LEVEL C#</span>
+            <span>C# BASICS</span>
             <span>CTRL / ⌘ + ENTER TO RUN</span>
           </footer>
         </section>
 
-        <section className={`work-panel output-panel ${isRunning ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""}`} aria-live="polite">
+        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""}`} aria-live="polite">
           <header className="panel-header">
             <div>
               <span className="panel-index">02</span>
               <strong>OUTPUT</strong>
             </div>
             <div className="panel-actions output-actions">
-              <span className={`runtime-status ${result?.success && hasRun ? "status-live" : ""}`}>
-                <i /> {isRunning ? "RUNNING" : result?.success && hasRun ? "SIGNAL LIVE" : "READY"}
+              <span className={`runtime-status ${runtimeStatus === "ready" ? "status-live" : ""}`}>
+                <i /> {runtimeStatus === "loading" ? "LOADING C#" : isRunning ? "RUNNING" : result?.success && hasRun ? "SIGNAL LIVE" : runtimeStatus === "error" ? "RETRY" : "C# READY"}
               </span>
               <button onClick={copyOutput} disabled={!result?.output} aria-label="Copy output">
                 {copied ? <Check size={14} /> : <Clipboard size={14} />}
@@ -262,10 +292,10 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </header>
 
           <div className="console-surface">
-            {isRunning ? (
+            {isRunning || runtimeStatus === "loading" ? (
               <div className="running-state">
                 <span className="run-wave"><i /><i /><i /><i /></span>
-                <p>SENDING TO C#...</p>
+                <p>{isRunning ? "RUNNING C# BASICS..." : "STARTING C# BASICS..."}</p>
               </div>
             ) : result?.error ? (
               <div className="error-state">
@@ -291,8 +321,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             )}
           </div>
 
-          <button className="run-button" onClick={() => void run()} disabled={isRunning || !code.trim()}>
-            <span>{isRunning ? "RUNNING" : "RUN"}</span>
+          <button className="run-button" onClick={() => void run()} disabled={isRunning || runtimeStatus === "loading" || !code.trim()}>
+            <span>{isRunning ? "RUNNING" : runtimeStatus === "error" ? "RETRY C#" : "RUN"}</span>
             <Play size={19} fill="currentColor" />
           </button>
         </section>
