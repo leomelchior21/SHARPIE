@@ -74,16 +74,16 @@ export const challenges: Challenge[] = [
     id: 5,
     eyebrow: "STACK THE SIGNAL",
     title: "Initials banner",
-    prompt: "Build a banner at least 3 lines tall using your initials, letters, or numbers.",
-    starterCode: () => '// Stack your initials, letters, or numbers into a 3-line banner.\nConsole.WriteLine("?");',
+    prompt: "Build a banner exactly 5 lines tall using your initials, letters, or numbers.",
+    starterCode: () => '// Stack your initials, letters, or numbers into a 5-line banner.\nConsole.WriteLine("?");',
     hints: [
       "Think of every WriteLine as one row of the banner.",
-      "Add at least two more WriteLine statements.",
+      "You need five WriteLine statements—one for every row.",
       "Repeat characters to make the rows look bold from a distance.",
     ],
     isComplete: (output, _name, code) => {
       const banner = lines(output);
-      return countWriteLines(code) >= 3 && banner.length >= 3 && banner.every((line) => /[A-Za-z0-9]/.test(line));
+      return countWriteLines(code) === 5 && banner.length === 5 && banner.every((line) => /[A-Za-z0-9]/.test(line));
     },
   },
 ];

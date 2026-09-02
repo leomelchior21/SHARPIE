@@ -47,8 +47,15 @@ describe("WriteLine activities", () => {
     const frameCode = 'Console.WriteLine("###"); Console.WriteLine("# #"); Console.WriteLine("###");';
     expect(challenges[3].isComplete("###\n# #\n###\n", "Leo", frameCode)).toBe(true);
 
-    const bannerCode = 'Console.WriteLine("LL"); Console.WriteLine("L1"); Console.WriteLine("LL");';
-    expect(challenges[4].isComplete("LL\nL1\nLL\n", "Leo", bannerCode)).toBe(true);
+    const bannerCode = [
+      'Console.WriteLine("LL");',
+      'Console.WriteLine("L1");',
+      'Console.WriteLine("LL");',
+      'Console.WriteLine("L1");',
+      'Console.WriteLine("LL");',
+    ].join("\n");
+    expect(challenges[4].isComplete("LL\nL1\nLL\nL1\nLL\n", "Leo", bannerCode)).toBe(true);
+    expect(challenges[4].isComplete("LL\nL1\nLL\n", "Leo", bannerCode)).toBe(false);
   });
 
   it("recognizes a completed WriteLine activity in the run note", () => {
