@@ -43,6 +43,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
   const [completed, setCompleted] = useState<number[]>(session.getCompleted());
+  const [runPulse, setRunPulse] = useState(0);
+  const [completionFeedback, setCompletionFeedback] = useState<{ challengeId: number; nextId: number | null } | null>(null);
   const [hintIndex, setHintIndex] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -75,11 +77,27 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     return () => { active = false; };
   }, []);
 
+  const selectChallenge = useCallback((id: number) => {
+    if (id === challengeId) return;
+    session.setCode(challengeId, code);
+    session.setChallenge(id);
+    const next = challenges[id - 1];
+    const saved = session.getCodes()[id];
+    setChallengeId(id);
+    setCode(saved ?? next.starterCode(name));
+    setResult(null);
+    setHasRun(false);
+    setHintIndex(-1);
+    setCompletionFeedback(null);
+  }, [challengeId, code, name]);
+
   const run = useCallback(async () => {
     if (isRunning || runtimeStatus === "loading" || !code.trim()) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    setRunPulse((current) => current + 1);
+    setCompletionFeedback(null);
     setIsRunning(true);
     setResult(null);
 
@@ -93,12 +111,16 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
       setResult(nextResult);
       setHasRun(true);
 
-      if (nextResult.success && challenge.isComplete(nextResult.output, name)) {
+      if (nextResult.success && challenge.isComplete(nextResult.output, name, code)) {
         setCompleted((current) => {
           if (current.includes(challenge.id)) return current;
           const next = [...current, challenge.id].sort((a, b) => a - b);
           session.setCompleted(next);
           return next;
+        });
+        setCompletionFeedback({
+          challengeId: challenge.id,
+          nextId: challenge.id < challenges.length ? challenge.id + 1 : null,
         });
       }
     } catch (error) {
@@ -120,6 +142,12 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
       setIsRunning(false);
     }
   }, [challenge, code, isRunning, name, runtimeStatus]);
+
+  useEffect(() => {
+    if (!completionFeedback?.nextId || completionFeedback.challengeId !== challengeId) return;
+    const timer = window.setTimeout(() => selectChallenge(completionFeedback.nextId!), 1450);
+    return () => window.clearTimeout(timer);
+  }, [challengeId, completionFeedback, selectChallenge]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
@@ -163,19 +191,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     session.setCode(challengeId, value);
   };
 
-  const selectChallenge = (id: number) => {
-    if (id === challengeId) return;
-    session.setCode(challengeId, code);
-    session.setChallenge(id);
-    const next = challenges[id - 1];
-    const saved = session.getCodes()[id];
-    setChallengeId(id);
-    setCode(saved ?? next.starterCode(name));
-    setResult(null);
-    setHasRun(false);
-    setHintIndex(-1);
-  };
-
   const reset = () => {
     const starter = challenge.starterCode(name);
     if (code !== starter) {
@@ -196,10 +211,10 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
 
   const revealHint = () => setHintIndex((current) => Math.min(current + 1, challenge.hints.length - 1));
   const isChallengeComplete = completed.includes(challenge.id);
-  const writeLineCount = (code.match(/Console\.WriteLine/g) ?? []).length;
+  const writeLineCount = (code.match(/Console\s*\.\s*Write(?:Line)?/g) ?? []).length;
   const successNote = result?.success
     ? hasRun
-      ? getRunNote(result.output, writeLineCount, challenge.isComplete(result.output, name))
+      ? getRunNote(result.output, writeLineCount, challenge.isComplete(result.output, name, code))
       : "One line in. One line out."
     : "";
 
@@ -275,7 +290,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </footer>
         </section>
 
-        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""}`} aria-live="polite">
+        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""} ${runPulse ? `run-flash-${runPulse % 2 ? "a" : "b"}` : ""}`} aria-live="polite">
           <header className="panel-header">
             <div>
               <span className="panel-index">02</span>
@@ -328,7 +343,13 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         </section>
       </div>
 
-      <section className="challenge-bar" aria-labelledby="challenge-title">
+      <section className={`challenge-bar ${completionFeedback?.challengeId === challenge.id ? "challenge-complete-flash" : ""}`} aria-labelledby="challenge-title">
+        {completionFeedback?.challengeId === challenge.id && (
+          <div className="challenge-success-feedback" role="status">
+            <span><Check size={16} /> ACTIVITY COMPLETE</span>
+            <strong>{completionFeedback.nextId ? "NEXT SIGNAL INCOMING" : "ALL 8 SIGNALS COMPLETE"}</strong>
+          </div>
+        )}
         <div className="challenge-copy">
           <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/08</span></div>
           <div>
@@ -400,10 +421,10 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           <div className="modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="close-modal" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button>
             <span className="modal-kicker">QUICK HELP</span>
-            <h2 id="help-title">One line in. One line out.</h2>
-            <code><span>Console.WriteLine</span>(<b>"Hello!"</b>);</code>
+            <h2 id="help-title">C# basics, ready to run.</h2>
+            <code><span>int total</span> = <b>6 * 7</b>;</code>
             <div className="help-flow"><span>YOUR CODE</span><i>→</i><span>RUN</span><i>→</i><span>OUTPUT</span></div>
-            <p>Change what is inside the parentheses, press RUN, and watch the output. Errors are part of the experiment.</p>
+            <p>Use Write or WriteLine, create variables, calculate with operators, and combine text through concatenation or interpolation. Errors are part of the experiment.</p>
           </div>
         </div>
       )}

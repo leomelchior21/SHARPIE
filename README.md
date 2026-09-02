@@ -6,7 +6,7 @@ SHARPIE is a classroom-first C# basics playground: write a small statement, run 
 
 - A session-only name gate—no account or database.
 - A five-module cartridge hub, with only WriteLine Playground active.
-- Eight lightweight WriteLine challenges in one consistent workspace.
+- Eight progressive C# basics activities in one consistent workspace, with automatic completion feedback and progression.
 - A CodeMirror editor with C# highlighting, line numbers, diagnostics, and `Ctrl/Cmd + Enter`.
 - A designed output surface, progressive hints, reset confirmation, and session completion.
 - An instant browser-based C# basics runner with no server dependency.
@@ -24,11 +24,12 @@ Open [http://localhost:5173](http://localhost:5173). The entire application—in
 
 The first SHARPIE module intentionally supports the syntax it teaches:
 
-- `Console.WriteLine("text");`
-- strings, numbers, and booleans;
-- multiple WriteLine statements;
-- simple `string`, `int`, `double`, `bool`, and `var` variables;
-- simple `+` concatenation and addition;
+- `Console.Write(...)` and `Console.WriteLine(...)`;
+- `string`, `int`, `double`, `bool`, `char`, and `var` variables;
+- assignment, `++`, `--`, and compound assignment;
+- arithmetic, comparison, equality, and boolean operators;
+- string concatenation and `$"{value}"` interpolation;
+- parentheses and standard arithmetic precedence;
 - line and block comments.
 
 Execution happens in a browser Web Worker. The worker has no DOM access, the site policy blocks remote connections, output is capped at 16 KB, source is capped at 12 KB, and a stalled worker is terminated. Familiar compiler codes such as `CS1002`, `CS1010`, `CS1026`, and `CS0103` are retained for the concepts taught here.

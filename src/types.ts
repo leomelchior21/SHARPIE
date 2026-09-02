@@ -24,5 +24,5 @@ export type Challenge = {
   prompt: string;
   starterCode: (name: string) => string;
   hints: string[];
-  isComplete: (output: string, name: string) => boolean;
+  isComplete: (output: string, name: string, code: string) => boolean;
 };

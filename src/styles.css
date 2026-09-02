@@ -917,14 +917,30 @@ button.module-card { cursor: pointer; }
   box-shadow: 0 0 12px #3764e3;
 }
 
+.output-panel::after {
+  position: absolute;
+  z-index: 4;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 72% 58%, rgba(64, 255, 174, 0.34), transparent 42%),
+    linear-gradient(115deg, rgba(14, 87, 67, 0.18), rgba(32, 211, 139, 0.08));
+  box-shadow: inset 0 0 70px rgba(42, 235, 153, 0.12);
+}
+
+.output-panel.run-flash-a::after { animation: output-green-pulse-a 820ms ease-out both; }
+.output-panel.run-flash-b::after { animation: output-green-pulse-b 820ms ease-out both; }
+
 .panel-success {
-  border-color: rgba(76, 132, 255, 0.34);
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25), 0 0 45px rgba(46, 89, 220, 0.09);
+  border-color: rgba(73, 190, 145, 0.32);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.25), 0 0 45px rgba(39, 194, 132, 0.08);
 }
 
 .panel-running {
-  border-color: rgba(88, 154, 255, 0.62);
-  box-shadow: 0 0 46px rgba(35, 98, 237, 0.16);
+  border-color: rgba(77, 231, 166, 0.66);
+  box-shadow: 0 0 50px rgba(31, 208, 139, 0.18);
 }
 
 .output-actions { min-width: 0; }
@@ -1017,8 +1033,8 @@ button.module-card { cursor: pointer; }
   width: 3px;
   height: 20%;
   border-radius: 3px;
-  background: linear-gradient(#71d8ff, #4a5eff);
-  box-shadow: 0 0 8px #427aff;
+  background: linear-gradient(#8dffd1, #28c989);
+  box-shadow: 0 0 9px #35e5a0;
   animation: running-wave 700ms ease-in-out infinite alternate;
 }
 
@@ -1102,6 +1118,7 @@ button.module-card { cursor: pointer; }
 .run-button:disabled { cursor: default; opacity: 0.48; }
 
 .challenge-bar {
+  position: relative;
   display: grid;
   min-width: 0;
   padding: 18px clamp(18px, 2.2vw, 36px);
@@ -1114,6 +1131,38 @@ button.module-card { cursor: pointer; }
     rgba(4, 8, 20, 0.95);
   box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(18px);
+}
+
+.challenge-success-feedback {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  color: #d9fff0;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(43, 231, 154, 0.24), transparent 60%),
+    rgba(3, 22, 19, 0.95);
+  box-shadow: inset 0 1px rgba(111, 255, 198, 0.22), 0 -12px 45px rgba(25, 192, 126, 0.14);
+  animation: challenge-success-in 300ms ease-out both;
+}
+
+.challenge-success-feedback span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #77f6bd;
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+}
+
+.challenge-success-feedback strong {
+  font-size: clamp(0.92rem, 1.35vw, 1.2rem);
+  letter-spacing: 0.04em;
 }
 
 .challenge-copy {
@@ -1400,6 +1449,20 @@ button.module-card { cursor: pointer; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes signal { from { transform: scaleY(0.5); opacity: 0.5; } to { transform: scaleY(1); opacity: 1; } }
 @keyframes running-wave { from { height: 22%; } to { height: 100%; } }
+@keyframes output-green-pulse-a {
+  0% { opacity: 0; transform: scale(1.02); }
+  24% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+@keyframes output-green-pulse-b {
+  0% { opacity: 0; transform: scale(1.02); }
+  24% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+@keyframes challenge-success-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes module-light {
   from { transform: translate(-5%, 2%) rotate(-62deg); opacity: 0.3; }
   to { transform: translate(10%, -4%) rotate(-58deg); opacity: 0.55; }
