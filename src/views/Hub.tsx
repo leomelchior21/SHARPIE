@@ -39,6 +39,7 @@ export function Hub({ name, onOpen }: HubProps) {
 
       <div className="module-grid">
         <button className="module-card active-module" onClick={onOpen}>
+          <span className="module-callout" aria-hidden="true" />
           <span className="module-light" aria-hidden="true" />
           <span className="module-topline">
             <span>MODULE 01</span>

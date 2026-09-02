@@ -359,7 +359,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </div>
         )}
         <div className="challenge-copy">
-          <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/08</span></div>
+          <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/{String(challenges.length).padStart(2, "0")}</span></div>
           <div>
             <span>TASK · {challenge.eyebrow}</span>
             <h2 id="challenge-title">{challenge.title}</h2>
@@ -400,8 +400,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </div>
           <button
             className="nav-arrow"
-            onClick={() => selectChallenge(Math.min(8, challengeId + 1))}
-            disabled={challengeId === 8}
+            onClick={() => selectChallenge(Math.min(challenges.length, challengeId + 1))}
+            disabled={challengeId === challenges.length}
             aria-label="Next challenge"
           ><ChevronRight size={18} /></button>
           <span className={`done-label ${isChallengeVisited ? "is-visited" : ""} ${isChallengeComplete ? "is-done" : ""}`}>

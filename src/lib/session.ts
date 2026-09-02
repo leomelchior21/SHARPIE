@@ -1,9 +1,9 @@
 const keys = {
   name: "sharpie:name",
-  challenge: "sharpie:v3:challenge",
-  completed: "sharpie:v3:completed",
-  visited: "sharpie:v3:visited",
-  codes: "sharpie:v3:codes",
+  challenge: "sharpie:v4:challenge",
+  completed: "sharpie:v4:completed",
+  visited: "sharpie:v4:visited",
+  codes: "sharpie:v4:codes",
 } as const;
 
 function available() {
@@ -15,7 +15,7 @@ export const session = {
   setName: (name: string) => available() && sessionStorage.setItem(keys.name, name),
   getChallenge: () => {
     const value = available() ? Number(sessionStorage.getItem(keys.challenge)) : 1;
-    return value >= 1 && value <= 8 ? value : 1;
+    return value >= 1 && value <= 5 ? value : 1;
   },
   setChallenge: (id: number) => available() && sessionStorage.setItem(keys.challenge, String(id)),
   getCompleted: (): number[] => {

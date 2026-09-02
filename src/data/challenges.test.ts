@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { challenges, getRunNote } from "./challenges";
 
 describe("WriteLine activities", () => {
-  it("ships eight focused activities without revealing complete solutions", () => {
-    expect(challenges).toHaveLength(8);
+  it("ships five focused activities in the requested order", () => {
+    expect(challenges).toHaveLength(5);
+    expect(challenges.map((challenge) => challenge.title)).toEqual([
+      "Morning signal",
+      "Introduce yourself",
+      "Leave a gap",
+      "Make a frame",
+      "Initials banner",
+    ]);
     expect(challenges.map((challenge) => challenge.title)).not.toContain("The meme");
     expect(challenges.map((challenge) => challenge.title)).not.toContain("Make it yours");
     expect(challenges.every((challenge) => challenge.starterCode("Leo").startsWith("//"))).toBe(true);
@@ -13,12 +20,9 @@ describe("WriteLine activities", () => {
     const starterOutputs = [
       "Hello!\n",
       "Bom dia, chat!\n",
-      "?\n",
       "TOP\nBOTTOM\n",
       "#####\n",
-      "START\n",
-      "3\n",
-      "================\n",
+      "?\n",
     ];
     challenges.forEach((challenge, index) => {
       expect(challenge.isComplete(starterOutputs[index], "Leo", challenge.starterCode("Leo"))).toBe(false);
@@ -34,12 +38,15 @@ describe("WriteLine activities", () => {
     expect(challenges[1].isComplete("Bom dia, chat!\n", "Leo", 'Console.WriteLine("Bom dia, chat!");')).toBe(false);
   });
 
-  it("validates the banner and launch-sequence challenges", () => {
-    const bannerCode = 'Console.WriteLine("LL"); Console.WriteLine("L1"); Console.WriteLine("LL");';
-    expect(challenges[2].isComplete("LL\nL1\nLL\n", "Leo", bannerCode)).toBe(true);
+  it("validates gap, frame, and banner challenges", () => {
+    const gapCode = 'Console.WriteLine("TOP"); Console.WriteLine(); Console.WriteLine("BOTTOM");';
+    expect(challenges[2].isComplete("TOP\n\nBOTTOM\n", "Leo", gapCode)).toBe(true);
 
-    const launchCode = ["3", "2", "1", "GO!"].map((text) => `Console.WriteLine("${text}");`).join(" ");
-    expect(challenges[6].isComplete("3\n2\n1\nGO!\n", "Leo", launchCode)).toBe(true);
+    const frameCode = 'Console.WriteLine("###"); Console.WriteLine("# #"); Console.WriteLine("###");';
+    expect(challenges[3].isComplete("###\n# #\n###\n", "Leo", frameCode)).toBe(true);
+
+    const bannerCode = 'Console.WriteLine("LL"); Console.WriteLine("L1"); Console.WriteLine("LL");';
+    expect(challenges[4].isComplete("LL\nL1\nLL\n", "Leo", bannerCode)).toBe(true);
   });
 
   it("recognizes a completed WriteLine activity in the run note", () => {

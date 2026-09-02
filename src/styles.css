@@ -480,6 +480,20 @@ button.module-card { cursor: pointer; }
   transition: transform 220ms, border-color 220ms, box-shadow 220ms;
 }
 
+.module-callout {
+  position: absolute;
+  z-index: 4;
+  inset: 5px;
+  border: 1px solid rgba(111, 177, 255, 0.58);
+  border-radius: 11px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 1px rgba(75, 127, 255, 0.08),
+    inset 0 0 18px rgba(71, 132, 255, 0.08),
+    0 0 18px rgba(69, 123, 255, 0.12);
+  animation: module-callout-pulse 2.1s ease-in-out infinite;
+}
+
 .active-module::before {
   position: absolute;
   content: "";
@@ -1287,6 +1301,7 @@ button.module-card { cursor: pointer; }
 }
 
 .challenge-nav button {
+  position: relative;
   display: grid;
   flex: 0 0 36px;
   width: 36px;
@@ -1301,6 +1316,25 @@ button.module-card { cursor: pointer; }
   font-family: var(--mono);
   font-size: 0.56rem;
   transition: border 160ms, color 160ms, background 160ms, box-shadow 160ms, transform 160ms;
+}
+
+.challenge-dots button { --activity-order: 0; }
+.challenge-dots button:nth-child(2) { --activity-order: 1; }
+.challenge-dots button:nth-child(3) { --activity-order: 2; }
+.challenge-dots button:nth-child(4) { --activity-order: 3; }
+.challenge-dots button:nth-child(5) { --activity-order: 4; }
+
+.challenge-dots button::after {
+  position: absolute;
+  content: "";
+  inset: -3px;
+  border: 1px solid rgba(111, 255, 197, 0.9);
+  border-radius: 9px;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 0 13px rgba(55, 235, 163, 0.4);
+  animation: activity-guide 4.6s ease-in-out infinite;
+  animation-delay: calc(var(--activity-order) * 0.62s);
 }
 
 .challenge-nav button:hover:not(:disabled) { color: #dfffee; border-color: rgba(79, 225, 162, 0.5); transform: translateY(-1px); }
@@ -1488,6 +1522,15 @@ button.module-card { cursor: pointer; }
 @keyframes challenge-success-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes module-callout-pulse {
+  0%, 100% { opacity: 0.42; box-shadow: 0 0 0 1px rgba(75, 127, 255, 0.04), inset 0 0 14px rgba(71, 132, 255, 0.05), 0 0 12px rgba(69, 123, 255, 0.08); }
+  50% { opacity: 1; box-shadow: 0 0 0 1px rgba(111, 186, 255, 0.2), inset 0 0 24px rgba(71, 132, 255, 0.12), 0 0 28px rgba(69, 145, 255, 0.28); }
+}
+@keyframes activity-guide {
+  0%, 9%, 27%, 100% { opacity: 0; transform: scale(0.92); }
+  15% { opacity: 1; transform: scale(1); }
+  21% { opacity: 0.45; transform: scale(1.08); }
 }
 @keyframes module-light {
   from { transform: translate(-5%, 2%) rotate(-62deg); opacity: 0.3; }

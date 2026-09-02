@@ -41,22 +41,6 @@ export const challenges: Challenge[] = [
   },
   {
     id: 3,
-    eyebrow: "STACK THE SIGNAL",
-    title: "Initials banner",
-    prompt: "Build a banner at least 3 lines tall using your initials, letters, or numbers.",
-    starterCode: () => '// Stack your initials, letters, or numbers into a 3-line banner.\nConsole.WriteLine("?");',
-    hints: [
-      "Think of every WriteLine as one row of the banner.",
-      "Add at least two more WriteLine statements.",
-      "Repeat characters to make the rows look bold from a distance.",
-    ],
-    isComplete: (output, _name, code) => {
-      const banner = lines(output);
-      return countWriteLines(code) >= 3 && banner.length >= 3 && banner.every((line) => /[A-Za-z0-9]/.test(line));
-    },
-  },
-  {
-    id: 4,
     eyebrow: "CONTROL THE SPACE",
     title: "Leave a gap",
     prompt: "Print TOP and BOTTOM with one completely empty output line between them.",
@@ -71,65 +55,35 @@ export const challenges: Challenge[] = [
       /Console\s*\.\s*WriteLine\s*\(\s*\)\s*;/.test(code),
   },
   {
-    id: 5,
+    id: 4,
     eyebrow: "DRAW WITH TEXT",
-    title: "Hash box",
-    prompt: "Draw a closed box made from # characters using at least 3 output lines.",
-    starterCode: () => '// Draw a closed box made from # characters, at least 3 lines tall.\nConsole.WriteLine("#####");',
+    title: "Make a frame",
+    prompt: "Draw a closed frame made from # characters using at least 3 output lines.",
+    starterCode: () => '// Draw a closed frame made from # characters, at least 3 lines tall.\nConsole.WriteLine("#####");',
     hints: [
       "The top and bottom borders should match.",
       "Add a middle row with a # at both ends.",
       "Use spaces between the two sides of the middle row.",
     ],
     isComplete: (output, _name, code) => {
-      const box = lines(output);
-      return countWriteLines(code) >= 3 && box.length >= 3 && box[0] === box[box.length - 1] && /^#{3,}$/.test(box[0]) && box.slice(1, -1).every((line) => /^#.*#$/.test(line));
+      const frame = lines(output);
+      return countWriteLines(code) >= 3 && frame.length >= 3 && frame[0] === frame[frame.length - 1] && /^#{3,}$/.test(frame[0]) && frame.slice(1, -1).every((line) => /^#.*#$/.test(line));
     },
   },
   {
-    id: 6,
-    eyebrow: "TELL A STORY",
-    title: "Three-line story",
-    prompt: "Print START, one sentence of your own, and END on 3 separate lines.",
-    starterCode: () => '// Write a 3-line story: START, one sentence, then END.\nConsole.WriteLine("START");',
+    id: 5,
+    eyebrow: "STACK THE SIGNAL",
+    title: "Initials banner",
+    prompt: "Build a banner at least 3 lines tall using your initials, letters, or numbers.",
+    starterCode: () => '// Stack your initials, letters, or numbers into a 3-line banner.\nConsole.WriteLine("?");',
     hints: [
-      "Your first line is ready; add two more statements.",
-      "The middle line can be any sentence, but it cannot be empty.",
-      "Finish with the exact word END in capital letters.",
+      "Think of every WriteLine as one row of the banner.",
+      "Add at least two more WriteLine statements.",
+      "Repeat characters to make the rows look bold from a distance.",
     ],
     isComplete: (output, _name, code) => {
-      const story = lines(output);
-      return countWriteLines(code) >= 3 && story.length >= 3 && story[0] === "START" && story[story.length - 1] === "END" && story.slice(1, -1).some((line) => line !== "START" && line !== "END");
-    },
-  },
-  {
-    id: 7,
-    eyebrow: "COUNT IT DOWN",
-    title: "Launch sequence",
-    prompt: "Print 3, 2, 1, and GO! in that order, each on its own line.",
-    starterCode: () => '// Complete the countdown: 3, 2, 1, then GO!\nConsole.WriteLine("3");',
-    hints: [
-      "You need four output lines in total.",
-      "Continue the countdown one line at a time.",
-      "The final line is a word followed by an exclamation mark.",
-    ],
-    isComplete: (output, _name, code) =>
-      countWriteLines(code) >= 4 && JSON.stringify(lines(output)) === JSON.stringify(["3", "2", "1", "GO!"]),
-  },
-  {
-    id: 8,
-    eyebrow: "FINAL TRANSMISSION",
-    title: "Student ID card",
-    prompt: "Build a 4-line card with matching borders, your name, and the word SHARPIE.",
-    starterCode: () => '// Build a 4-line ID card with matching top and bottom borders.\n// Include your name and the word SHARPIE.\nConsole.WriteLine("================");',
-    hints: [
-      "Use the first line as the top border and repeat it at the bottom.",
-      "Put your name and SHARPIE on the two lines between the borders.",
-      "Your finished output should have at least four visible lines.",
-    ],
-    isComplete: (output, name, code) => {
-      const card = lines(output);
-      return countWriteLines(code) >= 4 && card.length >= 4 && card[0] === card[card.length - 1] && card.some((line) => line.toLowerCase().includes(name.toLowerCase())) && card.some((line) => line.toUpperCase().includes("SHARPIE"));
+      const banner = lines(output);
+      return countWriteLines(code) >= 3 && banner.length >= 3 && banner.every((line) => /[A-Za-z0-9]/.test(line));
     },
   },
 ];

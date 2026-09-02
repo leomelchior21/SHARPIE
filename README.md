@@ -6,7 +6,7 @@ SHARPIE is a classroom-first C# basics playground: write a small statement, run 
 
 - A session-only name gate—no account or database.
 - A five-module cartridge hub, with only WriteLine Playground active.
-- Eight focused `Console.WriteLine` experiments in one consistent workspace, with automatic completion feedback and progression.
+- Five focused `Console.WriteLine` experiments in one consistent workspace, with clear feedback and student-controlled navigation.
 - A CodeMirror editor with C# highlighting, line numbers, diagnostics, and `Ctrl/Cmd + Enter`.
 - A designed output surface, progressive hints, reset confirmation, and session completion.
 - An instant browser-based C# basics runner with no server dependency.
