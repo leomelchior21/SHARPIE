@@ -41,6 +41,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const challenge = challenges[challengeId - 1];
   const savedCodes = session.getCodes();
   const [code, setCode] = useState(savedCodes[challengeId] ?? challenge.starterCode(name));
+  const [lastRunCode, setLastRunCode] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(challengeId === 1 ? defaultResult : null);
   const [hasRun, setHasRun] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -97,6 +98,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     const saved = session.getCodes()[id];
     setChallengeId(id);
     setCode(saved ?? next.starterCode(name));
+    setLastRunCode(null);
     setResult(null);
     setHasRun(false);
     setHintIndex(-1);
@@ -118,6 +120,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         setRuntimeStatus("ready");
       }
       const nextResult = await executeCSharp(code, controller.signal);
+      setLastRunCode(code);
       setResult(nextResult);
       setHasRun(true);
 
@@ -199,6 +202,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     }
     setResult(null);
     setHasRun(false);
+    setLastRunCode(null);
   };
 
   const confirmReset = () => {
@@ -206,6 +210,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     changeCode(starter);
     setResult(null);
     setHasRun(false);
+    setLastRunCode(null);
     setShowReset(false);
   };
 
@@ -222,22 +227,25 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     challenge.id === 1 &&
     hasRun &&
     result?.success === true &&
+    lastRunCode === code &&
     result.output.trim().toLowerCase() === "bom dia, chat!" &&
-    isMorningSignalCode(code);
+    isMorningSignalCode(lastRunCode);
   const introductionMessage =
-    challenge.id === 2 && hasRun && result?.success
-      ? getIntroductionMessage(code, result.output)
+    challenge.id === 2 && hasRun && result?.success && lastRunCode === code
+      ? getIntroductionMessage(lastRunCode, result.output)
       : null;
   const showGapFlight =
     challenge.id === 3 &&
     hasRun &&
     result?.success === true &&
-    isGapFlightCode(code);
+    lastRunCode === code &&
+    isGapFlightCode(lastRunCode);
   const showFrameSignal =
     challenge.id === 4 &&
     hasRun &&
     result?.success === true &&
-    isFrameSignalCode(code);
+    lastRunCode === code &&
+    isFrameSignalCode(lastRunCode);
   const specialOutputClass = showMorningEvolution
     ? "morning-evolved"
     : introductionMessage

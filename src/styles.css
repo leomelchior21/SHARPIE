@@ -1623,6 +1623,7 @@ button.module-card { cursor: pointer; }
 
 .run-button:active:not(:disabled) { transform: translateY(0); }
 .run-button:disabled { cursor: default; opacity: 0.48; }
+.run-button > span { font-size: 1.2em; }
 
 .challenge-bar {
   position: relative;

@@ -19,7 +19,7 @@ describe("WriteLine activities", () => {
   it("keeps every starter incomplete so the student has something to solve", () => {
     const starterOutputs = [
       "Hello!\n",
-      "Bom dia, chat!\n",
+      "Bom dia,\n",
       "TOP\nBOTTOM\n",
       "#####\n",
       "?\n",
@@ -35,9 +35,9 @@ describe("WriteLine activities", () => {
     expect(challenges[0].isComplete("bom dia, chat!\n", "Leo", 'Console.WriteLine("bom dia, chat!");')).toBe(true);
     expect(challenges[0].isComplete("Hello!\n", "Leo", 'Console.WriteLine("Hello!");')).toBe(false);
 
-    const introduction = 'Console.WriteLine("Bom dia, chat!"); Console.WriteLine("Leo");';
-    expect(challenges[1].isComplete("Bom dia, chat!\nLeo\n", "Leo", introduction)).toBe(true);
-    expect(challenges[1].isComplete("Bom dia, chat!\n", "Leo", 'Console.WriteLine("Bom dia, chat!");')).toBe(false);
+    const introduction = 'Console.WriteLine("Bom dia,"); Console.WriteLine("Leo");';
+    expect(challenges[1].isComplete("Bom dia,\nLeo\n", "Leo", introduction)).toBe(true);
+    expect(challenges[1].isComplete("Bom dia,\n", "Leo", 'Console.WriteLine("Bom dia,");')).toBe(false);
   });
 
   it("validates gap, frame, and banner challenges", () => {

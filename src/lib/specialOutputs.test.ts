@@ -5,11 +5,11 @@ describe("special activity outputs", () => {
   it("extracts the second, perfectly written WriteLine message", () => {
     const code = [
       "// Add a second WriteLine that prints your name.",
-      'Console.WriteLine("Bom dia, chat!");',
+      'Console.WriteLine("Bom dia,");',
       'Console.WriteLine("Leo");',
     ].join("\n");
 
-    expect(getIntroductionMessage(code, "Bom dia, chat!\nLeo\n")).toBe("Leo");
+    expect(getIntroductionMessage(code, "Bom dia,\nLeo\n")).toBe("Leo");
   });
 
   it("does not activate the car for an empty or loosely written second statement", () => {

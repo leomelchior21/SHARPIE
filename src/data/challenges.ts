@@ -28,7 +28,7 @@ export const challenges: Challenge[] = [
     eyebrow: "ADD A LINE",
     title: "Introduce yourself",
     prompt: "Keep the greeting, then add a second output line containing your name.",
-    starterCode: () => '// Add a second WriteLine that prints your name.\nConsole.WriteLine("Bom dia, chat!");',
+    starterCode: () => '// Add a second WriteLine that prints your name.\nConsole.WriteLine("Bom dia,");',
     hints: [
       "Do not replace the greeting—create another statement below it.",
       "Each WriteLine statement produces its own output line.",
@@ -36,7 +36,7 @@ export const challenges: Challenge[] = [
     ],
     isComplete: (output, name, code) =>
       countWriteLines(code) >= 2 &&
-      lines(output).includes("Bom dia, chat!") &&
+      lines(output).includes("Bom dia,") &&
       lines(output).some((line) => line.toLowerCase().includes(name.toLowerCase())),
   },
   {
