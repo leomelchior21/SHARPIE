@@ -21,7 +21,7 @@ export const challenges: Challenge[] = [
       "Capital letters, punctuation, and spaces must match the target.",
       "The target ends with an exclamation mark.",
     ],
-    isComplete: (output, _name, code) => lines(output).includes("Bom dia, chat!") && countWriteLines(code) >= 1,
+    isComplete: (output, _name, code) => lines(output).some((line) => line.toLowerCase() === "bom dia, chat!") && countWriteLines(code) >= 1,
   },
   {
     id: 2,

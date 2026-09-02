@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clipboard,
+  Plane,
   Play,
   RotateCcw,
   Sparkles,
@@ -18,8 +19,10 @@ import {
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { challenges, getRunNote } from "../data/challenges";
+import { isMorningSignalCode } from "../lib/morningSignal";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
+import { getIntroductionMessage, isFrameSignalCode, isGapFlightCode } from "../lib/specialOutputs";
 import type { RunResult } from "../types";
 
 type PlaygroundProps = {
@@ -45,7 +48,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [completed, setCompleted] = useState<number[]>(session.getCompleted());
   const [visited, setVisited] = useState<number[]>(() => [...new Set([...session.getVisited(), ...session.getCompleted()])]);
   const [runPulse, setRunPulse] = useState(0);
-  const [completionFeedback, setCompletionFeedback] = useState<{ challengeId: number } | null>(null);
   const [hintIndex, setHintIndex] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -98,7 +100,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     setResult(null);
     setHasRun(false);
     setHintIndex(-1);
-    setCompletionFeedback(null);
   }, [challengeId, code, name]);
 
   const run = useCallback(async () => {
@@ -107,7 +108,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     const controller = new AbortController();
     abortRef.current = controller;
     setRunPulse((current) => current + 1);
-    setCompletionFeedback(null);
     setIsRunning(true);
     setResult(null);
 
@@ -128,7 +128,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           session.setCompleted(next);
           return next;
         });
-        setCompletionFeedback({ challengeId: challenge.id });
       }
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
@@ -149,12 +148,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
       setIsRunning(false);
     }
   }, [challenge, code, isRunning, name, runtimeStatus]);
-
-  useEffect(() => {
-    if (!completionFeedback || completionFeedback.challengeId !== challengeId) return;
-    const timer = window.setTimeout(() => setCompletionFeedback(null), 1450);
-    return () => window.clearTimeout(timer);
-  }, [challengeId, completionFeedback]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
@@ -225,6 +218,35 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
       ? getRunNote(result.output, writeLineCount, challenge.isComplete(result.output, name, code))
       : "One line in. One line out."
     : "";
+  const showMorningEvolution =
+    challenge.id === 1 &&
+    hasRun &&
+    result?.success === true &&
+    result.output.trim().toLowerCase() === "bom dia, chat!" &&
+    isMorningSignalCode(code);
+  const introductionMessage =
+    challenge.id === 2 && hasRun && result?.success
+      ? getIntroductionMessage(code, result.output)
+      : null;
+  const showGapFlight =
+    challenge.id === 3 &&
+    hasRun &&
+    result?.success === true &&
+    isGapFlightCode(code);
+  const showFrameSignal =
+    challenge.id === 4 &&
+    hasRun &&
+    result?.success === true &&
+    isFrameSignalCode(code);
+  const specialOutputClass = showMorningEvolution
+    ? "morning-evolved"
+    : introductionMessage
+      ? "car-evolved"
+      : showGapFlight
+        ? "flight-evolved"
+        : showFrameSignal
+          ? "frame-evolved"
+          : "";
 
   const copyOutput = async () => {
     if (!result?.output) return;
@@ -298,7 +320,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
           </footer>
         </section>
 
-        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""} ${runPulse ? `run-flash-${runPulse % 2 ? "a" : "b"}` : ""}`} aria-live="polite">
+        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""} ${specialOutputClass} ${runPulse ? `run-flash-${runPulse % 2 ? "a" : "b"}` : ""}`} aria-live="polite">
           <header className="panel-header">
             <div>
               <span className="panel-index">02</span>
@@ -306,7 +328,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             </div>
             <div className="panel-actions output-actions">
               <span className={`runtime-status ${runtimeStatus === "ready" ? "status-live" : ""}`}>
-                <i /> {runtimeStatus === "loading" ? "LOADING C#" : isRunning ? "RUNNING" : result?.success && hasRun ? "SIGNAL LIVE" : runtimeStatus === "error" ? "RETRY" : "C# READY"}
+                <i /> {runtimeStatus === "loading" ? "LOADING C#" : isRunning ? "RUNNING" : showMorningEvolution ? "MORNING LIVE" : introductionMessage ? "MESSAGE ARRIVED" : showGapFlight ? "AIRSPACE OPEN" : showFrameSignal ? "FRAME LOCKED" : result?.success && hasRun ? "SIGNAL LIVE" : runtimeStatus === "error" ? "RETRY" : "C# READY"}
               </span>
               <button onClick={copyOutput} disabled={!result?.output} aria-label="Copy output">
                 {copied ? <Check size={14} /> : <Clipboard size={14} />}
@@ -330,6 +352,14 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
                   <code>{result.error.compiler}</code>
                 </div>
               </div>
+            ) : showMorningEvolution ? (
+              <MorningSignalFace />
+            ) : introductionMessage ? (
+              <MessageCar message={introductionMessage} />
+            ) : showGapFlight ? (
+              <GapFlight />
+            ) : showFrameSignal ? (
+              <FrameSignal />
             ) : result ? (
               <div className="output-content">
                 <span className="output-prompt">SHARPIE OUTPUT /</span>
@@ -351,13 +381,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         </section>
       </div>
 
-      <section className={`challenge-bar ${completionFeedback?.challengeId === challenge.id ? "challenge-complete-flash" : ""}`} aria-labelledby="challenge-title">
-        {completionFeedback?.challengeId === challenge.id && (
-          <div className="challenge-success-feedback" role="status">
-            <span><Check size={16} /> ACTIVITY COMPLETE</span>
-            <strong>CHOOSE YOUR NEXT TASK</strong>
-          </div>
-        )}
+      <section className="challenge-bar" aria-labelledby="challenge-title">
         <div className="challenge-copy">
           <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/{String(challenges.length).padStart(2, "0")}</span></div>
           <div>
@@ -437,5 +461,102 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         </div>
       )}
     </section>
+  );
+}
+
+function MorningSignalFace() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const currentTime = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(now);
+  const currentDate = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "2-digit",
+  }).format(now);
+
+  return (
+    <div className="morning-signal-face">
+      <span className="morning-sun" aria-hidden="true" />
+      <span className="morning-orbit orbit-one" aria-hidden="true" />
+      <span className="morning-orbit orbit-two" aria-hidden="true" />
+      <div className="morning-clock-card">
+        <div className="morning-clock-topline">
+          <span>LOCAL SIGNAL / 01</span>
+          <span><i /> SYNCHRONIZED</span>
+        </div>
+        <span className="morning-clock-label">CURRENT LOCAL TIME</span>
+        <time dateTime={now.toISOString()}>{currentTime}</time>
+        <span className="morning-clock-divider" aria-hidden="true"><i /><i /><i /></span>
+        <strong>Bom dia, chat!</strong>
+        <small>{currentDate}</small>
+      </div>
+      <span className="morning-scanline" aria-hidden="true" />
+    </div>
+  );
+}
+
+function MessageCar({ message }: { message: string }) {
+  return (
+    <div className="message-road-scene">
+      <span className="road-horizon" aria-hidden="true" />
+      <div className="message-car" role="status" aria-label={`Message delivered: ${message}`}>
+        <div className="car-message"><span>MESSAGE ON BOARD</span><strong>{message}</strong></div>
+        <div className="car-cabin"><i /><i /></div>
+        <div className="car-body"><span>02</span></div>
+        <i className="car-light" />
+        <i className="car-wheel wheel-front" />
+        <i className="car-wheel wheel-back" />
+      </div>
+      <span className="road-line line-one" aria-hidden="true" />
+      <span className="road-line line-two" aria-hidden="true" />
+    </div>
+  );
+}
+
+function GapFlight() {
+  return (
+    <div className="gap-flight-face" role="status" aria-label="Two planes flying with a clear gap between them">
+      <span className="flight-sun" aria-hidden="true" />
+      <div className="flight-path flight-path-top">
+        <span className="plane-streak" aria-hidden="true" />
+        <Plane className="gap-plane" size={46} strokeWidth={1.35} aria-hidden="true" />
+        <strong>TOP</strong>
+      </div>
+      <div className="air-gap">
+        <span>CLEAR AIRSPACE</span>
+        <i />
+        <small>1–5 SPACES</small>
+      </div>
+      <div className="flight-path flight-path-bottom">
+        <span className="plane-streak" aria-hidden="true" />
+        <Plane className="gap-plane" size={46} strokeWidth={1.35} aria-hidden="true" />
+        <strong>BOTTOM</strong>
+      </div>
+    </div>
+  );
+}
+
+function FrameSignal() {
+  const cells = ["#", "#", "#", "#", "#", "#", "", "", "", "#", "#", "#", "#", "#", "#"];
+
+  return (
+    <div className="frame-signal-face" role="status" aria-label="Hash frame complete">
+      <span className="frame-label">STRUCTURE VERIFIED / 04</span>
+      <div className="hash-frame" aria-hidden="true">
+        {cells.map((cell, index) => <i key={index} style={{ "--cell": index } as React.CSSProperties}>{cell}</i>)}
+        <Check className="frame-check" size={42} strokeWidth={1.8} />
+      </div>
+      <strong>FRAME LOCKED</strong>
+    </div>
   );
 }

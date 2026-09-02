@@ -31,6 +31,8 @@ describe("WriteLine activities", () => {
 
   it("checks the requested output and requires WriteLine practice", () => {
     expect(challenges[0].isComplete("Bom dia, chat!\n", "Leo", 'Console.WriteLine("Bom dia, chat!");')).toBe(true);
+    expect(challenges[0].isComplete("bom dia, chat!\n", "Leo", 'Console.WriteLine("bom dia, chat!");')).toBe(true);
+    expect(challenges[0].isComplete("bom dia, chat!\n", "Leo", 'Console.WriteLine("bom dia, chat!");')).toBe(true);
     expect(challenges[0].isComplete("Hello!\n", "Leo", 'Console.WriteLine("Hello!");')).toBe(false);
 
     const introduction = 'Console.WriteLine("Bom dia, chat!"); Console.WriteLine("Leo");';
