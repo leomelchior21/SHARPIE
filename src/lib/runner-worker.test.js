@@ -25,6 +25,11 @@ function createRunner() {
 describe("browser C# basics runner", () => {
   const run = createRunner();
 
+  it("ignores activity comments and runs WriteLine normally", () => {
+    const result = run('// Change the message below\nConsole.WriteLine("Bom dia, chat!");');
+    expect(result).toMatchObject({ success: true, output: "Bom dia, chat!\n" });
+  });
+
   it("supports Write, variables, operators, assignment, and C# value formatting", () => {
     const result = run(`
       string name = "Ada";

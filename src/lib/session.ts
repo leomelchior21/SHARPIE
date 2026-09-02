@@ -1,8 +1,8 @@
 const keys = {
   name: "sharpie:name",
-  challenge: "sharpie:v2:challenge",
-  completed: "sharpie:v2:completed",
-  codes: "sharpie:v2:codes",
+  challenge: "sharpie:v3:challenge",
+  completed: "sharpie:v3:completed",
+  codes: "sharpie:v3:codes",
 } as const;
 
 function available() {

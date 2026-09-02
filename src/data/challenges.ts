@@ -7,129 +7,136 @@ const lines = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+const countWriteLines = (code: string) => code.match(/Console\s*\.\s*WriteLine\s*\(/g)?.length ?? 0;
+
 export const challenges: Challenge[] = [
   {
     id: 1,
-    eyebrow: "FIRST SIGNAL",
-    title: "Write a line",
-    prompt: "Use WriteLine to print Hello!",
-    starterCode: () => 'Console.WriteLine("Hello!");',
+    eyebrow: "EDIT THE MESSAGE",
+    title: "Morning signal",
+    prompt: 'Change the existing line so the output says exactly: Bom dia, chat!',
+    starterCode: () => '// Change the message to "Bom dia, chat!"\nConsole.WriteLine("Hello!");',
     hints: [
-      "Text belongs between quotation marks.",
-      "Write the text inside Console.WriteLine( ).",
-      'Try: Console.WriteLine("Hello!");',
+      "Keep the instruction name and change only the text between the quotes.",
+      "Capital letters, punctuation, and spaces must match the target.",
+      "The target ends with an exclamation mark.",
     ],
-    isComplete: (output, _name, code) => lines(output).includes("Hello!") && /Console\s*\.\s*WriteLine\s*\(/.test(code),
+    isComplete: (output, _name, code) => lines(output).includes("Bom dia, chat!") && countWriteLines(code) >= 1,
   },
   {
     id: 2,
-    eyebrow: "SAME SIGNAL",
-    title: "Keep writing",
-    prompt: "Use Write twice to print Hello World! on one line.",
-    starterCode: () => 'Console.Write("Hello ");\nConsole.WriteLine("World?");',
+    eyebrow: "ADD A LINE",
+    title: "Introduce yourself",
+    prompt: "Keep the greeting, then add a second output line containing your name.",
+    starterCode: () => '// Add a second WriteLine that prints your name.\nConsole.WriteLine("Bom dia, chat!");',
     hints: [
-      "Console.Write does not move to a new line.",
-      "Use two separate Console.Write statements.",
-      'Try writing "Hello " first, including the space.',
+      "Do not replace the greeting—create another statement below it.",
+      "Each WriteLine statement produces its own output line.",
+      "Put your name between quotation marks in the new statement.",
     ],
-    isComplete: (output, _name, code) => output.trim() === "Hello World!" && (code.match(/Console\s*\.\s*Write\s*\(/g)?.length ?? 0) >= 2,
+    isComplete: (output, name, code) =>
+      countWriteLines(code) >= 2 &&
+      lines(output).includes("Bom dia, chat!") &&
+      lines(output).some((line) => line.toLowerCase().includes(name.toLowerCase())),
   },
   {
     id: 3,
-    eyebrow: "TEXT MEMORY",
-    title: "String variable",
-    prompt: "Store your name in a string, then print the variable.",
-    starterCode: () => 'string student = "SHARPIE";\nConsole.WriteLine(student);',
+    eyebrow: "STACK THE SIGNAL",
+    title: "Initials banner",
+    prompt: "Build a banner at least 3 lines tall using your initials, letters, or numbers.",
+    starterCode: () => '// Stack your initials, letters, or numbers into a 3-line banner.\nConsole.WriteLine("?");',
     hints: [
-      "A string variable stores text under a name.",
-      "Declare it first, then pass the variable to WriteLine.",
-      'Pattern: string student = "Alex";',
+      "Think of every WriteLine as one row of the banner.",
+      "Add at least two more WriteLine statements.",
+      "Repeat characters to make the rows look bold from a distance.",
     ],
-    isComplete: (output, name, code) =>
-      lines(output).some((line) => line.toLowerCase() === name.toLowerCase()) &&
-      /\bstring\s+[A-Za-z_]\w*\s*=/.test(code) &&
-      /WriteLine\s*\(\s*[A-Za-z_]\w*\s*\)/.test(code),
+    isComplete: (output, _name, code) => {
+      const banner = lines(output);
+      return countWriteLines(code) >= 3 && banner.length >= 3 && banner.every((line) => /[A-Za-z0-9]/.test(line));
+    },
   },
   {
     id: 4,
-    eyebrow: "NUMBER MEMORY",
-    title: "Integer variable",
-    prompt: "Store the number 8 in an int, then print it.",
-    starterCode: () => "int level = 1;\nConsole.WriteLine(level);",
+    eyebrow: "CONTROL THE SPACE",
+    title: "Leave a gap",
+    prompt: "Print TOP and BOTTOM with one completely empty output line between them.",
+    starterCode: () => '// Add one empty output line between TOP and BOTTOM.\nConsole.WriteLine("TOP");\nConsole.WriteLine("BOTTOM");',
     hints: [
-      "The int type stores whole numbers.",
-      "Numbers do not need quotation marks.",
-      "Pattern: int level = 8;",
+      "An empty line still needs its own WriteLine statement.",
+      "Try calling WriteLine without any text inside the parentheses.",
+      "Place that new statement between the other two.",
     ],
     isComplete: (output, _name, code) =>
-      lines(output).includes("8") &&
-      /\bint\s+[A-Za-z_]\w*\s*=\s*-?\d+/.test(code) &&
-      /WriteLine\s*\(\s*[A-Za-z_]\w*\s*\)/.test(code),
+      /TOP\n\s*\nBOTTOM/.test(output.replace(/\r/g, "")) &&
+      /Console\s*\.\s*WriteLine\s*\(\s*\)\s*;/.test(code),
   },
   {
     id: 5,
-    eyebrow: "MATH SIGNAL",
-    title: "Use an operator",
-    prompt: "Use a math operator to calculate and print 42.",
-    starterCode: () => "int answer = 6 + 7;\nConsole.WriteLine(answer);",
+    eyebrow: "DRAW WITH TEXT",
+    title: "Hash box",
+    prompt: "Draw a closed box made from # characters using at least 3 output lines.",
+    starterCode: () => '// Draw a closed box made from # characters, at least 3 lines tall.\nConsole.WriteLine("#####");',
     hints: [
-      "Operators include +, -, *, /, and %.",
-      "Six multiplied by seven makes the target.",
-      "Use * between 6 and 7.",
+      "The top and bottom borders should match.",
+      "Add a middle row with a # at both ends.",
+      "Use spaces between the two sides of the middle row.",
     ],
-    isComplete: (output, _name, code) => lines(output).includes("42") && /\d\s*[+\-*/%]\s*\d/.test(code),
+    isComplete: (output, _name, code) => {
+      const box = lines(output);
+      return countWriteLines(code) >= 3 && box.length >= 3 && box[0] === box[box.length - 1] && /^#{3,}$/.test(box[0]) && box.slice(1, -1).every((line) => /^#.*#$/.test(line));
+    },
   },
   {
     id: 6,
-    eyebrow: "JOIN SIGNALS",
-    title: "Concatenation",
-    prompt: "Join text and a variable with +, then print the result.",
-    starterCode: () => 'string language = "C#";\nConsole.WriteLine("I am learning ");',
+    eyebrow: "TELL A STORY",
+    title: "Three-line story",
+    prompt: "Print START, one sentence of your own, and END on 3 separate lines.",
+    starterCode: () => '// Write a 3-line story: START, one sentence, then END.\nConsole.WriteLine("START");',
     hints: [
-      "The + operator can join pieces of text.",
-      "Put + between the quoted text and the variable.",
-      'Pattern: "Hello " + name',
+      "Your first line is ready; add two more statements.",
+      "The middle line can be any sentence, but it cannot be empty.",
+      "Finish with the exact word END in capital letters.",
     ],
-    isComplete: (output, _name, code) =>
-      output.trim().length > 0 &&
-      /WriteLine\s*\([\s\S]*["'][\s\S]*\+[\s\S]*[A-Za-z_]\w*[\s\S]*\)/.test(code),
+    isComplete: (output, _name, code) => {
+      const story = lines(output);
+      return countWriteLines(code) >= 3 && story.length >= 3 && story[0] === "START" && story[story.length - 1] === "END" && story.slice(1, -1).some((line) => line !== "START" && line !== "END");
+    },
   },
   {
     id: 7,
-    eyebrow: "SMART SIGNAL",
-    title: "Interpolation",
-    prompt: "Use $ and { } to place a variable inside a string.",
-    starterCode: (name) => `string student = "${name}";\nint score = 100;\nConsole.WriteLine("Score ready!");`,
+    eyebrow: "COUNT IT DOWN",
+    title: "Launch sequence",
+    prompt: "Print 3, 2, 1, and GO! in that order, each on its own line.",
+    starterCode: () => '// Complete the countdown: 3, 2, 1, then GO!\nConsole.WriteLine("3");',
     hints: [
-      "Start the string with $ before the opening quote.",
-      "Place variable names inside curly braces.",
-      'Pattern: $"Hello {name}!"',
+      "You need four output lines in total.",
+      "Continue the countdown one line at a time.",
+      "The final line is a word followed by an exclamation mark.",
     ],
-    isComplete: (output, _name, code) => output.trim().length > 0 && /\$"[^"\n]*\{\s*[A-Za-z_]\w*[^}]*\}/.test(code),
+    isComplete: (output, _name, code) =>
+      countWriteLines(code) >= 4 && JSON.stringify(lines(output)) === JSON.stringify(["3", "2", "1", "GO!"]),
   },
   {
     id: 8,
-    eyebrow: "FULL TRANSMISSION",
-    title: "Build a receipt",
-    prompt: "Use variables, multiplication, and interpolation to print Total: 12.",
-    starterCode: () => 'string item = "Marker";\nint price = 4;\nint quantity = 3;\nint total = 0;\nConsole.WriteLine("Total pending");',
+    eyebrow: "FINAL TRANSMISSION",
+    title: "Student ID card",
+    prompt: "Build a 4-line card with matching borders, your name, and the word SHARPIE.",
+    starterCode: () => '// Build a 4-line ID card with matching top and bottom borders.\n// Include your name and the word SHARPIE.\nConsole.WriteLine("================");',
     hints: [
-      "Store words in string variables and whole numbers in int variables.",
-      "Multiply price by quantity and store the result in total.",
-      'Finish with: Console.WriteLine($"{item} Total: {total}");',
+      "Use the first line as the top border and repeat it at the bottom.",
+      "Put your name and SHARPIE on the two lines between the borders.",
+      "Your finished output should have at least four visible lines.",
     ],
-    isComplete: (output, _name, code) =>
-      /Total:\s*12/i.test(output) &&
-      /\bstring\s+/.test(code) &&
-      (code.match(/\bint\s+/g)?.length ?? 0) >= 3 &&
-      /[A-Za-z_]\w*\s*\*\s*[A-Za-z_]\w*/.test(code) &&
-      /\$"/.test(code),
+    isComplete: (output, name, code) => {
+      const card = lines(output);
+      return countWriteLines(code) >= 4 && card.length >= 4 && card[0] === card[card.length - 1] && card.some((line) => line.toLowerCase().includes(name.toLowerCase())) && card.some((line) => line.toUpperCase().includes("SHARPIE"));
+    },
   },
 ];
 
-export function getRunNote(output: string, writeCount: number, completed: boolean) {
-  if (!output.trim()) return "Quiet program. Console.Write can keep building the same line.";
-  if (writeCount >= 12) return "That's a lot of talking.";
+export function getRunNote(output: string, writeLineCount: number, completed: boolean) {
+  if (!output.trim()) return "Quiet program. WriteLine is waiting for a message.";
+  if (writeLineCount >= 12) return "That's a lot of talking.";
   if (completed) return "Signal matched. Activity complete.";
-  return "C# answered. Check the activity target.";
+  return "Output received. Compare it with the task below.";
 }

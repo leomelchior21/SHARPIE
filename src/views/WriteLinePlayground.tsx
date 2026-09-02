@@ -353,7 +353,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         <div className="challenge-copy">
           <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/08</span></div>
           <div>
-            <span>{challenge.eyebrow}</span>
+            <span>TASK · {challenge.eyebrow}</span>
             <h2 id="challenge-title">{challenge.title}</h2>
             <p>{challenge.prompt}</p>
           </div>
