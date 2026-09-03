@@ -19,6 +19,7 @@ export type RunResult = {
 
 export type Challenge = {
   id: number;
+  extra?: boolean;
   eyebrow: string;
   title: string;
   prompt: string;

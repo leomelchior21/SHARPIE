@@ -55,6 +55,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<EditorView | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sourceVersionRef = useRef(0);
 
   const extensions = useMemo(() => [StreamLanguage.define(csharp)], []);
 
@@ -96,6 +97,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     session.setChallenge(id);
     const next = challenges[id - 1];
     const saved = session.getCodes()[id];
+    sourceVersionRef.current += 1;
     setChallengeId(id);
     setCode(saved ?? next.starterCode(name));
     setLastRunCode(null);
@@ -109,6 +111,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const sourceVersion = sourceVersionRef.current;
+    const submittedCode = code;
     setRunPulse((current) => current + 1);
     setIsRunning(true);
     setResult(null);
@@ -119,12 +123,16 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         await prepareCSharp();
         setRuntimeStatus("ready");
       }
-      const nextResult = await executeCSharp(code, controller.signal);
-      setLastRunCode(code);
+      if (sourceVersionRef.current !== sourceVersion) return;
+
+      const nextResult = await executeCSharp(submittedCode, controller.signal);
+      if (sourceVersionRef.current !== sourceVersion) return;
+
+      setLastRunCode(submittedCode);
       setResult(nextResult);
       setHasRun(true);
 
-      if (nextResult.success && challenge.isComplete(nextResult.output, name, code)) {
+      if (nextResult.success && challenge.isComplete(nextResult.output, name, submittedCode)) {
         setCompleted((current) => {
           if (current.includes(challenge.id)) return current;
           const next = [...current, challenge.id].sort((a, b) => a - b);
@@ -133,6 +141,8 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         });
       }
     } catch (error) {
+      if (sourceVersionRef.current !== sourceVersion) return;
+
       if ((error as Error).name !== "AbortError") {
         setRuntimeStatus("error");
         setResult({
@@ -190,7 +200,11 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const changeCode = (value: string) => {
+    sourceVersionRef.current += 1;
     setCode(value);
+    setLastRunCode(null);
+    setResult(null);
+    setHasRun(false);
     session.setCode(challengeId, value);
   };
 
@@ -389,11 +403,11 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
         </section>
       </div>
 
-      <section className="challenge-bar" aria-labelledby="challenge-title">
+      <section className={`challenge-bar ${challenge.extra ? "challenge-extra" : ""}`} aria-labelledby="challenge-title">
         <div className="challenge-copy">
           <div className="challenge-number">{String(challenge.id).padStart(2, "0")}<span>/{String(challenges.length).padStart(2, "0")}</span></div>
           <div>
-            <span>TASK · {challenge.eyebrow}</span>
+            <span>{challenge.extra ? "EXTRA" : "TASK"} · {challenge.eyebrow}</span>
             <h2 id="challenge-title">{challenge.title}</h2>
             <p>{challenge.prompt}</p>
           </div>
@@ -421,9 +435,9 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             {challenges.map((item) => (
               <button
                 key={item.id}
-                className={`${item.id === challengeId ? "current" : ""} ${visited.includes(item.id) ? "visited" : ""} ${completed.includes(item.id) ? "complete" : ""}`}
+                className={`${item.extra ? "extra-activity" : ""} ${item.id === challengeId ? "current" : ""} ${visited.includes(item.id) ? "visited" : ""} ${completed.includes(item.id) ? "complete" : ""}`}
                 onClick={() => selectChallenge(item.id)}
-                aria-label={`Challenge ${item.id}${visited.includes(item.id) ? ", opened" : ""}${completed.includes(item.id) ? ", complete" : ""}`}
+                aria-label={`Challenge ${item.id}${item.extra ? ", extra" : ""}${visited.includes(item.id) ? ", opened" : ""}${completed.includes(item.id) ? ", complete" : ""}`}
                 aria-current={item.id === challengeId ? "step" : undefined}
               >
                 {visited.includes(item.id) ? <Check size={15} /> : item.id}

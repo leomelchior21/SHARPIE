@@ -461,7 +461,7 @@ function runBasics(code) {
     }
     const write = /^Console\s*\.\s*(WriteLine|Write)\s*\(([\s\S]*)\)$/.exec(statement.text);
     if (!write) {
-      if (/^Console\s*\.\s*(WriteLine|Write)/.test(statement.text)) throw new SharpieError("CS1026", ") expected", statement.line, statement.column + statement.text.length);
+      if (/^Console\s*\.\s*(WriteLine|Write)/.test(statement.text)) throw new SharpieError("CS1003", "Unexpected text in Console output statement", statement.line, statement.column + statement.text.length);
       throw new SharpieError("SHARP001", "This module supports variables, expressions, Console.Write, and Console.WriteLine.", statement.line, statement.column);
     }
     const item = write[2].trim() ? evaluateExpression(write[2], variables, statement.line, statement.column) : value("string", "");

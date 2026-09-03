@@ -86,6 +86,55 @@ export const challenges: Challenge[] = [
       return countWriteLines(code) === 5 && banner.length === 5 && banner.every((line) => /[A-Za-z0-9]/.test(line));
     },
   },
+  {
+    id: 6,
+    extra: true,
+    eyebrow: "FINAL TRANSMISSION",
+    title: "Student ID card",
+    prompt: "Build a 4-line card with matching borders, your name, and the word SHARPIE.",
+    starterCode: () => '// Build a 4-line ID card with matching top and bottom borders.\n// Include your name and the word SHARPIE.\nConsole.WriteLine("================");',
+    hints: [
+      "Use the first line as the top border and repeat it at the bottom.",
+      "Put your name and SHARPIE on the two lines between the borders.",
+      "Your finished output should have at least four visible lines.",
+    ],
+    isComplete: (output, name, code) => {
+      const card = lines(output);
+      return countWriteLines(code) >= 4 && card.length >= 4 && card[0] === card[card.length - 1] && card.some((line) => line.toLowerCase().includes(name.toLowerCase())) && card.some((line) => line.toUpperCase().includes("SHARPIE"));
+    },
+  },
+  {
+    id: 7,
+    extra: true,
+    eyebrow: "SECRET CHANNEL",
+    title: "Crack the code",
+    prompt: "Calculate 6 × 7 in an int variable, then print ACCESS CODE and 42 on separate lines.",
+    starterCode: () => '// Calculate the access code, then print it on a second line.\nint accessCode = 6;\nConsole.WriteLine("ACCESS CODE");',
+    hints: [
+      "Use the * operator to multiply 6 by 7 when you create accessCode.",
+      "Add another WriteLine below the title line.",
+      "Pass the variable name to WriteLine without quotation marks.",
+    ],
+    isComplete: (output, _name, code) =>
+      JSON.stringify(lines(output)) === JSON.stringify(["ACCESS CODE", "42"]) &&
+      /\b(?:int|var)\s+[A-Za-z_]\w*\s*=\s*6\s*\*\s*7\s*;/.test(code) &&
+      countWriteLines(code) >= 2,
+  },
+  {
+    id: 8,
+    extra: true,
+    eyebrow: "IGNITION SEQUENCE",
+    title: "Launch countdown",
+    prompt: "Print 3, 2, 1, and LIFTOFF! in that exact order, each on its own line.",
+    starterCode: () => '// Complete the countdown: 3, 2, 1, then LIFTOFF!\nConsole.WriteLine("3");',
+    hints: [
+      "You need four output lines in total.",
+      "Continue the countdown one line at a time.",
+      "The final line must say LIFTOFF! in capital letters.",
+    ],
+    isComplete: (output, _name, code) =>
+      countWriteLines(code) >= 4 && JSON.stringify(lines(output)) === JSON.stringify(["3", "2", "1", "LIFTOFF!"]),
+  },
 ];
 
 export function getRunNote(output: string, writeLineCount: number, completed: boolean) {

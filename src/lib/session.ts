@@ -6,6 +6,8 @@ const keys = {
   codes: "sharpie:v4:codes",
 } as const;
 
+const MAX_CHALLENGE_ID = 8;
+
 function available() {
   return typeof window !== "undefined" && !!window.sessionStorage;
 }
@@ -15,7 +17,7 @@ export const session = {
   setName: (name: string) => available() && sessionStorage.setItem(keys.name, name),
   getChallenge: () => {
     const value = available() ? Number(sessionStorage.getItem(keys.challenge)) : 1;
-    return value >= 1 && value <= 5 ? value : 1;
+    return value >= 1 && value <= MAX_CHALLENGE_ID ? value : 1;
   },
   setChallenge: (id: number) => available() && sessionStorage.setItem(keys.challenge, String(id)),
   getCompleted: (): number[] => {

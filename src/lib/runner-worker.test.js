@@ -49,6 +49,13 @@ describe("browser C# basics runner", () => {
     expect(result).toMatchObject({ success: true, output: "Ada has 5 stars\n" });
   });
 
+  it("accepts balanced parentheses and reserves CS1026 for a missing closing parenthesis", () => {
+    expect(run('Console.WriteLine("(ready)");')).toMatchObject({ success: true, output: "(ready)\n" });
+    expect(run("Console.WriteLine((2 + 3) * 4);")).toMatchObject({ success: true, output: "20\n" });
+    expect(run('Console.WriteLine("ready") extra;').error.code).toBe("CS1003");
+    expect(run('Console.WriteLine("ready";').error.code).toBe("CS1026");
+  });
+
   it("returns a familiar diagnostic for a type mismatch", () => {
     const result = run('int age = "seven";');
     expect(result.success).toBe(false);

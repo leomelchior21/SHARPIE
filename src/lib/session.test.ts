@@ -11,4 +11,12 @@ describe("activity visit state", () => {
     expect(session.getVisited()).toEqual([1, 3, 5]);
     expect(session.getCompleted()).toEqual([1]);
   });
+
+  it("restores extra activities from the current session", () => {
+    session.setChallenge(8);
+    expect(session.getChallenge()).toBe(8);
+
+    session.setChallenge(9);
+    expect(session.getChallenge()).toBe(1);
+  });
 });

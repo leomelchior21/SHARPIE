@@ -1641,6 +1641,22 @@ button.module-card { cursor: pointer; }
   backdrop-filter: blur(18px);
 }
 
+.challenge-bar.challenge-extra {
+  border-top-color: rgba(181, 111, 255, 0.42);
+  background:
+    radial-gradient(circle at 10% 50%, rgba(126, 54, 214, 0.2), transparent 34%),
+    linear-gradient(90deg, rgba(29, 13, 53, 0.96), rgba(8, 7, 27, 0.96));
+  box-shadow: 0 -18px 50px rgba(49, 15, 84, 0.25), inset 0 1px rgba(199, 137, 255, 0.05);
+}
+
+.challenge-extra .challenge-number { color: #e6d2ff; border-right-color: rgba(184, 116, 255, 0.25); }
+.challenge-extra .challenge-number span { color: #80609f; }
+.challenge-extra .challenge-copy > div:last-child > span { color: #bd7cff; }
+.challenge-extra .hint-zone { border-left-color: rgba(184, 116, 255, 0.2); }
+.challenge-extra .hint-zone p span { color: #aa70df; }
+.challenge-extra .hint-zone > button { color: #b68bdc; border-color: rgba(180, 105, 255, 0.25); background: rgba(41, 18, 65, 0.62); }
+.challenge-extra .hint-zone > button:hover:not(:disabled) { color: #f0ddff; border-color: rgba(196, 128, 255, 0.55); }
+
 .challenge-copy {
   display: flex;
   min-width: 0;
@@ -1772,6 +1788,9 @@ button.module-card { cursor: pointer; }
 .challenge-dots button:nth-child(3) { --activity-order: 2; }
 .challenge-dots button:nth-child(4) { --activity-order: 3; }
 .challenge-dots button:nth-child(5) { --activity-order: 4; }
+.challenge-dots button:nth-child(6) { --activity-order: 5; }
+.challenge-dots button:nth-child(7) { --activity-order: 6; }
+.challenge-dots button:nth-child(8) { --activity-order: 7; }
 
 .challenge-dots button::after {
   position: absolute;
@@ -1805,6 +1824,31 @@ button.module-card { cursor: pointer; }
   box-shadow: inset 0 0 16px rgba(108, 255, 199, 0.11), 0 0 19px rgba(42, 224, 151, 0.24);
 }
 .challenge-nav button.complete { box-shadow: inset 0 0 16px rgba(108, 255, 199, 0.15), 0 0 20px rgba(42, 224, 151, 0.3); }
+.challenge-dots button.extra-activity {
+  color: #b790df;
+  border-color: rgba(184, 105, 255, 0.42);
+  background: rgba(45, 20, 70, 0.6);
+  box-shadow: inset 0 0 13px rgba(166, 78, 255, 0.08);
+}
+.challenge-dots button.extra-activity::after {
+  border-color: rgba(198, 130, 255, 0.88);
+  box-shadow: 0 0 13px rgba(165, 75, 255, 0.4);
+}
+.challenge-nav button.extra-activity:hover:not(:disabled) {
+  color: #f1ddff;
+  border-color: rgba(203, 139, 255, 0.72);
+}
+.challenge-dots button.extra-activity.current,
+.challenge-dots button.extra-activity.visited,
+.challenge-dots button.extra-activity.current.visited {
+  color: #fff;
+  border-color: rgba(211, 159, 255, 0.85);
+  background: #7435aa;
+  box-shadow: inset 0 0 16px rgba(233, 198, 255, 0.12), 0 0 20px rgba(150, 61, 225, 0.32);
+}
+.challenge-dots button.extra-activity.complete {
+  box-shadow: inset 0 0 18px rgba(233, 198, 255, 0.16), 0 0 22px rgba(165, 75, 255, 0.38);
+}
 .challenge-nav button:disabled { cursor: default; opacity: 0.22; }
 .challenge-nav .nav-arrow { border-color: transparent; background: transparent; }
 

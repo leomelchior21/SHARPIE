@@ -2,17 +2,22 @@ import { describe, expect, it } from "vitest";
 import { challenges, getRunNote } from "./challenges";
 
 describe("WriteLine activities", () => {
-  it("ships five focused activities in the requested order", () => {
-    expect(challenges).toHaveLength(5);
+  it("ships five core activities followed by three extras", () => {
+    expect(challenges).toHaveLength(8);
     expect(challenges.map((challenge) => challenge.title)).toEqual([
       "Morning signal",
       "Introduce yourself",
       "Leave a gap",
       "Make a frame",
       "Initials banner",
+      "Student ID card",
+      "Crack the code",
+      "Launch countdown",
     ]);
     expect(challenges.map((challenge) => challenge.title)).not.toContain("The meme");
     expect(challenges.map((challenge) => challenge.title)).not.toContain("Make it yours");
+    expect(challenges.slice(0, 5).every((challenge) => !challenge.extra)).toBe(true);
+    expect(challenges.slice(5).every((challenge) => challenge.extra)).toBe(true);
     expect(challenges.every((challenge) => challenge.starterCode("Leo").startsWith("//"))).toBe(true);
   });
 
@@ -23,6 +28,9 @@ describe("WriteLine activities", () => {
       "TOP\nBOTTOM\n",
       "#####\n",
       "?\n",
+      "================\n",
+      "ACCESS CODE\n",
+      "3\n",
     ];
     challenges.forEach((challenge, index) => {
       expect(challenge.isComplete(starterOutputs[index], "Leo", challenge.starterCode("Leo"))).toBe(false);
@@ -56,6 +64,25 @@ describe("WriteLine activities", () => {
     ].join("\n");
     expect(challenges[4].isComplete("LL\nL1\nLL\nL1\nLL\n", "Leo", bannerCode)).toBe(true);
     expect(challenges[4].isComplete("LL\nL1\nLL\n", "Leo", bannerCode)).toBe(false);
+  });
+
+  it("validates the ID card, access code, and launch extras", () => {
+    const cardCode = [
+      'Console.WriteLine("================");',
+      'Console.WriteLine("LEO");',
+      'Console.WriteLine("SHARPIE");',
+      'Console.WriteLine("================");',
+    ].join("\n");
+    expect(challenges[5].isComplete("================\nLEO\nSHARPIE\n================\n", "Leo", cardCode)).toBe(true);
+    expect(challenges[5].isComplete("================\nOTHER\nSHARPIE\n================\n", "Leo", cardCode)).toBe(false);
+
+    const accessCode = 'int accessCode = 6 * 7;\nConsole.WriteLine("ACCESS CODE");\nConsole.WriteLine(accessCode);';
+    expect(challenges[6].isComplete("ACCESS CODE\n42\n", "Leo", accessCode)).toBe(true);
+    expect(challenges[6].isComplete("ACCESS CODE\n42\n", "Leo", 'Console.WriteLine("ACCESS CODE");\nConsole.WriteLine(42);')).toBe(false);
+
+    const launchCode = ["3", "2", "1", "LIFTOFF!"].map((line) => `Console.WriteLine("${line}");`).join("\n");
+    expect(challenges[7].isComplete("3\n2\n1\nLIFTOFF!\n", "Leo", launchCode)).toBe(true);
+    expect(challenges[7].isComplete("3\n2\n1\nGO!\n", "Leo", launchCode)).toBe(false);
   });
 
   it("recognizes a completed WriteLine activity in the run note", () => {
