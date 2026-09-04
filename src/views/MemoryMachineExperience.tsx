@@ -213,7 +213,7 @@ export function MemoryMachineExperience({
         </button>
       </header>
 
-      <main className="memory-machine-main">
+      <main className={`memory-machine-main ${stage !== "opening" ? "has-back" : ""}`}>
         {stage !== "opening" && (
           <button className="memory-step-back" onClick={goBackOneStep} aria-label="Back one step">
             <ChevronLeft size={18} /> <span>BACK</span>
@@ -450,6 +450,21 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
   const unassigned = questionKeys.filter((key) => !assignments[key]);
   const allAssigned = unassigned.length === 0;
 
+  const renderBucket = (type: VariableType) => (
+    <RealBucket
+      type={type}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => onDrop(event, type)}
+      onChoose={selectedVariable ? () => onAssign(selectedVariable, type) : undefined}
+    >
+      {questionKeys.filter((key) => assignments[key] === type).map((key) => (
+        <button className={result === "wrong" && variableTypes[key] !== type ? "misplaced" : ""} key={key} onClick={() => onRemove(key)} aria-label={`Move ${keyLabels[key]} out of ${type}`}>
+          <small>{keyLabels[key]}</small>{data[key]}
+        </button>
+      ))}
+    </RealBucket>
+  );
+
   return (
     <div className="variable-reveal stage-card bucket-sort-stage">
       <p className="memory-kicker">YOUR TURN · SORT THE MEMORY</p>
@@ -457,6 +472,7 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
       <p className="bucket-sort-instruction">Drag each card, or tap a card and then choose its bucket.</p>
 
       <div className="variable-sort-workspace">
+        {renderBucket("string")}
         <div className="variable-card-bank" aria-label="Variables waiting to be sorted">
           {unassigned.length ? unassigned.map((key) => (
             <button
@@ -470,24 +486,7 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
             </button>
           )) : <span><Check size={15} /> ALL VARIABLES PLACED</span>}
         </div>
-
-        <div className="sorting-buckets">
-          {(["string", "int"] as VariableType[]).map((type) => (
-            <RealBucket
-              key={type}
-              type={type}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => onDrop(event, type)}
-              onChoose={selectedVariable ? () => onAssign(selectedVariable, type) : undefined}
-            >
-              {questionKeys.filter((key) => assignments[key] === type).map((key) => (
-                <button className={result === "wrong" && variableTypes[key] !== type ? "misplaced" : ""} key={key} onClick={() => onRemove(key)} aria-label={`Move ${keyLabels[key]} out of ${type}`}>
-                  <small>{keyLabels[key]}</small>{data[key]}
-                </button>
-              ))}
-            </RealBucket>
-          ))}
-        </div>
+        {renderBucket("int")}
       </div>
 
       {result === "wrong" && <p className="bucket-feedback try-again">Not yet. Text goes to string; whole numbers go to int.</p>}
@@ -503,8 +502,8 @@ function RealBucket({ type, children, onDragOver, onDrop, onChoose }: { type: Va
   return (
     <section className={`real-bucket ${type}-real-bucket`} onDragOver={onDragOver} onDrop={onDrop}>
       <span className="bucket-handle" aria-hidden="true" />
-      <div className="bucket-rim"><strong>{type}</strong></div>
       <div className="bucket-shell">
+        <strong className="bucket-label">{type}</strong>
         <span>{type === "string" ? "TEXT" : "WHOLE NUMBERS"}</span>
         <div className="bucket-contents">{children}</div>
         {onChoose && <button className="bucket-place-button" onClick={onChoose}>PLACE HERE</button>}
@@ -563,10 +562,18 @@ function FinalMemoryWorkspace({ data, step, onNext, onComplete }: { data: Memory
                 <p className="type-note">Add it before every variable.</p>
               </div>
             ) : step === 1 ? (
-              <>
-                <pre>Memory ready.</pre>
-                <p>Each variable now has its <b>type</b>.</p>
-              </>
+              <div className="type-lead">
+                <p>The type always leads. It goes <b>before</b> the name.</p>
+                <div className="type-lead-list">
+                  {memoryKeys.map((key) => (
+                    <div className="type-lead-row" key={key}>
+                      <span className={`lead-type ${variableTypes[key]}`}>{variableTypes[key]}</span>
+                      <em>→</em>
+                      <b>{keyLabels[key]}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <>
                 <pre>{printed}</pre>

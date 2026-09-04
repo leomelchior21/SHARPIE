@@ -46,7 +46,7 @@ export function MemoryMachineHub({
         </div>
 
         <div className="memory-experience-grid">
-          <button className="memory-experience-card is-available" onClick={onOpenExperience}>
+          <button className="memory-experience-card is-available memory-card-purple" onClick={onOpenExperience}>
             <span className="memory-card-number">01</span>
             <span className="memory-card-icon"><Database size={28} /></span>
             <span className="memory-card-copy">
@@ -74,7 +74,7 @@ export function MemoryMachineHub({
               {unlocked ? (
                 runComplete ? <><Check size={14} /> COMPLETE</> : <><i /> UNLOCKED</>
               ) : (
-                <><LockKeyhole size={14} /> UNLOCK AFTER MEMORY MACHINE</>
+                <><LockKeyhole size={14} /> UNLOCK: MEMORY MACHINE</>
               )}
             </span>
             {unlocked && <span className="memory-card-enter">ENTER <ArrowUpRight size={18} /></span>}
