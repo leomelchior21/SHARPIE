@@ -76,8 +76,8 @@ export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
       </div>
 
       <div className="module-grid">
-        <div className="module-row">{modules.slice(0, 3).map(renderCard)}</div>
-        <div className="module-row module-row-bottom">{modules.slice(3).map(renderCard)}</div>
+        <div className="module-row">{modules.slice(0, 2).map(renderCard)}</div>
+        <div className="module-row module-row-bottom">{modules.slice(2).map(renderCard)}</div>
       </div>
 
       <div className={`toast ${notice ? "toast-visible" : ""}`} role="status">

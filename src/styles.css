@@ -424,16 +424,16 @@ input:focus-visible,
 
 .module-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(200px, 280px));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
-  justify-content: center;
 }
-.module-row.module-row-bottom { grid-template-columns: repeat(2, minmax(200px, 280px)); }
+.module-row.module-row-bottom { grid-template-columns: repeat(3, 1fr); }
+.module-row .module-card { min-height: clamp(220px, 30vh, 320px); }
+.module-row.module-row-bottom .module-card { min-height: clamp(150px, 20vh, 200px); }
 
 .module-card {
   position: relative;
   min-width: 0;
-  aspect-ratio: 1 / 1;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 20px;
@@ -2114,8 +2114,6 @@ button.module-card { cursor: pointer; }
 
 @media (max-width: 1100px) {
   .hub { padding-left: 32px; padding-right: 32px; }
-  .module-row { grid-template-columns: repeat(3, minmax(170px, 230px)); }
-  .module-row.module-row-bottom { grid-template-columns: repeat(2, minmax(170px, 230px)); }
   .challenge-bar { padding-left: 12px; padding-right: 12px; grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.7fr) auto; gap: 10px; }
   .hint-zone { padding-left: 14px; }
   .challenge-nav, .challenge-dots { gap: 5px; }
@@ -2125,8 +2123,8 @@ button.module-card { cursor: pointer; }
 @media (max-height: 780px) {
   .hub { padding-top: 23px; padding-bottom: 24px; row-gap: 17px; }
   .hub-copy h1 { font-size: clamp(1.9rem, 3.5vw, 3rem); }
-  .module-row { grid-template-columns: repeat(3, minmax(160px, 210px)); }
-  .module-row.module-row-bottom { grid-template-columns: repeat(2, minmax(160px, 210px)); }
+  .module-row .module-card { min-height: clamp(190px, 26vh, 250px); }
+  .module-row.module-row-bottom .module-card { min-height: clamp(130px, 17vh, 170px); }
   .module-content { margin-top: 16px; }
   .playground { grid-template-rows: 56px minmax(0, 1fr) 126px; }
   .workspace { padding: 10px 12px; }
@@ -2146,8 +2144,6 @@ button.module-card { cursor: pointer; }
 
 @media (max-width: 820px) {
   .hub { padding: 22px; }
-  .module-row { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
-  .module-row.module-row-bottom { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
   .module-topline { left: 14px; right: 14px; }
   .challenge-number { display: none; }
   .challenge-copy { min-width: 190px; }
@@ -2161,7 +2157,7 @@ button.module-card { cursor: pointer; }
   .hub { overflow: auto; }
   .module-grid { gap: 12px; }
   .module-row, .module-row.module-row-bottom { grid-template-columns: 1fr; }
-  .module-card { aspect-ratio: auto; min-height: 150px; }
+  .module-row .module-card, .module-row.module-row-bottom .module-card { min-height: 150px; }
   .playground { grid-template-rows: 54px minmax(0, 1fr) 150px; }
   .workspace { grid-template-columns: 1fr 1fr; }
   .editor-footer span:nth-child(2),
