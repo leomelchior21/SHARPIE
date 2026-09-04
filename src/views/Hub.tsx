@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { ArrowUpRight, Braces, LockKeyhole } from "lucide-react";
+import { ArrowUpRight, Braces, Database, LockKeyhole } from "lucide-react";
 import { Brand } from "../components/Brand";
 
 type HubProps = {
   name: string;
-  onOpen: () => void;
+  onOpenWriteLine: () => void;
+  onOpenMemoryMachine: () => void;
 };
 
 const futureModules = [
@@ -14,7 +15,7 @@ const futureModules = [
   { id: "05", glyph: "?", name: "Final Boss", subtitle: "Secret Challenge" },
 ];
 
-export function Hub({ name, onOpen }: HubProps) {
+export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
   const [notice, setNotice] = useState(false);
 
   const locked = () => {
@@ -38,7 +39,7 @@ export function Hub({ name, onOpen }: HubProps) {
       </div>
 
       <div className="module-grid">
-        <button className="module-card active-module" onClick={onOpen}>
+        <button className="module-card active-module" onClick={onOpenWriteLine}>
           <span className="module-callout" aria-hidden="true" />
           <span className="module-light" aria-hidden="true" />
           <span className="module-topline">
@@ -54,7 +55,20 @@ export function Hub({ name, onOpen }: HubProps) {
         </button>
 
         <div className="future-grid">
-          {futureModules.map((module) => (
+          <button className="module-card future-module available-module" onClick={onOpenMemoryMachine}>
+            <span className="module-light" aria-hidden="true" />
+            <span className="module-topline">
+              <span>MODULE 02</span>
+              <span className="available"><i /> AVAILABLE</span>
+            </span>
+            <span className="module-glyph active-glyph"><Database size={21} /></span>
+            <span className="module-content">
+              <strong>Memory Machine</strong>
+              <small>Discover how programs remember.</small>
+            </span>
+            <span className="coming-soon module-open">OPEN <ArrowUpRight size={13} /></span>
+          </button>
+          {futureModules.filter((module) => module.id !== "02").map((module) => (
             <button
               className="module-card future-module"
               key={module.id}

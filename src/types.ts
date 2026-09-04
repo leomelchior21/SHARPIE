@@ -1,4 +1,10 @@
-export type Screen = "name" | "hub" | "writeline";
+export type Screen =
+  | "name"
+  | "hub"
+  | "writeline"
+  | "memory-hub"
+  | "memory-experience"
+  | "variable-run";
 
 export type RunnerError = {
   title: string;
