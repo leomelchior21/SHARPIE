@@ -1,5 +1,6 @@
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Database, Power, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronLeft, Database, Power, Sparkles } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Brand } from "../components/Brand";
 import { memoryProgress } from "../lib/memoryProgress";
 
@@ -45,9 +46,18 @@ export function MemoryMachineExperience({
   const [updateDone, setUpdateDone] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [conceptChoice, setConceptChoice] = useState<number | null>(null);
-  const [mapArrows, setMapArrows] = useState(false);
+  const [valuesRevealed, setValuesRevealed] = useState(false);
   const [finalStep, setFinalStep] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const transitionTimerRef = useRef<number | null>(null);
+
+  const scheduleTransition = (callback: () => void, delay: number) => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = window.setTimeout(() => {
+      transitionTimerRef.current = null;
+      callback();
+    }, delay);
+  };
 
   useEffect(() => {
     if (stage === "collect" && !transfer) inputRef.current?.focus();
@@ -59,9 +69,13 @@ export function MemoryMachineExperience({
     return () => window.clearTimeout(timer);
   }, [stage, recallCount]);
 
+  useEffect(() => () => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+  }, []);
+
   const boot = () => {
     setStage("booting");
-    window.setTimeout(() => setStage("collect"), 560);
+    scheduleTransition(() => setStage("collect"), 560);
   };
 
   const remember = (value: string) => {
@@ -72,7 +86,7 @@ export function MemoryMachineExperience({
     setData((current) => ({ ...current, [key]: clean }));
     setTransfer({ key, value: clean, response });
     setEntry("");
-    window.setTimeout(() => {
+    scheduleTransition(() => {
       setTransfer(null);
       setOtherSelected(false);
       if (questionIndex === questionKeys.length - 1) {
@@ -93,11 +107,50 @@ export function MemoryMachineExperience({
     const clean = replacement.trim();
     if (!clean || clean === data.favoriteFood) return;
     setUpdating(true);
-    window.setTimeout(() => {
+    scheduleTransition(() => {
       setData((current) => ({ ...current, favoriteFood: clean }));
       setUpdating(false);
       setUpdateDone(true);
     }, 520);
+  };
+
+  const goBackOneStep = () => {
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    setTransfer(null);
+    setUpdating(false);
+
+    if (stage === "booting") return setStage("opening");
+    if (stage === "collect") {
+      if (questionIndex === 0) return setStage("opening");
+      const previousIndex = questionIndex - 1;
+      setQuestionIndex(previousIndex);
+      setEntry(data[questionKeys[previousIndex]]);
+      setOtherSelected(previousIndex === 3 && !["Games", "Music", "Sports", "Movies"].includes(data.likes));
+      return;
+    }
+    if (stage === "recall") {
+      setQuestionIndex(3);
+      setEntry(data.likes);
+      setOtherSelected(!["Games", "Music", "Sports", "Movies"].includes(data.likes));
+      return setStage("collect");
+    }
+    if (stage === "update") {
+      setRecallCount(4);
+      return setStage("recall");
+    }
+    if (stage === "concept") return setStage("update");
+    if (stage === "map") return setStage("concept");
+    if (stage === "variable") {
+      setValuesRevealed(true);
+      return setStage("map");
+    }
+    if (stage === "final") {
+      if (finalStep > 0) return setFinalStep((step) => step - 1);
+      return setStage("variable");
+    }
   };
 
   const complete = () => {
@@ -110,9 +163,16 @@ export function MemoryMachineExperience({
       <header className="memory-machine-header">
         <Brand compact asButton onClick={onBack} />
         <div className="memory-machine-status"><i /> MODULE 02 · MEMORY ONLINE</div>
-        <button className="icon-text-button back-button" onClick={onBack}>
-          <ArrowLeft size={17} /> <span>MODULE</span>
-        </button>
+        <div className="memory-machine-actions">
+          {stage !== "opening" && (
+            <button className="icon-text-button step-back-button" onClick={goBackOneStep}>
+              <ChevronLeft size={17} /> <span>BACK ONE STEP</span>
+            </button>
+          )}
+          <button className="icon-text-button back-button" onClick={onBack}>
+            <ArrowLeft size={17} /> <span>MODULE</span>
+          </button>
+        </div>
       </header>
 
       <main className="memory-machine-main">
@@ -174,7 +234,7 @@ export function MemoryMachineExperience({
                   <div className="memory-choice-area">
                     <div className="memory-options">
                       {["Games", "Music", "Sports", "Movies"].map((option) => (
-                        <button key={option} onClick={() => remember(option)}>{option}</button>
+                        <button className={data.likes === option ? "selected" : ""} key={option} onClick={() => remember(option)}>{option}</button>
                       ))}
                       <button className={otherSelected ? "selected" : ""} onClick={() => setOtherSelected(true)}>Other</button>
                     </div>
@@ -255,13 +315,16 @@ export function MemoryMachineExperience({
           <div className="memory-map stage-card">
             <p className="memory-kicker">THIS IS WHAT I REMEMBER</p>
             <h1 id="memory-title">MEMORY MAP</h1>
-            <div className={`memory-map-code ${mapArrows ? "show-arrows" : ""}`}>
+            <div className={`memory-map-code ${valuesRevealed ? "show-values" : "categories-only"}`}>
               {(Object.keys(data) as MemoryKey[]).map((key) => (
-                <code key={key}><b>{keyLabels[key]}</b><em>{mapArrows ? "→" : "="}</em><span>{data[key]}</span></code>
+                <code key={key}>
+                  <b>{keyLabels[key]}</b>
+                  {valuesRevealed && <><em>→</em><span>{data[key]}</span></>}
+                </code>
               ))}
             </div>
-            <button className="memory-primary compact-button" onClick={() => mapArrows ? setStage("variable") : setMapArrows(true)}>
-              {mapArrows ? "WHAT IS THIS?" : "SEE THE PATTERN"} <ArrowRight size={17} />
+            <button className="memory-primary compact-button" onClick={() => valuesRevealed ? setStage("variable") : setValuesRevealed(true)}>
+              {valuesRevealed ? "WHAT IS THIS?" : "REVEAL THE VALUES"} <ArrowRight size={17} />
             </button>
           </div>
         )}
@@ -271,9 +334,24 @@ export function MemoryMachineExperience({
             <p className="memory-kicker">THE IDEA HAS A NAME</p>
             <h1 id="memory-title">VARIABLE</h1>
             <p className="variable-definition">A named place where a program remembers information.</p>
-            <div className="variable-diagrams">
-              <div><span><b>NAME</b><b>VALUE</b></span><code><strong>name</strong><em>→</em>{data.name}</code></div>
-              <div><span><b>NAME</b><b>VALUE</b></span><code><strong>age</strong><em>→</em>{data.age}</code></div>
+            <div className="variable-bucket-flow" aria-label="Student values sorted into string and int buckets">
+              <div className="bucket-values">
+                {(["name", "age", "favoriteFood", "likes"] as MemoryKey[]).map((key, index) => (
+                  <code key={key} style={{ "--value-index": index } as CSSProperties}><small>{keyLabels[key]}</small>{data[key]}</code>
+                ))}
+              </div>
+              <div className="memory-buckets">
+                <section className="memory-bucket string-bucket">
+                  <header><strong>string</strong><span>TEXT BUCKET</span></header>
+                  <div>
+                    {(["name", "favoriteFood", "likes"] as MemoryKey[]).map((key, index) => <code key={key} style={{ "--bucket-index": index } as CSSProperties}><small>{keyLabels[key]}</small>{data[key]}</code>)}
+                  </div>
+                </section>
+                <section className="memory-bucket int-bucket">
+                  <header><strong>int</strong><span>WHOLE NUMBER BUCKET</span></header>
+                  <div><code style={{ "--bucket-index": 1 } as CSSProperties}><small>age</small>{data.age}</code></div>
+                </section>
+              </div>
             </div>
             <button className="memory-primary compact-button" onClick={() => setStage("final")}>CONNECT TO C# <ArrowRight size={17} /></button>
           </div>

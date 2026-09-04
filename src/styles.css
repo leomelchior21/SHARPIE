@@ -2368,6 +2368,8 @@ button.module-card { cursor: pointer; }
 }
 
 .memory-machine-status i { width: 5px; height: 5px; border-radius: 50%; background: #70e0ac; box-shadow: 0 0 9px #45c891; }
+.memory-machine-actions { display: flex; align-items: center; gap: 8px; }
+.step-back-button { color: #91a4cf; }
 .memory-machine-main { min-height: 0; overflow: hidden; }
 
 .stage-card {
@@ -2493,15 +2495,33 @@ button.module-card { cursor: pointer; }
 .memory-map-code code { display: grid; grid-template-columns: 150px 35px 1fr; color: #d9e5ff; font: 0.83rem var(--mono); }
 .memory-map-code b { color: #83b4ff; font-weight: 500; }
 .memory-map-code em { color: #6678a2; font-style: normal; transition: color 240ms, transform 240ms; }
-.memory-map-code.show-arrows em { color: #8a6dff; transform: translateX(4px); }
+.memory-map-code.categories-only { grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.memory-map-code.categories-only code { display: block; padding: 13px 4px; border-bottom: 1px solid rgba(111, 145, 229, 0.12); animation: recall-in 220ms ease-out both; }
+.memory-map-code.categories-only code:nth-child(n + 3) { border-bottom: 0; }
+.memory-map-code.show-values code { animation: memory-value-reveal 280ms ease-out both; }
+.memory-map-code.show-values code:nth-child(2) { animation-delay: 45ms; }
+.memory-map-code.show-values code:nth-child(3) { animation-delay: 90ms; }
+.memory-map-code.show-values code:nth-child(4) { animation-delay: 135ms; }
+.memory-map-code.show-values em { color: #8a6dff; transform: translateX(4px); }
 
 .variable-definition { margin: 14px 0 0; color: #96a3bf; font-size: 1rem; }
-.variable-diagrams { display: grid; width: min(100%, 610px); margin-top: 35px; grid-template-columns: 1fr 1fr; gap: 12px; }
-.variable-diagrams > div { padding: 13px 18px 18px; border: 1px solid rgba(111, 145, 229, 0.2); border-radius: 9px; background: rgba(5, 10, 28, 0.72); }
-.variable-diagrams > div > span { display: grid; grid-template-columns: 1fr 1fr; color: #4f5e7c; font: 0.43rem var(--mono); letter-spacing: 0.12em; }
-.variable-diagrams code { display: grid; margin-top: 14px; grid-template-columns: 1fr 30px 1fr; color: #fff; font: 0.9rem var(--mono); }
-.variable-diagrams code strong { color: #83b5ff; font-weight: 500; }
-.variable-diagrams code em { color: #6957d2; font-style: normal; }
+.variable-bucket-flow { width: min(100%, 720px); margin-top: 24px; }
+.bucket-values { position: relative; z-index: 2; display: flex; min-height: 48px; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7px; }
+.bucket-values code,
+.memory-bucket code { display: flex; border: 1px solid rgba(105, 151, 255, 0.26); border-radius: 7px; padding: 8px 11px; align-items: flex-start; flex-direction: column; color: #edf4ff; background: rgba(22, 48, 106, 0.7); font: 0.66rem var(--mono); box-shadow: 0 7px 18px rgba(0, 0, 0, 0.18); }
+.bucket-values code { animation: bucket-source 280ms calc(var(--value-index) * 45ms) ease-in both; }
+.bucket-values small,
+.memory-bucket code small { margin-bottom: 3px; color: #7594d5; font: 0.4rem var(--mono); letter-spacing: 0.08em; }
+.memory-buckets { display: grid; margin-top: 12px; grid-template-columns: 1fr 1fr; gap: 12px; }
+.memory-bucket { position: relative; min-height: 134px; border: 1px solid rgba(111, 151, 246, 0.26); border-radius: 10px 10px 18px 18px; overflow: hidden; background: linear-gradient(180deg, rgba(13, 27, 61, 0.82), rgba(5, 11, 29, 0.9)); text-align: left; box-shadow: inset 0 -22px 30px rgba(27, 60, 137, 0.09); }
+.memory-bucket::before { position: absolute; content: ""; left: -1px; right: -1px; top: 36px; height: 8px; border: 1px solid rgba(113, 155, 255, 0.24); border-radius: 3px; background: #0c1734; }
+.memory-bucket header { display: flex; height: 39px; padding: 0 14px; align-items: center; justify-content: space-between; }
+.memory-bucket header strong { color: #b392ff; font: 500 0.72rem var(--mono); }
+.memory-bucket header span { color: #526381; font: 0.4rem var(--mono); letter-spacing: 0.1em; }
+.int-bucket header strong { color: #df9fff; }
+.memory-bucket > div { display: flex; padding: 17px 13px 14px; align-items: flex-start; flex-wrap: wrap; gap: 7px; }
+.memory-bucket code { opacity: 0; animation: bucket-land 220ms calc(180ms + var(--bucket-index) * 55ms) ease-out forwards; }
+.int-bucket code { border-color: rgba(183, 111, 244, 0.28); background: rgba(86, 37, 130, 0.46); }
 
 /* Memory final workspace */
 
@@ -2627,6 +2647,9 @@ button.module-card { cursor: pointer; }
 @keyframes memory-card-in { from { opacity: 0; transform: translateY(8px) scale(0.992); } to { opacity: 1; transform: none; } }
 @keyframes boot-line-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 @keyframes recall-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes memory-value-reveal { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes bucket-source { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(22px) scale(0.94); } }
+@keyframes bucket-land { from { opacity: 0; transform: translateY(-16px) scale(0.94); } to { opacity: 1; transform: none; } }
 
 @media (max-height: 780px) {
   .memory-hub-main { padding-top: 28px; padding-bottom: 28px; }
@@ -2639,6 +2662,9 @@ button.module-card { cursor: pointer; }
   .memory-machine-orb { width: 84px; height: 84px; margin-bottom: 22px; }
   .memory-primary { margin-top: 25px; }
   .compact-button { margin-top: 18px; }
+  .variable-bucket-flow { margin-top: 16px; }
+  .memory-bucket { min-height: 112px; }
+  .memory-bucket > div { padding-top: 13px; }
   .memory-final { padding-top: 11px; padding-bottom: 11px; gap: 9px; }
   .memory-code-content { padding-top: 15px; padding-bottom: 15px; }
   .run-code-surface { padding-top: 28px; padding-bottom: 28px; }
