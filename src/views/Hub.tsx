@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { ArrowUpRight, Braces, Database, LockKeyhole } from "lucide-react";
 import { Brand } from "../components/Brand";
 
@@ -8,12 +9,14 @@ type HubProps = {
   onOpenMemoryMachine: () => void;
 };
 
-const futureModules = [
-  { id: "02", glyph: "▣", name: "Memory Machine", subtitle: "Restore Data from Variables" },
-  { id: "03", glyph: "Aa", name: "STOP", subtitle: "Basic String Formatting" },
-  { id: "04", glyph: "◇", name: "Wordle", subtitle: "Basic Operations" },
-  { id: "05", glyph: "?", name: "Final Boss", subtitle: "Secret Challenge" },
-];
+type Module = {
+  id: string;
+  name: string;
+  subtitle: string;
+  glyph: ReactNode;
+  state: "available" | "featured" | "locked";
+  onClick?: () => void;
+};
 
 export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
   const [notice, setNotice] = useState(false);
@@ -21,6 +24,40 @@ export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
   const locked = () => {
     setNotice(true);
     window.setTimeout(() => setNotice(false), 1800);
+  };
+
+  const modules: Module[] = [
+    { id: "01", name: "WriteLine Playground", subtitle: "Make C# talk.", glyph: <Braces size={28} />, state: "available", onClick: onOpenWriteLine },
+    { id: "02", name: "Memory Machine", subtitle: "Discover how programs remember.", glyph: <Database size={28} />, state: "featured", onClick: onOpenMemoryMachine },
+    { id: "03", name: "STOP", subtitle: "Basic String Formatting", glyph: "Aa", state: "locked" },
+    { id: "04", name: "Wordle", subtitle: "Basic Operations", glyph: "◇", state: "locked" },
+    { id: "05", name: "Final Boss", subtitle: "Secret Challenge", glyph: "?", state: "locked" },
+  ];
+
+  const renderCard = (module: Module) => {
+    const available = module.state !== "locked";
+    const featured = module.state === "featured";
+    return (
+      <button
+        className={`module-card ${featured ? "featured-module" : available ? "available-module" : "locked-module"}`}
+        key={module.id}
+        onClick={available ? module.onClick : locked}
+        aria-disabled={!available}
+      >
+        {featured && <span className="module-callout" aria-hidden="true" />}
+        {featured && <span className="module-light" aria-hidden="true" />}
+        <span className="module-topline">
+          <span>MODULE {module.id}</span>
+          {available ? <span className="available"><i /> AVAILABLE</span> : <LockKeyhole size={13} />}
+        </span>
+        <span className={`module-glyph ${featured ? "featured-glyph" : ""}`}>{module.glyph}</span>
+        <span className="module-content">
+          <strong>{module.name}</strong>
+          <small>{module.subtitle}</small>
+        </span>
+        {available ? <span className="module-open">OPEN <ArrowUpRight size={13} /></span> : <span className="coming-soon">COMING SOON</span>}
+      </button>
+    );
   };
 
   return (
@@ -39,55 +76,8 @@ export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
       </div>
 
       <div className="module-grid">
-        <button className="module-card active-module" onClick={onOpenWriteLine}>
-          <span className="module-callout" aria-hidden="true" />
-          <span className="module-light" aria-hidden="true" />
-          <span className="module-topline">
-            <span>MODULE 01</span>
-            <span className="available"><i /> AVAILABLE</span>
-          </span>
-          <span className="module-glyph active-glyph"><Braces size={34} /></span>
-          <span className="module-content">
-            <strong>WriteLine<br />Playground</strong>
-            <small>Make C# talk.</small>
-          </span>
-          <span className="module-enter">ENTER MODULE <ArrowUpRight size={19} /></span>
-        </button>
-
-        <div className="future-grid">
-          <button className="module-card future-module available-module" onClick={onOpenMemoryMachine}>
-            <span className="module-light" aria-hidden="true" />
-            <span className="module-topline">
-              <span>MODULE 02</span>
-              <span className="available"><i /> AVAILABLE</span>
-            </span>
-            <span className="module-glyph active-glyph"><Database size={21} /></span>
-            <span className="module-content">
-              <strong>Memory Machine</strong>
-              <small>Discover how programs remember.</small>
-            </span>
-            <span className="coming-soon module-open">OPEN <ArrowUpRight size={13} /></span>
-          </button>
-          {futureModules.filter((module) => module.id !== "02").map((module) => (
-            <button
-              className="module-card future-module"
-              key={module.id}
-              onClick={locked}
-              aria-disabled="true"
-            >
-              <span className="module-topline">
-                <span>MODULE {module.id}</span>
-                <LockKeyhole size={13} />
-              </span>
-              <span className="module-glyph">{module.glyph}</span>
-              <span className="module-content">
-                <strong>{module.name}</strong>
-                <small>{module.subtitle}</small>
-              </span>
-              <span className="coming-soon">COMING SOON</span>
-            </button>
-          ))}
-        </div>
+        <div className="module-row">{modules.slice(0, 3).map(renderCard)}</div>
+        <div className="module-row module-row-bottom">{modules.slice(3).map(renderCard)}</div>
       </div>
 
       <div className={`toast ${notice ? "toast-visible" : ""}`} role="status">
