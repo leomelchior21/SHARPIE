@@ -1,9 +1,14 @@
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, RotateCcw, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { StreamLanguage } from "@codemirror/language";
+import { csharp } from "@codemirror/legacy-modes/mode/clike";
+import CodeMirror from "@uiw/react-codemirror";
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, Play, RotateCcw, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Brand } from "../components/Brand";
 import { variableRunLessons } from "../data/variableRunLessons";
 import type { VariableRunLesson } from "../data/variableRunLessons";
 import { memoryProgress } from "../lib/memoryProgress";
+import { executeCSharp, prepareCSharp } from "../lib/runner";
+import type { RunResult } from "../types";
 
 type Result = "correct" | "wrong" | null;
 
@@ -13,10 +18,11 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [selectedBlocks, setSelectedBlocks] = useState<number[]>([]);
   const [result, setResult] = useState<Result>(null);
-  const [finalPhase, setFinalPhase] = useState<"predict" | "build">("predict");
+  const [finalPhase, setFinalPhase] = useState<"predict" | "build" | "sandbox">("predict");
   const [finished, setFinished] = useState(false);
   const lesson = variableRunLessons[lessonIndex];
   const finalPredictionOnly = lesson.type === "final" && finalPhase === "predict";
+  const isFinalBuild = lesson.type === "final" && finalPhase === "build";
   const completedCount = lessonIndex + (result === "correct" && !finalPredictionOnly ? 1 : 0);
 
   const blockValues = useMemo(
@@ -73,6 +79,11 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
       setResult(null);
       return;
     }
+    if (lesson.type === "final" && finalPhase === "build") {
+      setFinalPhase("sandbox");
+      setResult(null);
+      return;
+    }
     if (lessonIndex === variableRunLessons.length - 1) {
       memoryProgress.completeVariableRun();
       setFinished(true);
@@ -85,6 +96,10 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
   };
 
   if (finished) return <VariableRunComplete onFinish={onFinish} />;
+
+  if (lesson.type === "final" && finalPhase === "sandbox") {
+    return <SandboxFinal onBack={onBack} onFinish={() => { memoryProgress.completeVariableRun(); setFinished(true); }} />;
+  }
 
   return (
     <section className="variable-run screen-enter" aria-labelledby="variable-run-title">
@@ -105,19 +120,36 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
             <div><span>01</span><strong>CODE</strong></div><small>C#</small>
           </header>
           <div className="run-code-surface">
-            <div className="run-code-lines">
-              {(lesson.code ?? lesson.finalCode ?? "").split("\n").map((line, index) => (
-                <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine line={line || " "} /></code></div>
-              ))}
-            </div>
-            {isBlockTask && selectedBlocks.length > 0 && (
-              <div className="code-preview">
-                <span>YOUR CODE</span>
-                <code>{blockValues.map((token, index) => <span key={`${selectedBlocks[index]}-${index}`}>{token}{token === ";" && index < blockValues.length - 1 ? <br /> : " "}</span>)}</code>
-              </div>
+            {isFinalBuild ? (
+              result === "correct" ? (
+                <div className="run-code-lines code-revealed">
+                  {(lesson.finalCode ?? "").split("\n").map((line, index) => (
+                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine line={line || " "} /></code></div>
+                  ))}
+                </div>
+              ) : (
+                <div className="code-hidden">
+                  <span>CODE HIDDEN</span>
+                  <p>Build it from memory.</p>
+                </div>
+              )
+            ) : (
+              <>
+                <div className="run-code-lines">
+                  {(lesson.code ?? lesson.finalCode ?? "").split("\n").map((line, index) => (
+                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine line={line || " "} /></code></div>
+                  ))}
+                </div>
+                {isBlockTask && selectedBlocks.length > 0 && (
+                  <div className="code-preview">
+                    <span>YOUR CODE</span>
+                    <code>{blockValues.map((token, index) => <span key={`${selectedBlocks[index]}-${index}`}>{token}{token === ";" && index < blockValues.length - 1 ? <br /> : " "}</span>)}</code>
+                  </div>
+                )}
+              </>
             )}
           </div>
-          <footer><span>READ-ONLY EXAMPLE</span><span>VARIABLE BASICS</span></footer>
+          <footer><span>{isFinalBuild ? "BUILD WITHOUT PEEKING" : "READ-ONLY EXAMPLE"}</span><span>VARIABLE BASICS</span></footer>
         </section>
 
         <section className={`run-quiz-panel ${result ? `result-${result}` : ""}`} aria-live="polite">
@@ -125,7 +157,7 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
           <div className="run-quiz-content">
             <p className="run-eyebrow">{lesson.eyebrow}</p>
             <h1>{lesson.title}</h1>
-            <p className="run-question">{lesson.type === "final" && finalPhase === "build" ? "Now build both variables." : lesson.question}</p>
+            <p className="run-question">{isFinalBuild ? "Build a new string and int without looking." : lesson.question}</p>
 
             {isBlockTask ? (
               <BlockChallenge lesson={lesson} selected={selectedBlocks} onAdd={addBlock} onRemove={removeBlock} onReset={() => { setSelectedBlocks([]); setResult(null); }} />
@@ -201,6 +233,150 @@ function SyntaxLine({ line }: { line: string }) {
     const className = part.startsWith("//") ? "syn-comment" : part.startsWith('"') ? "syn-string" : /^(string|int)$/.test(part) ? "syn-type" : /^(Console|WriteLine)$/.test(part) ? "syn-method" : /^\d+$/.test(part) ? "syn-number" : "";
     return <span className={className} key={`${part}-${index}`}>{part}</span>;
   })}</>;
+}
+
+const sandboxStarter = `// create a text variable and a number variable, that completes the code below:
+
+Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`;
+
+function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () => void }) {
+  const [code, setCode] = useState(sandboxStarter);
+  const [result, setResult] = useState<RunResult | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [hasRun, setHasRun] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const extensions = useMemo(() => [StreamLanguage.define(csharp)], []);
+
+  useEffect(() => {
+    let active = true;
+    prepareCSharp()
+      .then(() => { if (active) setRuntimeStatus("ready"); })
+      .catch(() => { if (active) setRuntimeStatus("error"); });
+    return () => { active = false; abortRef.current?.abort(); };
+  }, []);
+
+  const run = useCallback(async () => {
+    if (isRunning || runtimeStatus === "loading" || !code.trim()) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsRunning(true);
+    setResult(null);
+    try {
+      if (runtimeStatus !== "ready") {
+        setRuntimeStatus("loading");
+        await prepareCSharp();
+        setRuntimeStatus("ready");
+      }
+      const next = await executeCSharp(code, controller.signal);
+      setResult(next);
+      setHasRun(true);
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        setRuntimeStatus("error");
+        setResult({
+          success: false,
+          output: "",
+          durationMs: 0,
+          error: {
+            title: "C# COULD NOT LOAD",
+            message: "The browser could not start its C# engine.",
+            compiler: error instanceof Error ? error.message : "Refresh and try again.",
+          },
+        });
+        setHasRun(true);
+      }
+    } finally {
+      setIsRunning(false);
+    }
+  }, [code, isRunning, runtimeStatus]);
+
+  const complete = Boolean(result?.success && hasRun && /\bstring\s+[A-Za-z_]\w*/.test(code) && /\bint\s+[A-Za-z_]\w*/.test(code));
+
+  return (
+    <section className="variable-run sandbox-final screen-enter" aria-labelledby="sandbox-title">
+      <header className="variable-run-header">
+        <div className="playground-identity">
+          <Brand compact asButton onClick={onBack} />
+          <span className="header-divider" />
+          <div><span>MODULE 02</span><strong id="sandbox-title">VARIABLE RUN · FINAL</strong></div>
+        </div>
+        <div className="run-meta"><span>{complete ? "+100 XP" : "FREE CODE"}</span><button className="icon-text-button" onClick={onBack}><ArrowLeft size={17} /><span>MODULE</span></button></div>
+      </header>
+
+      <div className="sandbox-workspace">
+        <section className="work-panel editor-panel" aria-label="C# code editor">
+          <header className="panel-header">
+            <div><span className="panel-index">01</span><strong>CODE</strong></div>
+            <div className="panel-actions"><span className="language-chip">C#</span></div>
+          </header>
+          <div className="editor-wrap">
+            <CodeMirror
+              value={code}
+              height="100%"
+              theme="dark"
+              extensions={extensions}
+              onChange={(value) => { setCode(value); setResult(null); setHasRun(false); }}
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: false,
+                highlightActiveLine: true,
+                highlightActiveLineGutter: true,
+                autocompletion: true,
+                bracketMatching: true,
+                closeBrackets: true,
+              }}
+              aria-label="C# code"
+            />
+          </div>
+          <footer className="editor-footer"><span>{code.split("\n").length} LINES</span><span>CREATE TWO VARIABLES</span></footer>
+        </section>
+
+        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""}`} aria-live="polite">
+          <header className="panel-header">
+            <div><span className="panel-index">02</span><strong>OUTPUT</strong></div>
+            <div className="panel-actions">
+              <span className={`runtime-status ${runtimeStatus === "ready" ? "status-live" : ""}`}>
+                <i /> {runtimeStatus === "loading" ? "LOADING C#" : isRunning ? "RUNNING" : result?.success && hasRun ? "SIGNAL LIVE" : runtimeStatus === "error" ? "RETRY" : "C# READY"}
+              </span>
+            </div>
+          </header>
+          <div className="console-surface">
+            {isRunning || runtimeStatus === "loading" ? (
+              <div className="running-state"><span className="run-wave"><i /><i /><i /><i /></span><p>{isRunning ? "RUNNING C#..." : "STARTING C#..."}</p></div>
+            ) : result?.error ? (
+              <div className="error-state">
+                <span className="error-label">C#</span>
+                <h2>{result.error.title}</h2>
+                <p>{result.error.message}</p>
+                <div className="compiler-message"><span>COMPILER</span><code>{result.error.compiler}</code></div>
+              </div>
+            ) : result ? (
+              <div className="output-content">
+                <span className="output-prompt">SHARPIE OUTPUT /</span>
+                <pre>{result.output || " "}</pre>
+                {complete && <div className="output-note"><Sparkles size={14} /> Both variables created.</div>}
+              </div>
+            ) : (
+              <div className="empty-output"><span>&gt;_</span><p>YOUR PROGRAM WILL SPEAK HERE.</p></div>
+            )}
+          </div>
+          <button className="run-button" onClick={() => void run()} disabled={isRunning || runtimeStatus === "loading" || !code.trim()}>
+            <span>{isRunning ? "RUNNING" : runtimeStatus === "error" ? "RETRY C#" : "RUN"}</span>
+            <Play size={19} fill="currentColor" />
+          </button>
+        </section>
+      </div>
+
+      <div className="sandbox-footer">
+        <p><Sparkles size={16} /> Create a text variable and a number variable so the WriteLine below works.</p>
+        <button className="memory-primary compact-button" disabled={!complete} onClick={onFinish}>
+          {complete ? <>FINISH <Check size={17} /></> : <>FINISH <ArrowRight size={17} /></>}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function VariableRunComplete({ onFinish }: { onFinish: () => void }) {
