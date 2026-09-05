@@ -2,9 +2,10 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronLeft, Database, Power
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { Brand } from "../components/Brand";
+import { FinalMemoryWorkspaceV2 } from "../components/FinalMemoryWorkspaceV2";
 import { memoryProgress } from "../lib/memoryProgress";
 
-type MemoryData = {
+export type MemoryData = {
   name: string;
   age: string;
   countriesVisited: string;
@@ -64,6 +65,8 @@ export function MemoryMachineExperience({
   const [bucketAssignments, setBucketAssignments] = useState<Partial<Record<MemoryKey, VariableType>>>({});
   const [sortResult, setSortResult] = useState<"correct" | "wrong" | null>(null);
   const [finalStep, setFinalStep] = useState(0);
+  const [typeReveal, setTypeReveal] = useState(0);
+  const [consoleStep, setConsoleStep] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const transitionTimerRef = useRef<number | null>(null);
 
@@ -165,7 +168,12 @@ export function MemoryMachineExperience({
       return setStage("map");
     }
     if (stage === "final") {
-      if (finalStep > 0) return setFinalStep((step) => step - 1);
+      if (finalStep === 1 && consoleStep > 0) return setConsoleStep((step) => step - 1);
+      if (finalStep === 1) {
+        setTypeReveal(2);
+        return setFinalStep(0);
+      }
+      if (typeReveal > 0) return setTypeReveal((step) => step - 1);
       setVariableStep(2);
       return setStage("variable");
     }
@@ -387,12 +395,21 @@ export function MemoryMachineExperience({
             onDrop={dropVariable}
             onCheck={checkBuckets}
             onNext={() => setVariableStep((step) => step + 1)}
-            onContinue={() => { setFinalStep(0); setStage("final"); }}
+            onContinue={() => { setFinalStep(0); setTypeReveal(0); setConsoleStep(0); setStage("final"); }}
           />
         )}
 
         {stage === "final" && (
-          <FinalMemoryWorkspace data={data} step={finalStep} onNext={() => setFinalStep((step) => step + 1)} onComplete={complete} />
+          <FinalMemoryWorkspaceV2
+            data={data}
+            screen={finalStep}
+            typeReveal={typeReveal}
+            consoleStep={consoleStep}
+            onTypeReveal={setTypeReveal}
+            onConsoleStep={setConsoleStep}
+            onOpenConsole={() => { setFinalStep(1); setConsoleStep(0); }}
+            onComplete={complete}
+          />
         )}
       </main>
     </section>

@@ -2792,6 +2792,90 @@ button.module-card { cursor: pointer; }
 .memory-final-footer p svg { color: #8a72ff; }
 .memory-final-footer .memory-primary { flex-shrink: 0; margin-top: 0; }
 
+/* Guided C# type and retrieval bridge */
+
+.type-builder-code { gap: 3px; }
+.type-builder-line {
+  display: flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 0.7ch;
+  white-space: nowrap;
+}
+.type-prefix-slot { display: inline-block; width: 7ch; min-width: 7ch; min-height: 1.3em; color: #b092ff !important; }
+.typed-prefix {
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  color: #b092ff;
+  font-style: normal;
+  white-space: nowrap;
+  border-right: 1px solid rgba(183, 151, 255, 0.8);
+  animation: prefix-type 340ms steps(6, end) var(--type-delay, 0s) forwards, prefix-caret 180ms step-end calc(var(--type-delay, 0s) + 340ms) 2;
+}
+.typed-prefix.prefix-int { color: #dfa4ff; animation-name: prefix-type-int, prefix-caret; animation-duration: 260ms, 180ms; animation-timing-function: steps(3, end), step-end; }
+.type-prefix-guide { display: flex; width: 100%; max-width: 430px; align-items: flex-start; flex-direction: column; gap: 13px; }
+.type-prefix-guide > p { margin: 0 0 7px; color: #a2aec9; font-size: 0.8rem; line-height: 1.55; }
+.type-prefix-guide > code { display: grid; width: 100%; min-height: 47px; border: 1px solid rgba(105, 140, 225, 0.19); border-radius: 8px; padding: 0 13px; grid-template-columns: 74px 1fr; align-items: center; background: rgba(8, 15, 36, 0.66); font: 0.68rem var(--mono); }
+.type-prefix-guide > code i { color: #b291ff; font-style: normal; font-weight: 500; }
+.type-prefix-guide > code span { color: #73819f; }
+.type-prefix-guide > small { color: #68799e; font: 0.53rem/1.5 var(--mono); letter-spacing: 0.06em; }
+.type-prefix-guide > strong { display: flex; margin-top: 4px; align-items: center; gap: 8px; color: #7fe0b0; font-size: 0.72rem; font-weight: 500; }
+.memory-console-content.align-left { align-items: flex-start; text-align: left; }
+
+.console-builder-screen .memory-code-content > code,
+.console-builder-screen .retrieval-code code { font-size: clamp(0.75rem, 1.15vw, 0.95rem); }
+.console-code-content { gap: 2px; }
+.guided-retrieval { gap: 7px; }
+.typewriter-code {
+  width: 0;
+  max-width: max-content;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 1px solid rgba(111, 166, 255, 0.85);
+  animation: writeline-type 480ms steps(29, end) forwards, prefix-caret 180ms step-end 480ms 2;
+}
+.typewriter-code.second-code { animation-name: writeline-type-age, prefix-caret; animation-duration: 450ms, 180ms; animation-timing-function: steps(28, end), step-end; }
+.run-link-pulse { animation: code-run-link 520ms ease-out both; }
+.memory-console-panel.console-success-glow { animation: console-green-pulse 580ms ease-out both; border-color: rgba(87, 223, 158, 0.45); }
+.memory-console-panel.console-success-glow .memory-console-content { background: radial-gradient(circle at 20% 50%, rgba(39, 178, 113, 0.16), transparent 65%); }
+.memory-console-panel.console-success-glow pre { color: #a8f2cd; text-shadow: 0 0 16px rgba(74, 225, 154, 0.34); animation: console-value-in 350ms ease-out both; }
+.console-waiting { color: #43516e; font: 0.68rem var(--mono); }
+.student-code-task { width: 100%; margin-top: 22px; padding-top: 17px; border-top: 1px solid var(--line); }
+.student-code-task > strong { color: #dfe8ff; font-size: 0.76rem; font-weight: 500; }
+.student-code-task > p { margin: 7px 0 0; color: #7e8daa; font-size: 0.69rem; line-height: 1.55; }
+.student-code-task code { color: #8bb9ff; font-family: var(--mono); }
+.student-code-task.success { display: flex; align-items: center; gap: 8px; color: #7fe0b0; }
+.student-code-task.success > strong { color: #9cebc5; }
+.editor-feedback.wrong { color: #d8a577; }
+
+.student-editor-panel { grid-template-rows: 43px minmax(0, 1fr); }
+.memory-student-editor { min-height: 0; background: #05091a; }
+.memory-student-editor .cm-theme,
+.memory-student-editor .cm-editor { height: 100%; }
+.memory-student-editor .cm-editor { color: #dce7ff; background: #05091a; font: clamp(0.68rem, 1vw, 0.82rem)/1.65 var(--mono); }
+.memory-student-editor .cm-scroller { overflow: auto; font-family: var(--mono); }
+.memory-student-editor .cm-content { padding: 14px 0; caret-color: #8fc9ff; }
+.memory-student-editor .cm-line { padding: 0 15px 0 9px; }
+.memory-student-editor .cm-gutters { color: #3f4b67; border-right: 1px solid rgba(96, 119, 181, 0.1); background: #080d20; }
+.memory-student-editor .cm-activeLine,
+.memory-student-editor .cm-activeLineGutter { background: rgba(41, 83, 170, 0.11); }
+.memory-student-editor .tok-keyword { color: #b291ff; }
+.memory-student-editor .tok-variableName { color: #78b6ff; }
+.memory-student-editor .tok-string { color: #a9dcae; }
+.memory-student-editor .tok-number { color: #e3a6ff; }
+.memory-student-editor .tok-comment { color: #566381; font-style: italic; }
+
+@keyframes prefix-type { from { width: 0; } to { width: 6ch; } }
+@keyframes prefix-type-int { from { width: 0; } to { width: 3ch; } }
+@keyframes prefix-caret { 0%, 100% { border-right-color: transparent; } 50% { border-right-color: currentColor; } }
+@keyframes writeline-type { from { width: 0; } to { width: 29ch; } }
+@keyframes writeline-type-age { from { width: 0; } to { width: 28ch; } }
+@keyframes code-run-link { 0% { background: rgba(81, 131, 255, 0); text-shadow: none; } 45% { background: rgba(81, 131, 255, 0.16); text-shadow: 0 0 13px rgba(99, 159, 255, 0.65); } 100% { background: transparent; text-shadow: none; } }
+@keyframes console-green-pulse { 0% { box-shadow: inset 0 0 0 rgba(55, 211, 137, 0); } 45% { box-shadow: inset 0 0 55px rgba(55, 211, 137, 0.11), 0 0 22px rgba(55, 211, 137, 0.12); } 100% { box-shadow: inset 0 0 30px rgba(55, 211, 137, 0.05); } }
+@keyframes console-value-in { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: none; } }
+
 .type-explanation { display: flex; width: 100%; align-items: center; flex-direction: column; gap: 20px; }
 .type-explanation > p { margin: 0; color: #8a97b6; font-size: 0.78rem; line-height: 1.5; }
 .type-chips { display: flex; gap: 12px; }
