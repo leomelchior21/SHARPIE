@@ -23,8 +23,9 @@ function errorDetails(error) {
     CS1010: ["CHECK THE QUOTES", "A line of text is missing its closing quotation mark."],
     CS1026: ["CHECK THE PARENTHESES", "C# expected a closing ) here."],
     CS1039: ["CHECK THE INTERPOLATION", "The interpolated string is missing a closing brace."],
-    CS1525: ["CHECK THIS LINE", "C# found something unexpected in this expression."],
-    SHARP001: ["NOT IN THIS MODULE YET", "This beginner playground does not support that C# feature yet."],
+    CS1501: ["CHECK THE METHOD", "That method does not have an overload for those arguments."],
+    CS1525: ["CHECK THIS LINE", "C# could not compile this line as written."],
+    SHARP002: ["PROGRAM TOO LARGE", "This browser run is too large to execute safely."],
   };
   const [title, friendly] = messages[error.code] ?? messages.CS1525;
   return {
@@ -329,6 +330,8 @@ function interpolate(content, variables, line, column) {
 }
 
 function evaluateExpression(expression, variables, line, column) {
+  const readLineCall = /\bConsole\s*\.\s*ReadLine\s*\(([^)]*)\)/.exec(expression);
+  if (readLineCall?.[1].trim()) throw new SharpieError("CS1501", "No overload for method 'ReadLine' takes arguments", line, column + readLineCall.index);
   const expressionWithInput = expression.replace(/\bConsole\s*\.\s*ReadLine\s*\(\s*\)/g, '""');
   const tokens = tokenize(expressionWithInput, line, column);
   let current = 0;
@@ -428,7 +431,7 @@ function appendOutput(current, addition) {
 function runBasics(code) {
   const started = performance.now();
   if (!code.trim()) return { success: true, output: "", durationMs: 0 };
-  if (code.length > CODE_LIMIT) throw new SharpieError("SHARP001", `Keep the experiment under ${CODE_LIMIT} characters.`);
+  if (code.length > CODE_LIMIT) throw new SharpieError("SHARP002", `Keep the experiment under ${CODE_LIMIT} characters.`);
   const variables = new Map();
   let output = "";
   let truncated = false;
@@ -460,11 +463,15 @@ function runBasics(code) {
       variables.set(name, coerce(current.kind, next, statement.line, statement.column));
       continue;
     }
-    if (/^Console\s*\.\s*ReadLine\s*\(\s*\)$/.test(statement.text)) continue;
+    const readLine = /^Console\s*\.\s*ReadLine\s*\(([\s\S]*)\)$/.exec(statement.text);
+    if (readLine) {
+      if (readLine[1].trim()) throw new SharpieError("CS1501", "No overload for method 'ReadLine' takes arguments", statement.line, statement.column);
+      continue;
+    }
     const write = /^Console\s*\.\s*(WriteLine|Write)\s*\(([\s\S]*)\)$/.exec(statement.text);
     if (!write) {
       if (/^Console\s*\.\s*(WriteLine|Write)/.test(statement.text)) throw new SharpieError("CS1003", "Unexpected text in Console output statement", statement.line, statement.column + statement.text.length);
-      throw new SharpieError("SHARP001", "This module supports variables, expressions, Console.ReadLine, Console.Write, and Console.WriteLine.", statement.line, statement.column);
+      throw new SharpieError("CS1525", `Invalid C# statement '${statement.text}'`, statement.line, statement.column);
     }
     const item = write[2].trim() ? evaluateExpression(write[2], variables, statement.line, statement.column) : value("string", "");
     const addition = formatValue(item) + (write[1] === "WriteLine" ? "\n" : "");

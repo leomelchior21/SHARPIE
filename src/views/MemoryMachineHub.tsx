@@ -85,7 +85,7 @@ export function MemoryMachineHub({
           </button>
 
           <button
-            className={`memory-experience-card ${sprintUnlocked ? "is-available" : "is-locked"}`}
+            className={`memory-experience-card memory-card-red ${sprintUnlocked ? "is-available" : "is-locked"}`}
             onClick={sprintUnlocked ? onOpenVariableSprint : undefined}
             disabled={!sprintUnlocked}
           >

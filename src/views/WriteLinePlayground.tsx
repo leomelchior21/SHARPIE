@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { challenges, getRunNote } from "../data/challenges";
-import { csharpEditorExtensions } from "../lib/csharpSyntax";
+import { csharpEditorBasicSetup, csharpEditorExtensions } from "../lib/csharpSyntax";
 import { isMorningSignalCode } from "../lib/morningSignal";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
@@ -322,15 +322,9 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
               extensions={extensions}
               onChange={changeCode}
               onCreateEditor={(view) => { editorRef.current = view; }}
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: false,
-                highlightActiveLine: true,
-                highlightActiveLineGutter: true,
-                autocompletion: true,
-                bracketMatching: true,
-                closeBrackets: true,
-              }}
+              basicSetup={csharpEditorBasicSetup}
+              editable
+              indentWithTab
               aria-label="C# code"
             />
           </div>

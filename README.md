@@ -25,6 +25,7 @@ Open [http://localhost:5173](http://localhost:5173). The entire application—in
 The first SHARPIE module intentionally supports the syntax it teaches:
 
 - `Console.Write(...)` and `Console.WriteLine(...)`;
+- `Console.ReadLine()` with empty browser input;
 - `string`, `int`, `double`, `bool`, `char`, and `var` variables;
 - assignment, `++`, `--`, and compound assignment;
 - arithmetic, comparison, equality, and boolean operators;

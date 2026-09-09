@@ -1,6 +1,6 @@
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
-import { csharpEditorExtensions } from "./csharpSyntax";
+import { csharpEditorBasicSetup, csharpEditorExtensions } from "./csharpSyntax";
 
 describe("shared C# syntax colors", () => {
   let view: EditorView | null = null;
@@ -8,6 +8,23 @@ describe("shared C# syntax colors", () => {
   afterEach(() => {
     view?.destroy();
     view = null;
+  });
+
+  it("keeps the full editing toolset enabled in every shared editor", () => {
+    expect(csharpEditorBasicSetup).toMatchObject({
+      history: true,
+      foldGutter: true,
+      allowMultipleSelections: true,
+      indentOnInput: true,
+      bracketMatching: true,
+      closeBrackets: true,
+      autocompletion: true,
+      rectangularSelection: true,
+      highlightSelectionMatches: true,
+      searchKeymap: true,
+      foldKeymap: true,
+      completionKeymap: true,
+    });
   });
 
   it("marks Console.WriteLine, Console.Write, and Console.ReadLine as cyan commands", () => {

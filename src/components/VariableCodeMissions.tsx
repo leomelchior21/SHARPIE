@@ -11,7 +11,7 @@ import {
   variableSprintChallenges,
 } from "../data/variableCodeChallenges";
 import type { VariableBuildChallenge } from "../data/variableCodeChallenges";
-import { csharpEditorExtensions } from "../lib/csharpSyntax";
+import { csharpEditorBasicSetup, csharpEditorExtensions } from "../lib/csharpSyntax";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import type { RunResult } from "../types";
 import { Brand } from "./Brand";
@@ -289,15 +289,9 @@ export function VariableCodeMissions({ mode, onBack, onFinish }: Props) {
               theme="dark"
               extensions={extensions}
               onChange={(value) => { setCode(value); setResult(null); setHasRun(false); }}
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: false,
-                highlightActiveLine: true,
-                highlightActiveLineGutter: true,
-                autocompletion: true,
-                bracketMatching: true,
-                closeBrackets: true,
-              }}
+              basicSetup={csharpEditorBasicSetup}
+              editable
+              indentWithTab
               aria-label="C# code"
             />
           </div>

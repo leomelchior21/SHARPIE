@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { ArrowRight, Check, RotateCcw } from "lucide-react";
-import { csharpEditorExtensions } from "../lib/csharpSyntax";
+import { csharpEditorBasicSetup, csharpEditorExtensions } from "../lib/csharpSyntax";
 import type { MemoryData } from "../views/MemoryMachineExperience";
 
 type Props = {
@@ -205,8 +205,10 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
                 theme="dark"
                 extensions={extensions}
                 onChange={(value) => { setCode(value); setEditorResult(null); }}
-                basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, highlightActiveLineGutter: true, bracketMatching: true, closeBrackets: true }}
-                aria-label="Complete the Console.WriteLine code"
+                basicSetup={csharpEditorBasicSetup}
+                editable
+                indentWithTab
+                aria-label="Complete the console C# code editor"
               />
             </div>
           ) : (

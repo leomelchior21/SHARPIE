@@ -2307,8 +2307,23 @@ button.module-card { cursor: pointer; }
   box-shadow: 0 0 26px rgba(124, 89, 255, 0.2);
 }
 
+.memory-experience-card.memory-card-red {
+  border-color: rgba(255, 91, 112, 0.56);
+  background:
+    radial-gradient(circle at 85% 100%, rgba(220, 39, 67, 0.46), transparent 55%),
+    linear-gradient(145deg, rgba(83, 18, 31, 0.96), rgba(29, 7, 17, 0.96));
+  box-shadow: 0 24px 65px rgba(0, 0, 0, 0.26), inset 0 0 46px rgba(255, 71, 99, 0.1);
+}
+.memory-experience-card.memory-card-red .memory-card-icon {
+  color: #ffb3bf;
+  border-color: rgba(255, 103, 126, 0.45);
+  background: rgba(145, 27, 48, 0.3);
+  box-shadow: 0 0 26px rgba(255, 67, 98, 0.2);
+}
+
 .memory-experience-card.is-available:hover { border-color: rgba(112, 166, 255, 0.7); transform: translateY(-3px); }
 .memory-experience-card.memory-card-purple:hover { border-color: rgba(186, 150, 255, 0.75); }
+.memory-experience-card.memory-card-red.is-available:hover { border-color: rgba(255, 127, 145, 0.88); }
 .memory-experience-card.is-locked { cursor: not-allowed; color: #687086; filter: saturate(0.35); }
 
 .memory-card-number {

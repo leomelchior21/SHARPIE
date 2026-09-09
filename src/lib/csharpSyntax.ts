@@ -3,6 +3,7 @@ import { csharp } from "@codemirror/legacy-modes/mode/clike";
 import { tags } from "@lezer/highlight";
 import { Decoration, EditorView, MatchDecorator, ViewPlugin, WidgetType } from "@codemirror/view";
 import type { ViewUpdate } from "@codemirror/view";
+import type { BasicSetupOptions } from "@uiw/react-codemirror";
 
 export const csharpPalette = {
   type: "#e5b567",
@@ -12,6 +13,33 @@ export const csharpPalette = {
   command: "#62e6ff",
   comment: "#7a8499",
 } as const;
+
+export const csharpEditorBasicSetup: BasicSetupOptions = {
+  lineNumbers: true,
+  highlightSpecialChars: true,
+  history: true,
+  drawSelection: true,
+  defaultKeymap: true,
+  historyKeymap: true,
+  highlightActiveLineGutter: true,
+  foldGutter: true,
+  dropCursor: true,
+  allowMultipleSelections: true,
+  indentOnInput: true,
+  bracketMatching: true,
+  closeBrackets: true,
+  autocompletion: true,
+  rectangularSelection: true,
+  crosshairCursor: true,
+  highlightActiveLine: true,
+  highlightSelectionMatches: true,
+  closeBracketsKeymap: true,
+  searchKeymap: true,
+  foldKeymap: true,
+  completionKeymap: true,
+  lintKeymap: true,
+  tabSize: 2,
+};
 
 const csharpHighlightStyle = HighlightStyle.define([
   { tag: [tags.keyword, tags.typeName, tags.definitionKeyword], color: csharpPalette.type },

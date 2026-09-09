@@ -58,6 +58,19 @@ describe("browser C# basics runner", () => {
     expect(result).toMatchObject({ success: true, output: "Hello \n" });
   });
 
+  it("reports the real ReadLine overload error instead of a lesson restriction", () => {
+    const standalone = run('Console.ReadLine("hey");');
+    const assignment = run('string name = Console.ReadLine("hey");');
+    expect(standalone.error).toMatchObject({ code: "CS1501", title: "CHECK THE METHOD" });
+    expect(assignment.error).toMatchObject({ code: "CS1501", title: "CHECK THE METHOD" });
+  });
+
+  it("uses compiler-style diagnostics for unsupported statements", () => {
+    const result = run("return;");
+    expect(result.error.code).toBe("CS1525");
+    expect(result.error.title).toBe("CHECK THIS LINE");
+  });
+
   it("accepts balanced parentheses and reserves CS1026 for a missing closing parenthesis", () => {
     expect(run('Console.WriteLine("(ready)");')).toMatchObject({ success: true, output: "(ready)\n" });
     expect(run("Console.WriteLine((2 + 3) * 4);")).toMatchObject({ success: true, output: "20\n" });
