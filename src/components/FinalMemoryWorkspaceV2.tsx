@@ -44,6 +44,7 @@ function starterCode(data: MemoryData) {
     "Console.WriteLine(age);",
     "",
     "// Add the other three WriteLine statements here.",
+    "",
   ].join("\n");
 }
 

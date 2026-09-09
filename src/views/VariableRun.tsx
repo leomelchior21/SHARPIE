@@ -293,7 +293,8 @@ Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
     success: "Hero signal transmitted.",
     baseXp: 40,
     starter: `// Create a string variable named heroName with the value "Nova".
-// Use Console.WriteLine to print "Hero: " followed by the heroName variable.`,
+// Use Console.WriteLine to print "Hero: " followed by the heroName variable.
+`,
     validate: (code, output) => /\bstring\s+heroName\s*=\s*"Nova"\s*;/.test(code) && writesVariable(code, "heroName") && outputIs(output, "Hero: Nova"),
   },
   {
@@ -304,7 +305,8 @@ Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
     success: "Coin count locked in.",
     baseXp: 40,
     starter: `// Create an int variable named coins with the value 25.
-// Use Console.WriteLine to print "Coins: " followed by the coins variable.`,
+// Use Console.WriteLine to print "Coins: " followed by the coins variable.
+`,
     validate: (code, output) => /\bint\s+coins\s*=\s*25\s*;/.test(code) && writesVariable(code, "coins") && outputIs(output, "Coins: 25"),
   },
   {
@@ -315,7 +317,8 @@ Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
     success: "Destination confirmed.",
     baseXp: 50,
     starter: `// Create a string variable named destination with the value "Mars".
-// Use Console.WriteLine to print "Next stop: " followed by the destination variable.`,
+// Use Console.WriteLine to print "Next stop: " followed by the destination variable.
+`,
     validate: (code, output) => /\bstring\s+destination\s*=\s*"Mars"\s*;/.test(code) && writesVariable(code, "destination") && outputIs(output, "Next stop: Mars"),
   },
   {
@@ -326,7 +329,8 @@ Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
     success: "Lap counter is live.",
     baseXp: 50,
     starter: `// Create an int variable named laps with the value 3.
-// Use Console.Write (not WriteLine) to print "Laps left: " followed by the laps variable.`,
+// Use Console.Write (not WriteLine) to print "Laps left: " followed by the laps variable.
+`,
     validate: (code, output) => /\bint\s+laps\s*=\s*3\s*;/.test(code) && /Console\s*\.\s*Write\s*\([^;]*\blaps\b[^;]*\)\s*;/.test(code) && outputIs(output, "Laps left: 3"),
   },
   {
@@ -337,7 +341,8 @@ Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
     success: "Final combo complete.",
     baseXp: 75,
     starter: `// Create a string variable named pet with "Pixel" and an int variable named tricks with 4.
-// Use Console.WriteLine to print pet + " knows " + tricks + " tricks.".`,
+// Use Console.WriteLine to print pet + " knows " + tricks + " tricks.".
+`,
     validate: (code, output) => /\bstring\s+pet\s*=\s*"Pixel"\s*;/.test(code) && /\bint\s+tricks\s*=\s*4\s*;/.test(code) && writesVariable(code, "pet") && writesVariable(code, "tricks") && outputIs(output, "Pixel knows 4 tricks."),
   },
 ];

@@ -916,6 +916,18 @@ button.module-card { cursor: pointer; }
 .editor-wrap .cm-console-method *,
 .memory-student-editor .cm-console-method,
 .memory-student-editor .cm-console-method * { color: var(--code-command) !important; font-weight: 600; }
+.cm-writing-prompt {
+  display: inline-block;
+  width: 2px;
+  height: 1.25em;
+  margin-left: 1px;
+  vertical-align: -0.23em;
+  border-radius: 2px;
+  background: var(--code-command);
+  box-shadow: 0 0 9px rgba(98, 230, 255, 0.9);
+  animation: writing-prompt-blink 0.82s steps(1, end) infinite;
+  pointer-events: none;
+}
 .editor-wrap .cm-diagnostic-error { border-left: 3px solid #ff6d91; background: #150817; }
 .editor-wrap .cm-lintRange-error { background-image: none; border-bottom: 2px wavy #ff658b; }
 
@@ -1997,6 +2009,11 @@ button.module-card { cursor: pointer; }
   border-radius: 5px;
   color: #91a5d3;
   background: rgba(13, 21, 45, 0.6);
+}
+
+@keyframes writing-prompt-blink {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: 0.12; }
 }
 
 @keyframes drift {

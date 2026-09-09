@@ -32,4 +32,41 @@ describe("shared C# syntax colors", () => {
     }
     parent.remove();
   });
+
+  it("shows a writing prompt on an instructed empty line until the student types", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    view = new EditorView({
+      parent,
+      doc: "// Create a string variable.\n\nConsole.WriteLine(message);",
+      extensions: csharpEditorExtensions,
+    });
+
+    const prompt = parent.querySelector<HTMLElement>(".cm-writing-prompt");
+    expect(prompt).not.toBeNull();
+    expect(prompt?.closest(".cm-line")?.textContent).toBe("");
+
+    const emptyLine = view.state.doc.line(2);
+    view.dispatch({
+      changes: { from: emptyLine.from, insert: 'string message = "Hello";' },
+    });
+
+    expect(parent.querySelector(".cm-writing-prompt")).toBeNull();
+    parent.remove();
+  });
+
+  it("shows a writing prompt after the final instruction line", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    view = new EditorView({
+      parent,
+      doc: "// Create a variable.\n// Print the variable.\n",
+      extensions: csharpEditorExtensions,
+    });
+
+    const prompt = parent.querySelector<HTMLElement>(".cm-writing-prompt");
+    expect(prompt).not.toBeNull();
+    expect(prompt?.closest(".cm-line")).toBe(parent.querySelectorAll(".cm-line")[2]);
+    parent.remove();
+  });
 });
