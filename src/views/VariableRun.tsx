@@ -235,12 +235,48 @@ function SyntaxLine({ line }: { line: string }) {
   })}</>;
 }
 
-const sandboxStarter = `// create a text variable and a number variable, that completes the code below:
+export const sandboxChallenges = [
+  {
+    title: "Create a string variable",
+    instruction: "Create a string named favoriteColor, then run the code.",
+    editorHint: "CREATE ONE STRING",
+    success: "String variable created.",
+    starter: `// Create a string variable named favoriteColor.
 
-Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`;
+Console.WriteLine(favoriteColor);`,
+    validate: (code: string) => /\bstring\s+favoriteColor\s*=\s*"(?:\\.|[^"\\])*"\s*;/.test(code),
+  },
+  {
+    title: "Create an int variable",
+    instruction: "Create an int named favoriteNumber, then run the code.",
+    editorHint: "CREATE ONE INT",
+    success: "Int variable created.",
+    starter: `// Create an int variable named favoriteNumber.
+
+Console.WriteLine(favoriteNumber);`,
+    validate: (code: string) => /\bint\s+favoriteNumber\s*=\s*-?\d+\s*;/.test(code),
+  },
+  {
+    title: "Create two variables",
+    instruction: "Create a string named name and an int named age so the message can run.",
+    editorHint: "CREATE A STRING + INT",
+    success: "String and int variables created.",
+    starter: `// Create a string named name and an int named age.
+
+Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
+    validate: (code: string) => /\bstring\s+name\s*=\s*"(?:\\.|[^"\\])*"\s*;/.test(code) && /\bint\s+age\s*=\s*-?\d+\s*;/.test(code),
+  },
+] as const;
+
+export function isSandboxChallengeComplete(challengeIndex: number, code: string, result: RunResult | null, hasRun: boolean) {
+  const challenge = sandboxChallenges[challengeIndex];
+  return Boolean(challenge && result?.success && hasRun && challenge.validate(code));
+}
 
 function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () => void }) {
-  const [code, setCode] = useState(sandboxStarter);
+  const [challengeIndex, setChallengeIndex] = useState(0);
+  const challenge = sandboxChallenges[challengeIndex];
+  const [code, setCode] = useState<string>(sandboxChallenges[0].starter);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -292,7 +328,30 @@ function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () =
     }
   }, [code, isRunning, runtimeStatus]);
 
-  const complete = Boolean(result?.success && hasRun && /\bstring\s+[A-Za-z_]\w*/.test(code) && /\bint\s+[A-Za-z_]\w*/.test(code));
+  const complete = isSandboxChallengeComplete(challengeIndex, code, result, hasRun);
+
+  const resetChallenge = () => {
+    abortRef.current?.abort();
+    setCode(challenge.starter);
+    setResult(null);
+    setHasRun(false);
+    setIsRunning(false);
+  };
+
+  const continueChallenge = () => {
+    if (!complete) return;
+    if (challengeIndex === sandboxChallenges.length - 1) {
+      onFinish();
+      return;
+    }
+    const nextIndex = challengeIndex + 1;
+    abortRef.current?.abort();
+    setChallengeIndex(nextIndex);
+    setCode(sandboxChallenges[nextIndex].starter);
+    setResult(null);
+    setHasRun(false);
+    setIsRunning(false);
+  };
 
   return (
     <section className="variable-run sandbox-final screen-enter" aria-labelledby="sandbox-title">
@@ -300,16 +359,19 @@ function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () =
         <div className="playground-identity">
           <Brand compact asButton onClick={onBack} />
           <span className="header-divider" />
-          <div><span>MODULE 02</span><strong id="sandbox-title">VARIABLE RUN · FINAL</strong></div>
+          <div><span>MODULE 02</span><strong id="sandbox-title">VARIABLE RUN · FINAL {challengeIndex + 1} / {sandboxChallenges.length}</strong></div>
         </div>
-        <div className="run-meta"><span>{complete ? "+100 XP" : "FREE CODE"}</span><button className="icon-text-button" onClick={onBack}><ArrowLeft size={17} /><span>MODULE</span></button></div>
+        <div className="run-meta"><span>{complete ? "READY" : `ROUND ${challengeIndex + 1} / ${sandboxChallenges.length}`}</span><button className="icon-text-button" onClick={onBack}><ArrowLeft size={17} /><span>MODULE</span></button></div>
       </header>
 
       <div className="sandbox-workspace">
         <section className="work-panel editor-panel" aria-label="C# code editor">
           <header className="panel-header">
             <div><span className="panel-index">01</span><strong>CODE</strong></div>
-            <div className="panel-actions"><span className="language-chip">C#</span></div>
+            <div className="panel-actions">
+              <button onClick={resetChallenge} aria-label="Reset exercise"><RotateCcw size={14} /> RESET</button>
+              <span className="language-chip">C#</span>
+            </div>
           </header>
           <div className="editor-wrap">
             <CodeMirror
@@ -330,7 +392,7 @@ function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () =
               aria-label="C# code"
             />
           </div>
-          <footer className="editor-footer"><span>{code.split("\n").length} LINES</span><span>CREATE TWO VARIABLES</span></footer>
+          <footer className="editor-footer"><span>{code.split("\n").length} LINES</span><span>{challenge.editorHint}</span></footer>
         </section>
 
         <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${result?.success && hasRun ? "panel-success" : ""}`} aria-live="polite">
@@ -356,7 +418,7 @@ function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () =
               <div className="output-content">
                 <span className="output-prompt">SHARPIE OUTPUT /</span>
                 <pre>{result.output || " "}</pre>
-                {complete && <div className="output-note"><Sparkles size={14} /> Both variables created.</div>}
+                {complete && <div className="output-note"><Sparkles size={14} /> {challenge.success}</div>}
               </div>
             ) : (
               <div className="empty-output"><span>&gt;_</span><p>YOUR PROGRAM WILL SPEAK HERE.</p></div>
@@ -370,9 +432,12 @@ function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: () =
       </div>
 
       <div className="sandbox-footer">
-        <p><Sparkles size={16} /> Create a text variable and a number variable so the WriteLine below works.</p>
-        <button className="memory-primary compact-button" disabled={!complete} onClick={onFinish}>
-          {complete ? <>FINISH <Check size={17} /></> : <>FINISH <ArrowRight size={17} /></>}
+        <div className="sandbox-instruction">
+          <span>FINAL EXERCISE {challengeIndex + 1} / {sandboxChallenges.length}</span>
+          <p><Sparkles size={16} /> <strong>{challenge.title}.</strong> {challenge.instruction}</p>
+        </div>
+        <button className="memory-primary compact-button" disabled={!complete} onClick={continueChallenge}>
+          {challengeIndex === sandboxChallenges.length - 1 ? <>FINISH <Check size={17} /></> : <>CONTINUE <ArrowRight size={17} /></>}
         </button>
       </div>
     </section>

@@ -506,11 +506,13 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
         {renderBucket("int")}
       </div>
 
-      {result === "wrong" && <p className="bucket-feedback try-again">Not yet. Text goes to string; whole numbers go to int.</p>}
-      {result === "correct" && <p className="bucket-feedback correct"><Check size={17} /> Perfect. Every value is in the right type.</p>}
-      <button className="memory-primary compact-button" disabled={!allAssigned} onClick={result === "correct" ? onContinue : onCheck}>
-        {result === "correct" ? "CONNECT TO C#" : "CHECK THE BUCKETS"} {result === "correct" ? <ArrowRight size={17} /> : <Check size={17} />}
-      </button>
+      <div className="bucket-sort-actions">
+        {result === "wrong" && <p className="bucket-feedback try-again">Not yet. Text goes to string; whole numbers go to int.</p>}
+        {result === "correct" && <p className="bucket-feedback correct"><Check size={17} /> Perfect. Every value is in the right type.</p>}
+        <button className="memory-primary compact-button" disabled={!allAssigned} onClick={result === "correct" ? onContinue : onCheck}>
+          {result === "correct" ? "CONNECT TO C#" : "CHECK THE BUCKETS"} {result === "correct" ? <ArrowRight size={17} /> : <Check size={17} />}
+        </button>
+      </div>
     </div>
   );
 }

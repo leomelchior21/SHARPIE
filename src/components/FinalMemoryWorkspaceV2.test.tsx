@@ -52,7 +52,13 @@ describe("Memory Machine C# bridge", () => {
     fireEvent.click(screen.getByRole("button", { name: /run first line/i }));
     fireEvent.click(screen.getByRole("button", { name: /add writeline for age/i }));
     fireEvent.click(screen.getByRole("button", { name: /run second line/i }));
+    expect(screen.getByText("Your turn.")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /complete the console/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/writeline instructions to add/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try it/i })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /try it/i }));
+    expect(screen.getByText("Your turn.")).toBeInTheDocument();
     const editor = screen.getByRole("textbox", { name: /complete the console/i });
     fireEvent.change(editor, {
       target: {
@@ -62,5 +68,6 @@ describe("Memory Machine C# bridge", () => {
     fireEvent.click(screen.getByRole("button", { name: /check my code/i }));
     expect(screen.getByRole("button", { name: /complete memory machine/i })).toBeInTheDocument();
     expect(screen.getByText("All five values retrieved.")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /all five values retrieved/i })).toBeInTheDocument();
   });
 });
