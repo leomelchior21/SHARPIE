@@ -48,7 +48,7 @@ describe("Memory Machine C# bridge", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue to console/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /add writeline for name/i }));
-    expect(screen.getByText("Console.WriteLine(", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Console.WriteLine")).toHaveClass("console-method");
     fireEvent.click(screen.getByRole("button", { name: /run first line/i }));
     fireEvent.click(screen.getByRole("button", { name: /add writeline for age/i }));
     fireEvent.click(screen.getByRole("button", { name: /run second line/i }));
@@ -60,6 +60,10 @@ describe("Memory Machine C# bridge", () => {
     fireEvent.click(screen.getByRole("button", { name: /try it/i }));
     expect(screen.getByText("Your turn.")).toBeInTheDocument();
     const editor = screen.getByRole("textbox", { name: /complete the console/i });
+    fireEvent.change(editor, { target: { value: "broken code" } });
+    fireEvent.click(screen.getByRole("button", { name: /reset final code/i }));
+    expect((editor as HTMLTextAreaElement).value).toContain("Console.WriteLine(name);");
+    expect(editor).not.toHaveValue("broken code");
     fireEvent.change(editor, {
       target: {
         value: `${(editor as HTMLTextAreaElement).value}\nConsole.WriteLine(countriesVisited);\nConsole.WriteLine(favoriteFood);\nConsole.WriteLine(likes);`,

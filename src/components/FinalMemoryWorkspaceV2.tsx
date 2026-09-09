@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import CodeMirror from "@uiw/react-codemirror";
-import { StreamLanguage } from "@codemirror/language";
-import { csharp } from "@codemirror/legacy-modes/mode/clike";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, RotateCcw } from "lucide-react";
+import { csharpEditorExtensions } from "../lib/csharpSyntax";
 import type { MemoryData } from "../views/MemoryMachineExperience";
 
 type Props = {
@@ -28,7 +27,6 @@ const variableTypes: Record<MemoryKey, VariableType> = {
   favoriteFood: "string",
   likes: "string",
 };
-const csharpExtension = StreamLanguage.define(csharp);
 
 function escapeString(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -63,7 +61,7 @@ function StudentTurnInstruction() {
 }
 
 export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, onTypeReveal, onConsoleStep, onOpenConsole, onComplete }: Props) {
-  const extensions = useMemo(() => [csharpExtension], []);
+  const extensions = useMemo(() => csharpEditorExtensions, []);
   const [code, setCode] = useState(() => starterCode(data));
   const [editorResult, setEditorResult] = useState<"correct" | "wrong" | null>(null);
 
@@ -75,6 +73,11 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
     const correct = memoryKeys.every((key) => hasWriteLine(code, key));
     setEditorResult(correct ? "correct" : "wrong");
     if (correct) onConsoleStep(6);
+  };
+
+  const resetStudentCode = () => {
+    setCode(starterCode(data));
+    setEditorResult(null);
   };
 
   if (screen === 0) {
@@ -119,7 +122,7 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
         </div>
         <div className="memory-final-footer">
           <span />
-          <button className="memory-primary compact-button" onClick={() => typeReveal === 0 ? onTypeReveal(1) : typeReveal === 1 ? onTypeReveal(2) : onOpenConsole()}>
+          <button className="memory-primary compact-button progress-ready" onClick={() => typeReveal === 0 ? onTypeReveal(1) : typeReveal === 1 ? onTypeReveal(2) : onOpenConsole()}>
             {typeReveal === 0 && "ADD STRING"}
             {typeReveal === 1 && "ADD INT"}
             {typeReveal === 2 && "CONTINUE TO CONSOLE"}
@@ -166,10 +169,10 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
             </div>
             <div className="fishing-complete-copy">
               <strong>All five values retrieved.</strong>
-              <p>The program caught every memory with <code>Console.WriteLine</code>.</p>
+              <p>The program caught every memory with <code className="console-method">Console.WriteLine</code>.</p>
             </div>
             <pre className="fishing-output">{outputValues.join("\n")}</pre>
-            <button className="memory-primary compact-button" onClick={onComplete}>
+            <button className="memory-primary compact-button progress-ready" onClick={onComplete}>
               COMPLETE MEMORY MACHINE <Check size={17} />
             </button>
           </section>
@@ -186,7 +189,13 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
       </div>
       <div className="memory-final-workspace">
         <section className={`memory-code-panel ${editorVisible ? "student-editor-panel" : ""}`}>
-          <header><div><span>01</span><strong>{editorVisible ? "YOUR C# CODE" : "C# MEMORY"}</strong></div><small>{editorVisible ? "EDIT" : "C#"}</small></header>
+          <header>
+            <div><span>01</span><strong>{editorVisible ? "YOUR C# CODE" : "C# MEMORY"}</strong></div>
+            <div className="memory-code-header-actions">
+              {editorVisible && <button onClick={resetStudentCode} aria-label="Reset final code"><RotateCcw size={13} /> RESET</button>}
+              <small>{editorVisible ? "EDIT" : "C#"}</small>
+            </div>
+          </header>
           {editorVisible ? (
             <div className="memory-student-editor">
               <CodeMirror
@@ -206,8 +215,8 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
               ))}
               {(firstLineVisible || secondLineVisible) && (
                 <div className="retrieval-code guided-retrieval">
-                  {firstLineVisible && <code className={`typewriter-code ${consoleStep === 2 ? "run-link-pulse" : ""}`}>Console.WriteLine(<b>name</b>);</code>}
-                  {secondLineVisible && <code className={`typewriter-code second-code ${consoleStep === 4 ? "run-link-pulse" : ""}`}>Console.WriteLine(<b>age</b>);</code>}
+                  {firstLineVisible && <code className={`typewriter-code ${consoleStep === 2 ? "run-link-pulse" : ""}`}><span className="console-method">Console.WriteLine</span>(<b>name</b>);</code>}
+                  {secondLineVisible && <code className={`typewriter-code second-code ${consoleStep === 4 ? "run-link-pulse" : ""}`}><span className="console-method">Console.WriteLine</span>(<b>age</b>);</code>}
                 </div>
               )}
             </div>
@@ -220,7 +229,7 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
               <div className={`student-code-task prominent ${consoleStep === 4 ? "try-card" : ""}`}>
                 <StudentTurnInstruction />
                 {consoleStep === 4 && (
-                  <button className="memory-primary compact-button student-try-button" onClick={advanceConsole}>
+                  <button className="memory-primary compact-button student-try-button progress-ready" onClick={advanceConsole}>
                     TRY IT <ArrowRight size={17} />
                   </button>
                 )}
@@ -239,7 +248,7 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
       <div className="memory-final-footer">
         {editorResult === "wrong" ? <p className="editor-feedback wrong">Not yet. Add one WriteLine for each of the three remaining variables.</p> : <span />}
         {consoleStep !== 4 && (
-          <button className="memory-primary compact-button" onClick={advanceConsole}>
+          <button className="memory-primary compact-button progress-ready" onClick={advanceConsole}>
             {consoleStep === 0 && "ADD WRITELINE FOR NAME"}
             {consoleStep === 1 && "RUN FIRST LINE"}
             {consoleStep === 2 && "ADD WRITELINE FOR AGE"}
@@ -254,5 +263,5 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
 }
 
 function DeclarationLine({ type, name, value, highlighted }: { type: VariableType; name: MemoryKey; value: string; highlighted: boolean }) {
-  return <code className={`csharp-line ${highlighted ? "run-link-pulse" : ""}`}><i>{type}</i> <b>{name}</b> <em>=</em> <span>{type === "string" ? `"${escapeString(value)}"` : value}</span>;</code>;
+  return <code className={`csharp-line ${highlighted ? "run-link-pulse" : ""}`}><i>{type}</i> <b>{name}</b> <em>=</em> <span className={type === "string" ? "code-string" : "code-number"}>{type === "string" ? `"${escapeString(value)}"` : value}</span>;</code>;
 }

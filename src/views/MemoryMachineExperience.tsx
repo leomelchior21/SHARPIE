@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronLeft, Database, Power, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronLeft, Database, GripVertical, Power, Sparkles } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { Brand } from "../components/Brand";
@@ -314,7 +314,7 @@ export function MemoryMachineExperience({
               {recallCount >= 4 && <p>Your favorite food is <strong>{data.favoriteFood}</strong>.</p>}
               {recallCount >= 5 && <p>You like <strong>{data.likes}</strong>.</p>}
             </div>
-            {recallCount >= questionKeys.length && <button className="memory-primary compact-button" onClick={() => setStage("update")}>CHANGE A MEMORY <ArrowRight size={17} /></button>}
+            {recallCount >= questionKeys.length && <button className="memory-primary compact-button progress-ready" onClick={() => setStage("update")}>CHANGE A MEMORY <ArrowRight size={17} /></button>}
           </div>
         )}
 
@@ -336,7 +336,7 @@ export function MemoryMachineExperience({
                 <Check size={25} />
                 <h1>Same name. New value.</h1>
                 <code className="memory-slot"><b>favoriteFood</b><em>→</em>{data.favoriteFood}</code>
-                <button className="memory-primary compact-button" onClick={() => setStage("concept")}>CONTINUE <ArrowRight size={17} /></button>
+                <button className="memory-primary compact-button progress-ready" onClick={() => setStage("concept")}>CONTINUE <ArrowRight size={17} /></button>
               </div>
             )}
           </div>
@@ -359,7 +359,7 @@ export function MemoryMachineExperience({
             </div>
             {conceptChoice !== null && conceptChoice !== 0 && <p className="concept-feedback">Not quite. Think about what happened after each answer.</p>}
             {conceptChoice === 0 && (
-              <div className="concept-correct"><strong>Exactly.</strong><button className="memory-primary compact-button" onClick={() => setStage("map")}>OPEN MEMORY <ArrowRight size={17} /></button></div>
+              <div className="concept-correct"><strong>Exactly.</strong><button className="memory-primary compact-button progress-ready" onClick={() => setStage("map")}>OPEN MEMORY <ArrowRight size={17} /></button></div>
             )}
           </div>
         )}
@@ -376,7 +376,7 @@ export function MemoryMachineExperience({
                 </code>
               ))}
             </div>
-            <button className="memory-primary compact-button" onClick={() => valuesRevealed ? setStage("variable") : setValuesRevealed(true)}>
+            <button className="memory-primary compact-button progress-ready" onClick={() => valuesRevealed ? setStage("variable") : setValuesRevealed(true)}>
               {valuesRevealed ? "WHAT IS THIS?" : "REVEAL THE VALUES"} <ArrowRight size={17} />
             </button>
           </div>
@@ -432,6 +432,22 @@ type BucketLessonProps = {
 };
 
 function VariableBucketLesson({ data, step, selectedVariable, assignments, result, onSelect, onAssign, onRemove, onDrop, onCheck, onNext, onContinue }: BucketLessonProps) {
+  const [draggedVariable, setDraggedVariable] = useState<MemoryKey | null>(null);
+  const [dropTarget, setDropTarget] = useState<VariableType | null>(null);
+
+  const startDrag = (event: DragEvent<HTMLElement>, key: MemoryKey) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", key);
+    setDraggedVariable(key);
+    setDropTarget(null);
+    onSelect(key);
+  };
+
+  const finishDrag = () => {
+    setDraggedVariable(null);
+    setDropTarget(null);
+  };
+
   if (step < 2) {
     const type: VariableType = step === 0 ? "string" : "int";
     const sampleKey: MemoryKey = type === "string" ? "name" : "countriesVisited";
@@ -450,14 +466,14 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
               <strong>{data[sampleKey]}</strong>
             </div>
             <code className="bucket-code-example">
-              {type === "string" ? `string name = "${csharpString(data.name)}";` : `int countriesVisited = ${data.countriesVisited};`}
+              <i>{type}</i> <b>{sampleKey}</b> <em>=</em> <span className={type === "string" ? "code-string" : "code-number"}>{type === "string" ? `"${csharpString(data[sampleKey])}"` : data[sampleKey]}</span>;
             </code>
           </div>
           <RealBucket type={type}>
             <code><small>{sampleKey}</small>{data[sampleKey]}</code>
           </RealBucket>
         </div>
-        <button className="memory-primary compact-button" onClick={onNext}>
+        <button className="memory-primary compact-button progress-ready" onClick={onNext}>
           {step === 0 ? "NEXT: INT" : "SORT YOUR VARIABLES"} <ArrowRight size={17} />
         </button>
       </div>
@@ -470,13 +486,36 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
   const renderBucket = (type: VariableType) => (
     <RealBucket
       type={type}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => onDrop(event, type)}
+      dragging={draggedVariable !== null}
+      isDropTarget={dropTarget === type}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setDropTarget(type);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(event) => {
+        onDrop(event, type);
+        finishDrag();
+      }}
       onChoose={selectedVariable ? () => onAssign(selectedVariable, type) : undefined}
     >
       {questionKeys.filter((key) => assignments[key] === type).map((key) => (
-        <button className={result === "wrong" && variableTypes[key] !== type ? "misplaced" : ""} key={key} onClick={() => onRemove(key)} aria-label={`Move ${keyLabels[key]} out of ${type}`}>
-          <small>{keyLabels[key]}</small>{data[key]}
+        <button
+          className={`${result === "wrong" && variableTypes[key] !== type ? "misplaced" : ""} ${draggedVariable === key ? "is-dragging" : ""}`}
+          key={key}
+          draggable
+          onDragStart={(event) => startDrag(event, key)}
+          onDragEnd={finishDrag}
+          onClick={() => onRemove(key)}
+          aria-label={`Move ${keyLabels[key]} out of ${type}`}
+        >
+          <GripVertical size={13} aria-hidden="true" /><small>{keyLabels[key]}</small>{data[key]}
         </button>
       ))}
     </RealBucket>
@@ -486,22 +525,29 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
     <div className="variable-reveal stage-card bucket-sort-stage">
       <p className="memory-kicker">YOUR TURN · SORT THE MEMORY</p>
       <h1 id="memory-title">Which bucket does each variable belong in?</h1>
-      <p className="bucket-sort-instruction">Drag each card, or tap a card and then choose its bucket.</p>
+      <div className="bucket-objective" role="note">
+        <strong>YOUR OBJECTIVE</strong>
+        <span><b>1</b> Pick a variable</span>
+        <span><b>2</b> Drop text into <em>string</em> and whole numbers into <em>int</em></span>
+      </div>
 
       <div className="variable-sort-workspace">
         {renderBucket("string")}
-        <div className="variable-card-bank" aria-label="Variables waiting to be sorted">
+        <div className={`variable-card-bank ${draggedVariable ? "drag-active" : ""}`} aria-label="Variables waiting to be sorted">
+          <span className="variable-bank-label">VARIABLES TO SORT</span>
           {unassigned.length ? unassigned.map((key) => (
             <button
               key={key}
               draggable
-              className={selectedVariable === key ? "selected" : ""}
-              onDragStart={(event) => event.dataTransfer.setData("text/plain", key)}
+              className={`${selectedVariable === key ? "selected" : ""} ${draggedVariable === key ? "is-dragging" : ""}`}
+              onDragStart={(event) => startDrag(event, key)}
+              onDragEnd={finishDrag}
               onClick={() => onSelect(selectedVariable === key ? null : key)}
             >
-              <small>{keyLabels[key]}</small><strong>{data[key]}</strong>
+              <GripVertical size={15} aria-hidden="true" /><span><small>{keyLabels[key]}</small><strong>{data[key]}</strong></span>
             </button>
           )) : <span><Check size={15} /> ALL VARIABLES PLACED</span>}
+          {selectedVariable && !draggedVariable && <p className="tap-placement-hint">Now choose a bucket.</p>}
         </div>
         {renderBucket("int")}
       </div>
@@ -509,7 +555,7 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
       <div className="bucket-sort-actions">
         {result === "wrong" && <p className="bucket-feedback try-again">Not yet. Text goes to string; whole numbers go to int.</p>}
         {result === "correct" && <p className="bucket-feedback correct"><Check size={17} /> Perfect. Every value is in the right type.</p>}
-        <button className="memory-primary compact-button" disabled={!allAssigned} onClick={result === "correct" ? onContinue : onCheck}>
+        <button className={`memory-primary compact-button ${result === "correct" ? "progress-ready" : ""}`} disabled={!allAssigned} onClick={result === "correct" ? onContinue : onCheck}>
           {result === "correct" ? "CONNECT TO C#" : "CHECK THE BUCKETS"} {result === "correct" ? <ArrowRight size={17} /> : <Check size={17} />}
         </button>
       </div>
@@ -517,13 +563,14 @@ function VariableBucketLesson({ data, step, selectedVariable, assignments, resul
   );
 }
 
-function RealBucket({ type, children, onDragOver, onDrop, onChoose }: { type: VariableType; children: React.ReactNode; onDragOver?: (event: DragEvent<HTMLElement>) => void; onDrop?: (event: DragEvent<HTMLElement>) => void; onChoose?: () => void }) {
+function RealBucket({ type, children, dragging = false, isDropTarget = false, onDragEnter, onDragLeave, onDragOver, onDrop, onChoose }: { type: VariableType; children: React.ReactNode; dragging?: boolean; isDropTarget?: boolean; onDragEnter?: (event: DragEvent<HTMLElement>) => void; onDragLeave?: (event: DragEvent<HTMLElement>) => void; onDragOver?: (event: DragEvent<HTMLElement>) => void; onDrop?: (event: DragEvent<HTMLElement>) => void; onChoose?: () => void }) {
   return (
-    <section className={`real-bucket ${type}-real-bucket`} onDragOver={onDragOver} onDrop={onDrop}>
+    <section className={`real-bucket ${type}-real-bucket ${dragging ? "is-ready" : ""} ${isDropTarget ? "is-drop-target" : ""}`} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={onDragOver} onDrop={onDrop}>
       <span className="bucket-handle" aria-hidden="true" />
       <div className="bucket-shell">
         <strong className="bucket-label">{type}</strong>
         <span>{type === "string" ? "TEXT" : "WHOLE NUMBERS"}</span>
+        {dragging && <span className="bucket-drop-copy">DROP HERE</span>}
         <div className="bucket-contents">{children}</div>
         {onChoose && <button className="bucket-place-button" onClick={onChoose}>PLACE HERE</button>}
       </div>
@@ -561,7 +608,7 @@ function FinalMemoryWorkspace({ data, step, onNext, onComplete }: { data: Memory
                   : <HighlightedLine key={key} type={variableTypes[key]} name={keyLabels[key]} value={data[key]} />)}
                 {step === 2 && (
                   <div className="retrieval-code">
-                    {memoryKeys.map((key) => <code key={key}>Console.WriteLine(<b>{keyLabels[key]}</b>);</code>)}
+                    {memoryKeys.map((key) => <code key={key}><span className="console-method">Console.WriteLine</span>(<b>{keyLabels[key]}</b>);</code>)}
                   </div>
                 )}
               </>
@@ -596,7 +643,7 @@ function FinalMemoryWorkspace({ data, step, onNext, onComplete }: { data: Memory
             ) : (
               <>
                 <pre>{printed}</pre>
-                <p><b>Console.WriteLine</b> prints each variable's value.</p>
+                <p><b className="console-method">Console.WriteLine</b> prints each variable's value.</p>
               </>
             )}
           </div>
@@ -604,7 +651,7 @@ function FinalMemoryWorkspace({ data, step, onNext, onComplete }: { data: Memory
       </div>
       <div className="memory-final-footer">
         {step === 2 ? <p><Sparkles size={16} /> Now you know what the memory does. Next, you create it yourself.</p> : <span />}
-        <button className="memory-primary compact-button" onClick={step === 2 ? onComplete : onNext}>
+        <button className="memory-primary compact-button progress-ready" onClick={step === 2 ? onComplete : onNext}>
           {step === 0 && "ADD int & string"}
           {step === 1 && "READ THE MEMORY"}
           {step === 2 && "COMPLETE MEMORY MACHINE"}
@@ -616,13 +663,13 @@ function FinalMemoryWorkspace({ data, step, onNext, onComplete }: { data: Memory
 }
 
 function HighlightedLine({ type, name, value }: { type: "string" | "int"; name: string; value: string }) {
-  return <code className="csharp-line"><i>{type}</i> <b>{name}</b> <em>=</em> <span>{type === "string" ? `"${csharpString(value)}"` : value}</span>;</code>;
+  return <code className="csharp-line"><i>{type}</i> <b>{name}</b> <em>=</em> <span className={type === "string" ? "code-string" : "code-number"}>{type === "string" ? `"${csharpString(value)}"` : value}</span>;</code>;
 }
 
 function TypedLine({ type, name, value, index }: { type: "string" | "int"; name: string; value: string; index: number }) {
   return (
     <code className="csharp-line typed-line" style={{ "--line-delay": `${index * 0.42}s` } as CSSProperties}>
-      <span className={`type-key type-${type}`}>{type}</span> <b>{name}</b> <em>=</em> <span>{type === "string" ? `"${csharpString(value)}"` : value}</span>;
+      <span className={`type-key type-${type}`}>{type}</span> <b>{name}</b> <em>=</em> <span className={type === "string" ? "code-string" : "code-number"}>{type === "string" ? `"${csharpString(value)}"` : value}</span>;
     </code>
   );
 }

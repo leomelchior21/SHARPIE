@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
-import { StreamLanguage } from "@codemirror/language";
-import { csharp } from "@codemirror/legacy-modes/mode/clike";
 import { setDiagnostics } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import {
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { challenges, getRunNote } from "../data/challenges";
+import { csharpEditorExtensions } from "../lib/csharpSyntax";
 import { isMorningSignalCode } from "../lib/morningSignal";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
@@ -57,7 +56,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const abortRef = useRef<AbortController | null>(null);
   const sourceVersionRef = useRef(0);
 
-  const extensions = useMemo(() => [StreamLanguage.define(csharp)], []);
+  const extensions = useMemo(() => csharpEditorExtensions, []);
 
   useEffect(() => {
     setVisited((current) => {
