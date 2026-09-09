@@ -249,7 +249,7 @@ export function FinalMemoryWorkspaceV2({ data, screen, typeReveal, consoleStep, 
       <div className="memory-final-footer">
         {editorResult === "wrong" ? <p className="editor-feedback wrong">Not yet. Add one WriteLine for each of the three remaining variables.</p> : <span />}
         {consoleStep !== 4 && (
-          <button className="memory-primary compact-button progress-ready" onClick={advanceConsole}>
+          <button className={`memory-primary compact-button progress-ready ${consoleStep === 1 || consoleStep === 3 ? "run-action" : ""}`} onClick={advanceConsole}>
             {consoleStep === 0 && "ADD WRITELINE FOR NAME"}
             {consoleStep === 1 && "RUN FIRST LINE"}
             {consoleStep === 2 && "ADD WRITELINE FOR AGE"}

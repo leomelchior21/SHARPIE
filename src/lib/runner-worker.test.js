@@ -49,6 +49,15 @@ describe("browser C# basics runner", () => {
     expect(result).toMatchObject({ success: true, output: "Ada has 5 stars\n" });
   });
 
+  it("accepts Console.ReadLine in assignments, expressions, and standalone statements", () => {
+    const result = run(`
+      string name = Console.ReadLine();
+      Console.ReadLine();
+      Console.WriteLine("Hello " + name);
+    `);
+    expect(result).toMatchObject({ success: true, output: "Hello \n" });
+  });
+
   it("accepts balanced parentheses and reserves CS1026 for a missing closing parenthesis", () => {
     expect(run('Console.WriteLine("(ready)");')).toMatchObject({ success: true, output: "(ready)\n" });
     expect(run("Console.WriteLine((2 + 3) * 4);")).toMatchObject({ success: true, output: "20\n" });

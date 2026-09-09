@@ -10,12 +10,12 @@ describe("shared C# syntax colors", () => {
     view = null;
   });
 
-  it("marks Console.WriteLine and Console.Write as cyan commands", () => {
+  it("marks Console.WriteLine, Console.Write, and Console.ReadLine as cyan commands", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);
     view = new EditorView({
       parent,
-      doc: 'Console.WriteLine("hello");\nConsole.Write("world");',
+      doc: 'Console.WriteLine("hello");\nConsole.Write("world");\nstring name = Console.ReadLine();',
       extensions: csharpEditorExtensions,
     });
 
@@ -23,6 +23,7 @@ describe("shared C# syntax colors", () => {
     expect(commands.map((node) => node.textContent)).toEqual([
       "Console.WriteLine",
       "Console.Write",
+      "Console.ReadLine",
     ]);
     for (const command of commands) {
       expect(getComputedStyle(command).color).toBe("rgb(98, 230, 255)");

@@ -329,7 +329,8 @@ function interpolate(content, variables, line, column) {
 }
 
 function evaluateExpression(expression, variables, line, column) {
-  const tokens = tokenize(expression, line, column);
+  const expressionWithInput = expression.replace(/\bConsole\s*\.\s*ReadLine\s*\(\s*\)/g, '""');
+  const tokens = tokenize(expressionWithInput, line, column);
   let current = 0;
   const peek = () => tokens[current];
   const take = () => tokens[current++];
@@ -459,10 +460,11 @@ function runBasics(code) {
       variables.set(name, coerce(current.kind, next, statement.line, statement.column));
       continue;
     }
+    if (/^Console\s*\.\s*ReadLine\s*\(\s*\)$/.test(statement.text)) continue;
     const write = /^Console\s*\.\s*(WriteLine|Write)\s*\(([\s\S]*)\)$/.exec(statement.text);
     if (!write) {
       if (/^Console\s*\.\s*(WriteLine|Write)/.test(statement.text)) throw new SharpieError("CS1003", "Unexpected text in Console output statement", statement.line, statement.column + statement.text.length);
-      throw new SharpieError("SHARP001", "This module supports variables, expressions, Console.Write, and Console.WriteLine.", statement.line, statement.column);
+      throw new SharpieError("SHARP001", "This module supports variables, expressions, Console.ReadLine, Console.Write, and Console.WriteLine.", statement.line, statement.column);
     }
     const item = write[2].trim() ? evaluateExpression(write[2], variables, statement.line, statement.column) : value("string", "");
     const addition = formatValue(item) + (write[1] === "WriteLine" ? "\n" : "");

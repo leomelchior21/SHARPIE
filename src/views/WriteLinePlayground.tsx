@@ -477,7 +477,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
             <h2 id="help-title">C# basics, ready to run.</h2>
             <code><span>int total</span> = <b>6 * 7</b>;</code>
             <div className="help-flow"><span>YOUR CODE</span><i>→</i><span>RUN</span><i>→</i><span>OUTPUT</span></div>
-            <p>Use Write or WriteLine, create variables, calculate with operators, and combine text through concatenation or interpolation. Errors are part of the experiment.</p>
+            <p>Use ReadLine, Write, or WriteLine; create variables; calculate with operators; and combine text through concatenation or interpolation. ReadLine uses an empty browser input in this playground.</p>
           </div>
         </div>
       )}

@@ -22,7 +22,7 @@ const csharpHighlightStyle = HighlightStyle.define([
 ]);
 
 const consoleMethodMatcher = new MatchDecorator({
-  regexp: /\bConsole\s*\.\s*Write(?:Line)?\b/g,
+  regexp: /\bConsole\s*\.\s*(?:Write(?:Line)?|ReadLine)\b/g,
   decoration: Decoration.mark({ class: "cm-console-method" }),
 });
 

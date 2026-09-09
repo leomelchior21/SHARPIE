@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, Check, Database, LockKeyhole, Route } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, Database, LockKeyhole, Route, Zap } from "lucide-react";
 import { useState } from "react";
 import { Brand } from "../components/Brand";
 import { memoryProgress } from "../lib/memoryProgress";
@@ -8,6 +8,7 @@ type MemoryMachineHubProps = {
   onBack: () => void;
   onOpenExperience: () => void;
   onOpenVariableRun: () => void;
+  onOpenVariableSprint: () => void;
 };
 
 export function MemoryMachineHub({
@@ -15,10 +16,13 @@ export function MemoryMachineHub({
   onBack,
   onOpenExperience,
   onOpenVariableRun,
+  onOpenVariableSprint,
 }: MemoryMachineHubProps) {
   const [unlocked] = useState(memoryProgress.isVariableRunUnlocked);
   const memoryComplete = memoryProgress.isMemoryMachineCompleted();
   const runComplete = memoryProgress.isVariableRunCompleted();
+  const sprintUnlocked = memoryProgress.isVariableSprintUnlocked();
+  const sprintComplete = memoryProgress.isVariableSprintCompleted();
 
   return (
     <section className="memory-hub screen-enter" aria-labelledby="memory-hub-title">
@@ -78,6 +82,27 @@ export function MemoryMachineHub({
               )}
             </span>
             {unlocked && <span className="memory-card-enter">ENTER <ArrowUpRight size={18} /></span>}
+          </button>
+
+          <button
+            className={`memory-experience-card ${sprintUnlocked ? "is-available" : "is-locked"}`}
+            onClick={sprintUnlocked ? onOpenVariableSprint : undefined}
+            disabled={!sprintUnlocked}
+          >
+            <span className="memory-card-number">03</span>
+            <span className="memory-card-icon"><Zap size={28} /></span>
+            <span className="memory-card-copy">
+              <strong>Variable Sprint</strong>
+              <small>Five warmups. Five C# missions.</small>
+            </span>
+            <span className="memory-card-status">
+              {sprintUnlocked ? (
+                sprintComplete ? <><Check size={14} /> COMPLETE</> : <><i /> UNLOCKED</>
+              ) : (
+                <><LockKeyhole size={14} /> UNLOCK: VARIABLE RUN</>
+              )}
+            </span>
+            {sprintUnlocked && <span className="memory-card-enter">ENTER <ArrowUpRight size={18} /></span>}
           </button>
         </div>
       </div>

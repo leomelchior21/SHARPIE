@@ -4,7 +4,8 @@ export type Screen =
   | "writeline"
   | "memory-hub"
   | "memory-experience"
-  | "variable-run";
+  | "variable-run"
+  | "variable-sprint";
 
 export type RunnerError = {
   title: string;

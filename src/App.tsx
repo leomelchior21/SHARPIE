@@ -17,11 +17,15 @@ const MemoryMachineExperience = lazy(() =>
 const VariableRun = lazy(() =>
   import("./views/VariableRun").then((module) => ({ default: module.VariableRun })),
 );
+const VariableSprint = lazy(() =>
+  import("./views/VariableSprint").then((module) => ({ default: module.VariableSprint })),
+);
 
 function screenFromPath(): Screen {
   if (typeof window === "undefined") return "hub";
   if (window.location.pathname === "/memory-machine/experience") return "memory-experience";
   if (window.location.pathname === "/memory-machine/variable-run") return "variable-run";
+  if (window.location.pathname === "/memory-machine/variable-sprint") return "variable-sprint";
   if (window.location.pathname === "/memory-machine") return "memory-hub";
   if (window.location.pathname === "/writeline") return "writeline";
   return "hub";
@@ -33,6 +37,7 @@ const paths: Partial<Record<Screen, string>> = {
   "memory-hub": "/memory-machine",
   "memory-experience": "/memory-machine/experience",
   "variable-run": "/memory-machine/variable-run",
+  "variable-sprint": "/memory-machine/variable-sprint",
 };
 
 export default function App() {
@@ -84,6 +89,7 @@ export default function App() {
             onBack={() => navigate("hub")}
             onOpenExperience={() => navigate("memory-experience")}
             onOpenVariableRun={() => navigate("variable-run")}
+            onOpenVariableSprint={() => navigate("variable-sprint")}
           />
         </Suspense>
       )}
@@ -98,7 +104,12 @@ export default function App() {
       )}
       {screen === "variable-run" && (
         <Suspense fallback={<ModuleLoader />}>
-          <VariableRun onBack={() => navigate("memory-hub")} onFinish={() => navigate("hub")} />
+          <VariableRun onBack={() => navigate("memory-hub")} onFinish={() => navigate("memory-hub")} />
+        </Suspense>
+      )}
+      {screen === "variable-sprint" && (
+        <Suspense fallback={<ModuleLoader />}>
+          <VariableSprint onBack={() => navigate("memory-hub")} />
         </Suspense>
       )}
     </main>

@@ -2,6 +2,7 @@ const keys = {
   memoryMachineCompleted: "memoryMachineCompleted",
   variableRunUnlocked: "variableRunUnlocked",
   variableRunCompleted: "variableRunCompleted",
+  variableSprintCompleted: "variableSprintCompleted",
 } as const;
 
 function available() {
@@ -16,6 +17,8 @@ export const memoryProgress = {
   isMemoryMachineCompleted: () => read(keys.memoryMachineCompleted),
   isVariableRunUnlocked: () => read(keys.variableRunUnlocked),
   isVariableRunCompleted: () => read(keys.variableRunCompleted),
+  isVariableSprintUnlocked: () => read(keys.variableRunCompleted),
+  isVariableSprintCompleted: () => read(keys.variableSprintCompleted),
   completeMemoryMachine: () => {
     if (!available()) return;
     window.localStorage.setItem(keys.memoryMachineCompleted, "true");
@@ -23,5 +26,8 @@ export const memoryProgress = {
   },
   completeVariableRun: () => {
     if (available()) window.localStorage.setItem(keys.variableRunCompleted, "true");
+  },
+  completeVariableSprint: () => {
+    if (available()) window.localStorage.setItem(keys.variableSprintCompleted, "true");
   },
 };

@@ -1,15 +1,17 @@
-import CodeMirror from "@uiw/react-codemirror";
-import { ArrowLeft, ArrowRight, Bug, Check, Gem, LockKeyhole, Play, RadioTower, Rocket, RotateCcw, Sparkles, Star, Timer, Trophy, Zap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, RotateCcw, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
+import { VariableCodeMissions } from "../components/VariableCodeMissions";
 import { variableRunLessons } from "../data/variableRunLessons";
 import type { VariableRunLesson } from "../data/variableRunLessons";
 import { memoryProgress } from "../lib/memoryProgress";
-import { csharpEditorExtensions } from "../lib/csharpSyntax";
-import { executeCSharp, prepareCSharp } from "../lib/runner";
-import type { RunResult } from "../types";
+
+export {
+  isSandboxChallengeComplete,
+  sandboxChallenges,
+  sandboxPracticeCount,
+  sandboxTimedCount,
+} from "../data/variableCodeChallenges";
 
 type Result = "correct" | "wrong" | null;
 
@@ -21,7 +23,6 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
   const [result, setResult] = useState<Result>(null);
   const [finalPhase, setFinalPhase] = useState<"predict" | "build" | "sandbox">("predict");
   const [finished, setFinished] = useState(false);
-  const [finalBonusXp, setFinalBonusXp] = useState(0);
   const lesson = variableRunLessons[lessonIndex];
   const finalPredictionOnly = lesson.type === "final" && finalPhase === "predict";
   const isFinalBuild = lesson.type === "final" && finalPhase === "build";
@@ -97,10 +98,19 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
     setResult(null);
   };
 
-  if (finished) return <VariableRunComplete onFinish={onFinish} bonusXp={finalBonusXp} />;
+  if (finished) return <VariableRunComplete onFinish={onFinish} />;
 
   if (lesson.type === "final" && finalPhase === "sandbox") {
-    return <SandboxFinal onBack={onBack} onFinish={(bonusXp) => { memoryProgress.completeVariableRun(); setFinalBonusXp(bonusXp); setFinished(true); }} />;
+    return (
+      <VariableCodeMissions
+        mode="practice"
+        onBack={onBack}
+        onFinish={() => {
+          memoryProgress.completeVariableRun();
+          setFinished(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -230,495 +240,19 @@ function BlockChallenge({ lesson, selected, onAdd, onRemove, onReset }: { lesson
 }
 
 function SyntaxLine({ line }: { line: string }) {
-  const parts = line.split(/(\/\/.*|"(?:\\.|[^"\\])*"|\bConsole\s*\.\s*Write(?:Line)?\b|\b(?:string|int)\b|\b\d+\b|\b[A-Za-z_]\w*\b)/g).filter(Boolean);
+  const parts = line.split(/(\/\/.*|"(?:\\.|[^"\\])*"|\bConsole\s*\.\s*(?:Write(?:Line)?|ReadLine)\b|\b(?:string|int|double)\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b)/g).filter(Boolean);
   return <>{parts.map((part, index) => {
-    const className = part.startsWith("//") ? "syn-comment" : part.startsWith('"') ? "syn-string" : /^(string|int)$/.test(part) ? "syn-type" : /^Console\s*\.\s*Write(?:Line)?$/.test(part) ? "syn-method" : /^\d+$/.test(part) ? "syn-number" : /^\w+$/.test(part) ? "syn-variable" : "";
+    const className = part.startsWith("//") ? "syn-comment" : part.startsWith('"') ? "syn-string" : /^(string|int|double)$/.test(part) ? "syn-type" : /^Console\s*\.\s*(?:Write(?:Line)?|ReadLine)$/.test(part) ? "syn-method" : /^\d+(?:\.\d+)?$/.test(part) ? "syn-number" : /^\w+$/.test(part) ? "syn-variable" : "";
     return <span className={className} key={`${part}-${index}`}>{part}</span>;
   })}</>;
 }
 
-export type SandboxChallenge = {
-  mode: "practice" | "timed";
-  title: string;
-  instruction: string;
-  editorHint: string;
-  success: string;
-  starter: string;
-  baseXp?: number;
-  validate: (code: string, output: string) => boolean;
-};
-
-const writesVariable = (code: string, variable: string) => new RegExp(`Console\\s*\\.\\s*Write(?:Line)?\\s*\\([^;]*\\b${variable}\\b[^;]*\\)\\s*;`).test(code);
-const outputIs = (output: string, expected: string) => output.trimEnd() === expected;
-
-export const sandboxChallenges: SandboxChallenge[] = [
-  {
-    mode: "practice",
-    title: "Create a string variable",
-    instruction: "Create a string named favoriteColor, then run the code.",
-    editorHint: "CREATE ONE STRING",
-    success: "String variable created.",
-    starter: `// Create a string variable named favoriteColor.
-
-Console.WriteLine(favoriteColor);`,
-    validate: (code: string) => /\bstring\s+favoriteColor\s*=\s*"(?:\\.|[^"\\])*"\s*;/.test(code),
-  },
-  {
-    mode: "practice",
-    title: "Create an int variable",
-    instruction: "Create an int named favoriteNumber, then run the code.",
-    editorHint: "CREATE ONE INT",
-    success: "Int variable created.",
-    starter: `// Create an int variable named favoriteNumber.
-
-Console.WriteLine(favoriteNumber);`,
-    validate: (code: string) => /\bint\s+favoriteNumber\s*=\s*-?\d+\s*;/.test(code),
-  },
-  {
-    mode: "practice",
-    title: "Create two variables",
-    instruction: "Create a string named name and an int named age so the message can run.",
-    editorHint: "CREATE A STRING + INT",
-    success: "String and int variables created.",
-    starter: `// Create a string named name and an int named age.
-
-Console.WriteLine("Hello, my name is: " + name + " and my age is: " + age);`,
-    validate: (code: string) => /\bstring\s+name\s*=\s*"(?:\\.|[^"\\])*"\s*;/.test(code) && /\bint\s+age\s*=\s*-?\d+\s*;/.test(code),
-  },
-  {
-    mode: "timed",
-    title: "Name the hero",
-    instruction: "Create a string variable named heroName with the value Nova. Use Console.WriteLine to print the label Hero: followed by heroName.",
-    editorHint: "VARIABLE + WRITELINE",
-    success: "Hero signal transmitted.",
-    baseXp: 40,
-    starter: `// Create a string variable named heroName with the value "Nova".
-// Use Console.WriteLine to print "Hero: " followed by the heroName variable.
-`,
-    validate: (code, output) => /\bstring\s+heroName\s*=\s*"Nova"\s*;/.test(code) && writesVariable(code, "heroName") && outputIs(output, "Hero: Nova"),
-  },
-  {
-    mode: "timed",
-    title: "Count the coins",
-    instruction: "Create an int variable named coins with the value 25. Use Console.WriteLine to print the label Coins: followed by coins.",
-    editorHint: "VARIABLE + WRITELINE",
-    success: "Coin count locked in.",
-    baseXp: 40,
-    starter: `// Create an int variable named coins with the value 25.
-// Use Console.WriteLine to print "Coins: " followed by the coins variable.
-`,
-    validate: (code, output) => /\bint\s+coins\s*=\s*25\s*;/.test(code) && writesVariable(code, "coins") && outputIs(output, "Coins: 25"),
-  },
-  {
-    mode: "timed",
-    title: "Set the destination",
-    instruction: "Create a string variable named destination with the value Mars. Use Console.WriteLine to print the label Next stop: followed by destination.",
-    editorHint: "VARIABLE + WRITELINE",
-    success: "Destination confirmed.",
-    baseXp: 50,
-    starter: `// Create a string variable named destination with the value "Mars".
-// Use Console.WriteLine to print "Next stop: " followed by the destination variable.
-`,
-    validate: (code, output) => /\bstring\s+destination\s*=\s*"Mars"\s*;/.test(code) && writesVariable(code, "destination") && outputIs(output, "Next stop: Mars"),
-  },
-  {
-    mode: "timed",
-    title: "Finish the laps",
-    instruction: "Create an int variable named laps with the value 3. Use Console.Write to print the label Laps left: followed by laps.",
-    editorHint: "VARIABLE + CONSOLE.WRITE",
-    success: "Lap counter is live.",
-    baseXp: 50,
-    starter: `// Create an int variable named laps with the value 3.
-// Use Console.Write (not WriteLine) to print "Laps left: " followed by the laps variable.
-`,
-    validate: (code, output) => /\bint\s+laps\s*=\s*3\s*;/.test(code) && /Console\s*\.\s*Write\s*\([^;]*\blaps\b[^;]*\)\s*;/.test(code) && outputIs(output, "Laps left: 3"),
-  },
-  {
-    mode: "timed",
-    title: "Combine two memories",
-    instruction: "Create string pet with Pixel and int tricks with 4. Use Console.WriteLine to print pet, the label knows, tricks, and the word tricks.",
-    editorHint: "2 VARIABLES + WRITELINE",
-    success: "Final combo complete.",
-    baseXp: 75,
-    starter: `// Create a string variable named pet with "Pixel" and an int variable named tricks with 4.
-// Use Console.WriteLine to print pet + " knows " + tricks + " tricks.".
-`,
-    validate: (code, output) => /\bstring\s+pet\s*=\s*"Pixel"\s*;/.test(code) && /\bint\s+tricks\s*=\s*4\s*;/.test(code) && writesVariable(code, "pet") && writesVariable(code, "tricks") && outputIs(output, "Pixel knows 4 tricks."),
-  },
-];
-
-export const sandboxPracticeCount = sandboxChallenges.filter((challenge) => challenge.mode === "practice").length;
-export const sandboxTimedCount = sandboxChallenges.filter((challenge) => challenge.mode === "timed").length;
-
-type TouchGame = {
-  title: string;
-  instruction: string;
-  itemLabel: string;
-  color: string;
-  icon: LucideIcon;
-  itemCount: number;
-};
-
-const speedTouchGames: TouchGame[] = [
-  { title: "Charge the terminal", instruction: "Tap every energy bolt to power the first challenge.", itemLabel: "Energy bolt", color: "#62e6ff", icon: Zap, itemCount: 4 },
-  { title: "Collect the data crystals", instruction: "Touch every crystal before the data disappears.", itemLabel: "Data crystal", color: "#bd8cff", icon: Gem, itemCount: 5 },
-  { title: "Plot the flight path", instruction: "Activate every star to guide the code rocket.", itemLabel: "Flight star", color: "#ffd36d", icon: Star, itemCount: 5 },
-  { title: "Wake the satellites", instruction: "Tap each signal tower and bring the network online.", itemLabel: "Signal tower", color: "#78f0b4", icon: RadioTower, itemCount: 4 },
-  { title: "Clear the code bugs", instruction: "Catch every bug before the final coding round.", itemLabel: "Code bug", color: "#ff879f", icon: Bug, itemCount: 5 },
-];
-
-function formatElapsedTime(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-export function isSandboxChallengeComplete(challengeIndex: number, code: string, result: RunResult | null, hasRun: boolean) {
-  const challenge = sandboxChallenges[challengeIndex];
-  return Boolean(challenge && result?.success && hasRun && challenge.validate(code, result.output));
-}
-
-function SandboxFinal({ onBack, onFinish }: { onBack: () => void; onFinish: (bonusXp: number) => void }) {
-  const [challengeIndex, setChallengeIndex] = useState(0);
-  const [speedPhase, setSpeedPhase] = useState<"code" | "intro" | "touch">("code");
-  const [touchProgress, setTouchProgress] = useState<number[]>([]);
-  const challenge = sandboxChallenges[challengeIndex];
-  const [code, setCode] = useState<string>(sandboxChallenges[0].starter);
-  const [result, setResult] = useState<RunResult | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [hasRun, setHasRun] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
-  const [bonusXp, setBonusXp] = useState(0);
-  const [lastEarnedXp, setLastEarnedXp] = useState<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const awardedChallengesRef = useRef(new Set<number>());
-  const awardedTouchGamesRef = useRef(new Set<number>());
-  const extensions = useMemo(() => csharpEditorExtensions, []);
-  const complete = isSandboxChallengeComplete(challengeIndex, code, result, hasRun);
-  const isTimed = challenge.mode === "timed";
-  const timedRound = isTimed ? challengeIndex - sandboxPracticeCount + 1 : 0;
-  const practiceRound = isTimed ? sandboxPracticeCount : challengeIndex + 1;
-  const touchGame = isTimed ? speedTouchGames[timedRound - 1] : null;
-
-  useEffect(() => {
-    let active = true;
-    prepareCSharp()
-      .then(() => { if (active) setRuntimeStatus("ready"); })
-      .catch(() => { if (active) setRuntimeStatus("error"); });
-    return () => { active = false; abortRef.current?.abort(); };
-  }, []);
-
-  useEffect(() => {
-    if (!isTimed || speedPhase !== "code" || complete) return;
-    const timer = window.setInterval(() => {
-      setElapsedSeconds((current) => (current ?? 0) + 1);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [complete, isTimed, speedPhase]);
-
-  const run = useCallback(async () => {
-    if (isRunning || runtimeStatus === "loading" || !code.trim()) return;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setIsRunning(true);
-    setResult(null);
-    try {
-      if (runtimeStatus !== "ready") {
-        setRuntimeStatus("loading");
-        await prepareCSharp();
-        setRuntimeStatus("ready");
-      }
-      const next = await executeCSharp(code, controller.signal);
-      setResult(next);
-      setHasRun(true);
-      if (challenge.mode === "timed" && next.success && challenge.validate(code, next.output) && !awardedChallengesRef.current.has(challengeIndex)) {
-        const earnedXp = challenge.baseXp ?? 0;
-        awardedChallengesRef.current.add(challengeIndex);
-        setLastEarnedXp(earnedXp);
-        setBonusXp((current) => current + earnedXp);
-      }
-    } catch (error) {
-      if ((error as Error).name !== "AbortError") {
-        setRuntimeStatus("error");
-        setResult({
-          success: false,
-          output: "",
-          durationMs: 0,
-          error: {
-            title: "C# COULD NOT LOAD",
-            message: "The browser could not start its C# engine.",
-            compiler: error instanceof Error ? error.message : "Refresh and try again.",
-          },
-        });
-        setHasRun(true);
-      }
-    } finally {
-      setIsRunning(false);
-    }
-  }, [challenge, challengeIndex, code, isRunning, runtimeStatus]);
-
-  const resetChallenge = () => {
-    abortRef.current?.abort();
-    setCode(challenge.starter);
-    setResult(null);
-    setHasRun(false);
-    setIsRunning(false);
-    setLastEarnedXp(null);
-    setElapsedSeconds(isTimed ? 0 : null);
-  };
-
-  const continueChallenge = () => {
-    if (!complete) return;
-    if (challengeIndex === sandboxChallenges.length - 1) {
-      onFinish(bonusXp);
-      return;
-    }
-    const nextIndex = challengeIndex + 1;
-    const enteringSpeedRun = nextIndex === sandboxPracticeCount;
-    abortRef.current?.abort();
-    setChallengeIndex(nextIndex);
-    setCode(sandboxChallenges[nextIndex].starter);
-    setResult(null);
-    setHasRun(false);
-    setIsRunning(false);
-    setLastEarnedXp(null);
-    setElapsedSeconds(null);
-    setTouchProgress([]);
-    setSpeedPhase(enteringSpeedRun ? "intro" : sandboxChallenges[nextIndex].mode === "timed" ? "touch" : "code");
-  };
-
-  const touchItem = (itemIndex: number) => {
-    if (!touchGame || touchProgress.includes(itemIndex)) return;
-    setTouchProgress((current) => {
-      const next = [...current, itemIndex];
-      if (next.length === touchGame.itemCount && !awardedTouchGamesRef.current.has(timedRound)) {
-        awardedTouchGamesRef.current.add(timedRound);
-        setBonusXp((currentXp) => currentXp + 25);
-      }
-      return next;
-    });
-  };
-
-  const beginCodeRound = () => {
-    setSpeedPhase("code");
-    setElapsedSeconds(0);
-    setCode(challenge.starter);
-    setResult(null);
-    setHasRun(false);
-    setLastEarnedXp(null);
-  };
-
-  if (isTimed && speedPhase === "intro") {
-    return <SpeedRunIntro onBack={onBack} bonusXp={bonusXp} onStart={() => setSpeedPhase("touch")} />;
-  }
-
-  if (isTimed && speedPhase === "touch" && touchGame) {
-    return (
-      <TouchRound
-        game={touchGame}
-        round={timedRound}
-        totalRounds={sandboxTimedCount}
-        touched={touchProgress}
-        bonusXp={bonusXp}
-        onBack={onBack}
-        onTouch={touchItem}
-        onContinue={beginCodeRound}
-      />
-    );
-  }
-
-  return (
-    <section className={`variable-run sandbox-final screen-enter ${isTimed ? "timed-sandbox" : "practice-sandbox"}`} aria-labelledby="sandbox-title">
-      <header className="variable-run-header">
-        <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
-          <span className="header-divider" />
-          <div><span>MODULE 02</span><strong id="sandbox-title">VARIABLE RUN · {isTimed ? `SPEED RUN ${timedRound} / ${sandboxTimedCount}` : `PRACTICE ${practiceRound} / ${sandboxPracticeCount}`}</strong></div>
-        </div>
-        <div className="run-meta">
-          {isTimed && <span className="timer-chip" aria-label={`Elapsed time ${formatElapsedTime(elapsedSeconds ?? 0)}`}><Timer size={14} /> {formatElapsedTime(elapsedSeconds ?? 0)}</span>}
-          <span className="xp-chip"><Trophy size={14} /> {bonusXp} XP</span>
-          <button className="icon-text-button" onClick={onBack}><ArrowLeft size={17} /><span>MODULE</span></button>
-        </div>
-      </header>
-
-      <div className="sandbox-workspace">
-        <section className="work-panel editor-panel" aria-label="C# code editor">
-          <header className="panel-header">
-            <div><span className="panel-index">01</span><strong>CODE</strong></div>
-            <div className="panel-actions">
-              <button onClick={resetChallenge} aria-label="Reset exercise"><RotateCcw size={14} /> RESET</button>
-              <span className="language-chip">C#</span>
-            </div>
-          </header>
-          <div className="editor-wrap">
-            <CodeMirror
-              value={code}
-              height="100%"
-              theme="dark"
-              extensions={extensions}
-              onChange={(value) => { setCode(value); setResult(null); setHasRun(false); }}
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: false,
-                highlightActiveLine: true,
-                highlightActiveLineGutter: true,
-                autocompletion: true,
-                bracketMatching: true,
-                closeBrackets: true,
-              }}
-              aria-label="C# code"
-            />
-          </div>
-          <footer className="editor-footer"><span>{code.split("\n").length} LINES</span><span>{challenge.editorHint}</span></footer>
-        </section>
-
-        <section className={`work-panel output-panel ${isRunning || runtimeStatus === "loading" ? "panel-running" : ""} ${complete ? "panel-success" : ""}`} aria-live="polite">
-          <header className="panel-header">
-            <div><span className="panel-index">02</span><strong>OUTPUT</strong></div>
-            <div className="panel-actions">
-              <span className={`runtime-status ${runtimeStatus === "ready" ? "status-live" : ""}`}>
-                <i /> {runtimeStatus === "loading" ? "LOADING C#" : isRunning ? "RUNNING" : result?.success && hasRun ? "SIGNAL LIVE" : runtimeStatus === "error" ? "RETRY" : "C# READY"}
-              </span>
-            </div>
-          </header>
-          <div className="console-surface">
-            {isRunning || runtimeStatus === "loading" ? (
-              <div className="running-state"><span className="run-wave"><i /><i /><i /><i /></span><p>{isRunning ? "RUNNING C#..." : "STARTING C#..."}</p></div>
-            ) : result?.error ? (
-              <div className="error-state">
-                <span className="error-label">C#</span>
-                <h2>{result.error.title}</h2>
-                <p>{result.error.message}</p>
-                <div className="compiler-message"><span>COMPILER</span><code>{result.error.compiler}</code></div>
-              </div>
-            ) : result ? (
-              <div className="output-content">
-                <span className="output-prompt">SHARPIE OUTPUT /</span>
-                <pre>{result.output || " "}</pre>
-                {complete && <div className="output-note"><Sparkles size={14} /> {challenge.success}</div>}
-                {isTimed && result.success && !complete && <div className="output-note output-miss">Match the requested variable, command, and sentence.</div>}
-                {lastEarnedXp !== null && <div className="xp-earned"><Trophy size={14} /> +{lastEarnedXp} XP</div>}
-              </div>
-            ) : (
-              <div className="empty-output"><span>&gt;_</span><p>YOUR PROGRAM WILL SPEAK HERE.</p></div>
-            )}
-          </div>
-          <button className="run-button" onClick={() => void run()} disabled={isRunning || runtimeStatus === "loading" || !code.trim()}>
-            <span>{isRunning ? "RUNNING" : runtimeStatus === "error" ? "RETRY C#" : "RUN"}</span>
-            <Play size={19} fill="currentColor" />
-          </button>
-        </section>
-      </div>
-
-      <div className="sandbox-footer">
-        <div className="sandbox-instruction">
-          <span>{isTimed ? `SPEED RUN ${timedRound} / ${sandboxTimedCount} · +${challenge.baseXp ?? 0} XP` : `PRACTICE ${practiceRound} / ${sandboxPracticeCount}`}</span>
-          <p><Sparkles size={16} /> <strong>{challenge.title}.</strong> {challenge.instruction}</p>
-        </div>
-        <button className={`memory-primary compact-button ${complete ? "progress-ready" : ""}`} disabled={!complete} onClick={continueChallenge}>
-          {challengeIndex === sandboxChallenges.length - 1 ? <>FINISH <Check size={17} /></> : challengeIndex === sandboxPracticeCount - 1 ? <>START SPEED RUN <Timer size={17} /></> : <>CONTINUE <ArrowRight size={17} /></>}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function SpeedRunHeader({ title, bonusXp, onBack }: { title: string; bonusXp: number; onBack: () => void }) {
-  return (
-    <header className="variable-run-header">
-      <div className="playground-identity">
-        <Brand compact asButton onClick={onBack} />
-        <span className="header-divider" />
-        <div><span>MODULE 02</span><strong>{title}</strong></div>
-      </div>
-      <div className="run-meta">
-        <span className="xp-chip"><Trophy size={14} /> {bonusXp} XP</span>
-        <button className="icon-text-button" onClick={onBack}><ArrowLeft size={17} /><span>MODULE</span></button>
-      </div>
-    </header>
-  );
-}
-
-function SpeedRunIntro({ bonusXp, onBack, onStart }: { bonusXp: number; onBack: () => void; onStart: () => void }) {
-  return (
-    <section className="variable-run speed-run-intro screen-enter" aria-labelledby="speed-run-title">
-      <SpeedRunHeader title="CHALLENGE MODE" bonusXp={bonusXp} onBack={onBack} />
-      <main className="speed-run-intro-main">
-        <div className="challenge-orbit" aria-hidden="true">
-          <span className="orbit-ring ring-one" />
-          <span className="orbit-ring ring-two" />
-          <span className="challenge-rocket"><Rocket size={34} /></span>
-          <i className="orbit-spark spark-one" />
-          <i className="orbit-spark spark-two" />
-          <i className="orbit-spark spark-three" />
-        </div>
-        <p className="run-eyebrow">A NEW SIGNAL IS OPEN</p>
-        <h1 id="speed-run-title">ENTER THE VARIABLE SPRINT</h1>
-        <p className="speed-run-lead">Five quick-touch warmups. Five timed C# missions. Build the variable, write the message, and bank as much XP as you can.</p>
-        <div className="speed-run-stats" aria-label="Challenge details">
-          <span><b>05</b><small>TOUCH ROUNDS</small></span>
-          <span><b>05</b><small>CODE ROUNDS</small></span>
-          <span><b><Timer size={20} /></b><small>ELAPSED TIMER</small></span>
-        </div>
-        <button className="memory-primary progress-ready" onClick={onStart}>ENTER CHALLENGE <Zap size={18} /></button>
-      </main>
-    </section>
-  );
-}
-
-function TouchRound({ game, round, totalRounds, touched, bonusXp, onBack, onTouch, onContinue }: { game: TouchGame; round: number; totalRounds: number; touched: number[]; bonusXp: number; onBack: () => void; onTouch: (index: number) => void; onContinue: () => void }) {
-  const complete = touched.length === game.itemCount;
-  const TouchIcon = game.icon;
-  const touchStyle = { "--touch-color": game.color, "--touch-count": game.itemCount } as CSSProperties;
-
-  return (
-    <section className="variable-run touch-round screen-enter" style={touchStyle} aria-labelledby="touch-round-title">
-      <SpeedRunHeader title={`QUICK TOUCH ${round} / ${totalRounds}`} bonusXp={bonusXp} onBack={onBack} />
-      <main className={`touch-round-main ${complete ? "is-complete" : ""}`}>
-        <div className="touch-round-heading">
-          <p className="run-eyebrow">WARMUP · +25 XP</p>
-          <h1 id="touch-round-title">{game.title}</h1>
-          <p>{game.instruction}</p>
-        </div>
-        <div className="touch-arena" aria-label={`${game.title}: ${touched.length} of ${game.itemCount} complete`}>
-          {Array.from({ length: game.itemCount }, (_, index) => {
-            const isTouched = touched.includes(index);
-            return (
-              <button
-                key={index}
-                className={isTouched ? "is-touched" : ""}
-                style={{ "--touch-index": index } as CSSProperties}
-                onClick={() => onTouch(index)}
-                disabled={isTouched}
-                aria-label={`${game.itemLabel} ${index + 1}`}
-                aria-pressed={isTouched}
-              >
-                {isTouched ? <Check size={27} /> : <TouchIcon size={30} />}
-              </button>
-            );
-          })}
-          <span className="touch-progress"><i style={{ width: `${(touched.length / game.itemCount) * 100}%` }} /></span>
-        </div>
-        <div className="touch-round-result" aria-live="polite">
-          {complete ? <><Sparkles size={18} /><strong>WARMUP COMPLETE</strong><span>+25 XP</span></> : <span>{game.itemCount - touched.length} SIGNAL{game.itemCount - touched.length === 1 ? "" : "S"} LEFT</span>}
-        </div>
-        <button className={`memory-primary compact-button ${complete ? "progress-ready" : ""}`} disabled={!complete} onClick={onContinue}>
-          START CODE MISSION <ArrowRight size={17} />
-        </button>
-      </main>
-    </section>
-  );
-}
-
-function VariableRunComplete({ onFinish, bonusXp }: { onFinish: () => void; bonusXp: number }) {
+function VariableRunComplete({ onFinish }: { onFinish: () => void }) {
   return (
     <section className="variable-run-complete screen-enter">
       <div className="run-complete-card">
         <span className="complete-icon"><Check size={34} /></span>
-        <p>MODULE 02 · {100 + bonusXp} XP</p>
+        <p>MODULE 02 · 100 XP</p>
         <h1>VARIABLE RUN COMPLETE</h1>
         <div className="complete-code">
           <code><SyntaxLine line={'string name = "Luna";'} /></code>
@@ -727,8 +261,8 @@ function VariableRunComplete({ onFinish, bonusXp }: { onFinish: () => void; bonu
           <code><SyntaxLine line={'Console.WriteLine("Hello " + name);'} /></code>
           <code><SyntaxLine line={'Console.WriteLine("Age: " + age);'} /></code>
         </div>
-        <strong>You cleared five timed C# challenges and created memory from scratch.</strong>
-        <button className="memory-primary" onClick={onFinish}>BACK TO SHARPIE <ArrowRight size={17} /></button>
+        <strong>You completed the variable lessons and built three C# programs from scratch. Variable Sprint is now unlocked.</strong>
+        <button className="memory-primary" onClick={onFinish}>BACK TO MODULE <ArrowRight size={17} /></button>
       </div>
     </section>
   );
