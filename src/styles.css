@@ -3286,12 +3286,7 @@ button.module-card { cursor: pointer; }
 .timer-chip,
 .xp-chip { display: inline-flex; align-items: center; gap: 6px; }
 .timer-chip { color: #73e4ff !important; }
-.timer-chip.urgent { color: #ffc36b !important; animation: timer-urgent 560ms ease-in-out infinite alternate; }
-.timer-chip.expired { color: #ff8099 !important; animation: none; }
 .xp-chip { color: #d7b1ff !important; }
-.timer-expired-state { display: flex; align-items: center; justify-content: center; flex-direction: column; color: #ff829c; text-align: center; }
-.timer-expired-state h2 { margin: 12px 0 0; color: #fff; font-size: 1.25rem; letter-spacing: 0.08em; }
-.timer-expired-state p { margin: 8px 0 0; color: #8795b4; font-size: 0.72rem; }
 .output-note.output-miss { color: #e7b071; border-color: rgba(231, 176, 113, 0.25); background: rgba(101, 61, 18, 0.22); }
 .xp-earned { display: inline-flex; margin-top: 10px; padding: 7px 10px; border: 1px solid rgba(191, 126, 255, 0.3); border-radius: 6px; align-items: center; gap: 7px; color: #e0b9ff; background: rgba(91, 39, 143, 0.24); font: 0.56rem var(--mono); animation: xp-pop 360ms ease-out both; }
 
@@ -3435,7 +3430,6 @@ button.module-card { cursor: pointer; }
   to { border-color: rgba(138, 232, 255, 0.96); box-shadow: 0 0 0 4px rgba(87, 188, 255, 0.12), 0 12px 38px rgba(70, 101, 255, 0.48), inset 0 0 20px rgba(139, 221, 255, 0.2); filter: brightness(1.2); }
 }
 @keyframes bucket-drop-pulse { from { opacity: 0.64; } to { opacity: 1; } }
-@keyframes timer-urgent { from { opacity: 0.68; transform: scale(0.98); } to { opacity: 1; transform: scale(1.04); } }
 @keyframes xp-pop { from { opacity: 0; transform: translateY(5px) scale(0.94); } to { opacity: 1; transform: none; } }
 @keyframes orbit-spin { to { transform: rotate(360deg); } }
 @keyframes challenge-rocket-float { from { transform: translateY(4px) rotate(-4deg); } to { transform: translateY(-5px) rotate(4deg); } }
