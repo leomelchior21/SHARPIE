@@ -8,6 +8,10 @@ const WriteLinePlayground = lazy(() =>
   import("./views/WriteLinePlayground").then((module) => ({ default: module.WriteLinePlayground })),
 );
 
+const StopPlayground = lazy(() =>
+  import("./views/StopPlayground").then((module) => ({ default: module.StopPlayground })),
+);
+
 const MemoryMachineHub = lazy(() =>
   import("./views/MemoryMachineHub").then((module) => ({ default: module.MemoryMachineHub })),
 );
@@ -28,12 +32,14 @@ function screenFromPath(): Screen {
   if (window.location.pathname === "/memory-machine/variable-sprint") return "variable-sprint";
   if (window.location.pathname === "/memory-machine") return "memory-hub";
   if (window.location.pathname === "/writeline") return "writeline";
+  if (window.location.pathname === "/stop") return "stop";
   return "hub";
 }
 
 const paths: Partial<Record<Screen, string>> = {
   hub: "/",
   writeline: "/writeline",
+  stop: "/stop",
   "memory-hub": "/memory-machine",
   "memory-experience": "/memory-machine/experience",
   "variable-run": "/memory-machine/variable-run",
@@ -74,12 +80,18 @@ export default function App() {
         <Hub
           name={name}
           onOpenWriteLine={() => navigate("writeline")}
+          onOpenStop={() => navigate("stop")}
           onOpenMemoryMachine={() => navigate("memory-hub")}
         />
       )}
       {screen === "writeline" && (
         <Suspense fallback={<ModuleLoader />}>
           <WriteLinePlayground name={name} onBack={() => navigate("hub")} />
+        </Suspense>
+      )}
+      {screen === "stop" && (
+        <Suspense fallback={<ModuleLoader />}>
+          <StopPlayground name={name} onBack={() => navigate("hub")} />
         </Suspense>
       )}
       {screen === "memory-hub" && (

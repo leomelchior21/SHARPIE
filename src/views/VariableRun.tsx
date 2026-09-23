@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, RotateCcw, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
+import { SyntaxLine } from "../components/SyntaxLine";
 import { VariableCodeMissions } from "../components/VariableCodeMissions";
 import { variableRunLessons } from "../data/variableRunLessons";
 import type { VariableRunLesson } from "../data/variableRunLessons";
@@ -136,7 +137,7 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
               result === "correct" ? (
                 <div className="run-code-lines code-revealed">
                   {(lesson.finalCode ?? "").split("\n").map((line, index) => (
-                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine line={line || " "} /></code></div>
+                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine code={line || " "} /></code></div>
                   ))}
                 </div>
               ) : (
@@ -149,7 +150,7 @@ export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish
               <>
                 <div className="run-code-lines">
                   {(lesson.code ?? lesson.finalCode ?? "").split("\n").map((line, index) => (
-                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine line={line || " "} /></code></div>
+                    <div className="run-code-line" key={`${index}-${line}`}><span>{index + 1}</span><code><SyntaxLine code={line || " "} /></code></div>
                   ))}
                 </div>
                 {isBlockTask && selectedBlocks.length > 0 && (
@@ -216,7 +217,7 @@ function AnswerChallenge({ lesson, selected, onSelect }: { lesson: VariableRunLe
       {lesson.answers?.map((answer, index) => (
         <button key={answer} className={selected === index ? "selected" : ""} onClick={() => onSelect(index)}>
           <span>{String.fromCharCode(65 + index)}</span>
-          {answer.includes("=") ? <code><SyntaxLine line={answer} /></code> : <strong className={answer.includes("\n") ? "multiline-answer" : ""}>{answer}</strong>}
+          {answer.includes("=") ? <code><SyntaxLine code={answer} /></code> : <strong className={answer.includes("\n") ? "multiline-answer" : ""}>{answer}</strong>}
         </button>
       ))}
     </div>
@@ -239,13 +240,6 @@ function BlockChallenge({ lesson, selected, onAdd, onRemove, onReset }: { lesson
   );
 }
 
-function SyntaxLine({ line }: { line: string }) {
-  const parts = line.split(/(\/\/.*|"(?:\\.|[^"\\])*"|\bConsole\s*\.\s*(?:Write(?:Line)?|ReadLine)\b|\b(?:string|int|double)\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b)/g).filter(Boolean);
-  return <>{parts.map((part, index) => {
-    const className = part.startsWith("//") ? "syn-comment" : part.startsWith('"') ? "syn-string" : /^(string|int|double)$/.test(part) ? "syn-type" : /^Console\s*\.\s*(?:Write(?:Line)?|ReadLine)$/.test(part) ? "syn-method" : /^\d+(?:\.\d+)?$/.test(part) ? "syn-number" : /^\w+$/.test(part) ? "syn-variable" : "";
-    return <span className={className} key={`${part}-${index}`}>{part}</span>;
-  })}</>;
-}
 
 function VariableRunComplete({ onFinish }: { onFinish: () => void }) {
   return (
@@ -255,11 +249,11 @@ function VariableRunComplete({ onFinish }: { onFinish: () => void }) {
         <p>MODULE 02 · 100 XP</p>
         <h1>VARIABLE RUN COMPLETE</h1>
         <div className="complete-code">
-          <code><SyntaxLine line={'string name = "Luna";'} /></code>
-          <code><SyntaxLine line={"int age = 14;"} /></code>
+          <code><SyntaxLine code={'string name = "Luna";'} /></code>
+          <code><SyntaxLine code={"int age = 14;"} /></code>
           <br />
-          <code><SyntaxLine line={'Console.WriteLine("Hello " + name);'} /></code>
-          <code><SyntaxLine line={'Console.WriteLine("Age: " + age);'} /></code>
+          <code><SyntaxLine code={'Console.WriteLine("Hello " + name);'} /></code>
+          <code><SyntaxLine code={'Console.WriteLine("Age: " + age);'} /></code>
         </div>
         <strong>You completed the variable lessons and built three C# programs from scratch. Variable Sprint is now unlocked.</strong>
         <button className="memory-primary" onClick={onFinish}>BACK TO MODULE <ArrowRight size={17} /></button>

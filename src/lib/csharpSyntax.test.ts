@@ -51,6 +51,21 @@ describe("shared C# syntax colors", () => {
     parent.remove();
   });
 
+  it("leaves commands inside comments in the comment color", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    view = new EditorView({
+      parent,
+      doc: '// Console.WriteLine("hidden");\nConsole.WriteLine("live");',
+      extensions: csharpEditorExtensions,
+    });
+
+    const commands = [...parent.querySelectorAll<HTMLElement>(".cm-console-method")];
+    expect(commands.map((node) => node.textContent)).toEqual(["Console.WriteLine"]);
+    expect(commands[0].closest(".cm-line")?.textContent).toBe('Console.WriteLine("live");');
+    parent.remove();
+  });
+
   it("shows a writing prompt on an instructed empty line until the student types", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);

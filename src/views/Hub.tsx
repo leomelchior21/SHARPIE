@@ -6,6 +6,7 @@ import { Brand } from "../components/Brand";
 type HubProps = {
   name: string;
   onOpenWriteLine: () => void;
+  onOpenStop: () => void;
   onOpenMemoryMachine: () => void;
 };
 
@@ -18,7 +19,7 @@ type Module = {
   onClick?: () => void;
 };
 
-export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
+export function Hub({ name, onOpenWriteLine, onOpenStop, onOpenMemoryMachine }: HubProps) {
   const [notice, setNotice] = useState(false);
 
   const locked = () => {
@@ -29,7 +30,7 @@ export function Hub({ name, onOpenWriteLine, onOpenMemoryMachine }: HubProps) {
   const modules: Module[] = [
     { id: "01", name: "WriteLine Playground", subtitle: "Make C# talk.", glyph: <Braces size={28} />, state: "available", onClick: onOpenWriteLine },
     { id: "02", name: "Memory Machine", subtitle: "Discover how programs remember.", glyph: <Database size={28} />, state: "featured", onClick: onOpenMemoryMachine },
-    { id: "03", name: "STOP", subtitle: "Basic String Formatting", glyph: "Aa", state: "locked" },
+    { id: "03", name: "STOP", subtitle: "Basic String Formatting", glyph: "Aa", state: "available", onClick: onOpenStop },
     { id: "04", name: "Wordle", subtitle: "Basic Operations", glyph: "◇", state: "locked" },
     { id: "05", name: "Final Boss", subtitle: "Secret Challenge", glyph: "?", state: "locked" },
   ];

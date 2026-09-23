@@ -1,7 +1,9 @@
-import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, StreamLanguage, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { csharp } from "@codemirror/legacy-modes/mode/clike";
 import { tags } from "@lezer/highlight";
-import { Decoration, EditorView, MatchDecorator, ViewPlugin, WidgetType } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
+import type { DecorationSet } from "@codemirror/view";
+import type { Range } from "@codemirror/state";
 import type { ViewUpdate } from "@codemirror/view";
 import type { BasicSetupOptions } from "@uiw/react-codemirror";
 
@@ -49,20 +51,46 @@ const csharpHighlightStyle = HighlightStyle.define([
   { tag: [tags.lineComment, tags.blockComment], color: csharpPalette.comment, fontStyle: "italic" },
 ]);
 
-const consoleMethodMatcher = new MatchDecorator({
-  regexp: /\bConsole\s*\.\s*(?:Write(?:Line)?|ReadLine)\b/g,
-  decoration: Decoration.mark({ class: "cm-console-method" }),
-});
+const consoleMethodPattern = /\bConsole\s*\.\s*(?:Write(?:Line)?|ReadLine)\b/g;
+
+function consoleMethodDecorations(view: EditorView) {
+  const decorations: Range<Decoration>[] = [];
+  const tree = syntaxTree(view.state);
+
+  for (const { from, to } of view.visibleRanges) {
+    const text = view.state.doc.sliceString(from, to);
+    consoleMethodPattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = consoleMethodPattern.exec(text)) !== null) {
+      const start = from + match.index;
+      const end = start + match[0].length;
+      let insideLiteral = false;
+      tree.iterate({
+        from: start,
+        to: end,
+        enter(node) {
+          if (/comment|string|char/i.test(node.name)) insideLiteral = true;
+        },
+      });
+      if (insideLiteral) continue;
+      decorations.push(Decoration.mark({ class: "cm-console-method" }).range(start, end));
+    }
+  }
+
+  return Decoration.set(decorations, true);
+}
 
 export const consoleMethodHighlight = ViewPlugin.fromClass(class {
-  decorations;
+  decorations: DecorationSet;
 
   constructor(view: EditorView) {
-    this.decorations = consoleMethodMatcher.createDeco(view);
+    this.decorations = consoleMethodDecorations(view);
   }
 
   update(update: ViewUpdate) {
-    this.decorations = consoleMethodMatcher.updateDeco(update, this.decorations);
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = consoleMethodDecorations(update.view);
+    }
   }
 }, {
   decorations: (value) => value.decorations,

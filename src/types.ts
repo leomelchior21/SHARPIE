@@ -2,6 +2,7 @@ export type Screen =
   | "name"
   | "hub"
   | "writeline"
+  | "stop"
   | "memory-hub"
   | "memory-experience"
   | "variable-run"
