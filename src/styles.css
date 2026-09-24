@@ -590,21 +590,21 @@ button.module-card { cursor: pointer; }
 .available-module .module-topline { color: #7790c9; }
 
 .featured-module {
-  border-color: rgba(168, 128, 255, 0.52);
-  color: #f0ebff;
+  border-color: rgba(102, 154, 255, 0.55);
+  color: #eef4ff;
   background:
-    radial-gradient(circle at 85% 100%, rgba(124, 77, 255, 0.44), transparent 55%),
-    linear-gradient(145deg, rgba(46, 28, 92, 0.94), rgba(15, 9, 34, 0.94));
-  box-shadow: 0 24px 65px rgba(0, 0, 0, 0.24), inset 0 0 46px rgba(124, 89, 255, 0.1);
+    radial-gradient(circle at 85% 100%, rgba(64, 118, 255, 0.44), transparent 55%),
+    linear-gradient(145deg, rgba(21, 42, 96, 0.94), rgba(6, 10, 28, 0.94));
+  box-shadow: 0 24px 65px rgba(0, 0, 0, 0.24), inset 0 0 46px rgba(90, 140, 255, 0.12);
 }
 .featured-module:hover {
-  border-color: rgba(186, 150, 255, 0.75);
+  border-color: rgba(140, 180, 255, 0.78);
   transform: translateY(-3px);
 }
-.featured-module .module-content strong { color: #f3eeff; }
-.featured-module .module-content small { color: #b6a6e8; }
-.featured-module .module-topline { color: #a58cdd; }
-.featured-module .module-open { color: #d7c3ff; border-color: rgba(160, 128, 255, 0.4); }
+.featured-module .module-content strong { color: #f2f7ff; }
+.featured-module .module-content small { color: #a8c0ea; }
+.featured-module .module-topline { color: #8fa8dd; }
+.featured-module .module-open { color: #cfe0ff; border-color: rgba(130, 170, 255, 0.45); }
 
 .featured-module::before {
   position: absolute;
@@ -612,8 +612,8 @@ button.module-card { cursor: pointer; }
   inset: 0;
   opacity: 0.5;
   background:
-    radial-gradient(ellipse at 75% 68%, rgba(160, 90, 255, 0.7), transparent 38%),
-    radial-gradient(ellipse at 40% 110%, rgba(106, 40, 235, 0.66), transparent 52%);
+    radial-gradient(ellipse at 75% 68%, rgba(90, 150, 255, 0.7), transparent 38%),
+    radial-gradient(ellipse at 40% 110%, rgba(40, 90, 235, 0.66), transparent 52%);
   transition: opacity 220ms;
 }
 .featured-module::after {
@@ -627,29 +627,29 @@ button.module-card { cursor: pointer; }
   filter: blur(20px);
   opacity: 0.45;
   transform: rotate(-62deg);
-  background: linear-gradient(90deg, transparent, #b06bff, #7a3bff, transparent);
+  background: linear-gradient(90deg, transparent, #6bb0ff, #3b7bff, transparent);
   animation: module-light 7s ease-in-out infinite alternate;
 }
 .featured-module:hover::before { opacity: 0.64; }
 
 .featured-glyph {
-  color: #d7c3ff;
-  border-color: rgba(160, 128, 255, 0.4);
-  background: rgba(96, 60, 168, 0.28);
-  box-shadow: 0 0 26px rgba(124, 89, 255, 0.2);
+  color: #cfe0ff;
+  border-color: rgba(130, 170, 255, 0.45);
+  background: rgba(40, 80, 180, 0.3);
+  box-shadow: 0 0 26px rgba(90, 140, 255, 0.25);
 }
 
 .module-callout {
   position: absolute;
   z-index: 4;
   inset: 5px;
-  border: 1px solid rgba(178, 138, 255, 0.58);
+  border: 1px solid rgba(138, 170, 255, 0.58);
   border-radius: 11px;
   pointer-events: none;
   box-shadow:
-    0 0 0 1px rgba(148, 100, 255, 0.08),
-    inset 0 0 18px rgba(150, 100, 255, 0.1),
-    0 0 18px rgba(140, 90, 255, 0.14);
+    0 0 0 1px rgba(100, 148, 255, 0.08),
+    inset 0 0 18px rgba(100, 148, 255, 0.1),
+    0 0 18px rgba(90, 138, 255, 0.16);
   animation: module-callout-pulse 2.1s ease-in-out infinite;
 }
 
@@ -660,8 +660,8 @@ button.module-card { cursor: pointer; }
   right: 15%;
   top: -1px;
   height: 1px;
-  box-shadow: 0 0 14px 2px #9b6bff;
-  background: linear-gradient(90deg, transparent, #d2aaff, transparent);
+  box-shadow: 0 0 14px 2px #6b9bff;
+  background: linear-gradient(90deg, transparent, #aad2ff, transparent);
 }
 
 .toast {
@@ -2130,8 +2130,8 @@ button.module-card { cursor: pointer; }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 @keyframes module-callout-pulse {
-  0%, 100% { opacity: 0.42; box-shadow: 0 0 0 1px rgba(150, 100, 255, 0.05), inset 0 0 14px rgba(150, 100, 255, 0.06), 0 0 12px rgba(140, 90, 255, 0.1); }
-  50% { opacity: 1; box-shadow: 0 0 0 1px rgba(186, 150, 255, 0.22), inset 0 0 24px rgba(150, 100, 255, 0.14), 0 0 28px rgba(150, 100, 255, 0.3); }
+  0%, 100% { opacity: 0.42; box-shadow: 0 0 0 1px rgba(100, 148, 255, 0.05), inset 0 0 14px rgba(100, 148, 255, 0.06), 0 0 12px rgba(90, 138, 255, 0.1); }
+  50% { opacity: 1; box-shadow: 0 0 0 1px rgba(140, 180, 255, 0.22), inset 0 0 24px rgba(100, 148, 255, 0.14), 0 0 28px rgba(100, 148, 255, 0.3); }
 }
 @keyframes activity-guide {
   0%, 9%, 27%, 100% { opacity: 0; transform: scale(0.92); }
