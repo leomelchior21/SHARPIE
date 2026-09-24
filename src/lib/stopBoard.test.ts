@@ -74,12 +74,12 @@ describe("buildStopBoard", () => {
     ]);
   });
 
-  it("updates a column when the same label is printed again", () => {
+  it("updates a category when the same label is printed again", () => {
     const board = sheet(
-      'string answer = "Ana";',
-      'Console.WriteLine("Name: " + answer);',
-      'answer = "Aveiro";',
-      'Console.WriteLine("Name: " + answer);',
+      'string answer1 = "Ana";',
+      'string answer2 = "Aveiro";',
+      'Console.WriteLine("Name: " + answer1);',
+      'Console.WriteLine("Name: " + answer2);',
     );
     expect(board.columns).toHaveLength(1);
     expect(board.columns[0].value).toBe("Aveiro");
@@ -95,7 +95,7 @@ describe("buildStopBoard", () => {
     expect(board.columns[0]).toMatchObject({ label: "FULL NAME", value: "Ana Silva", built: true });
   });
 
-  it("keys columns by label so one variable can fill many columns", () => {
+  it("keys one card per category label so a variable can fill many categories", () => {
     const board = sheet(
       '// string old = "Zulu";',
       'string city = "Braga";',

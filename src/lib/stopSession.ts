@@ -1,5 +1,5 @@
 const keys = {
-  code: "sharpie:stop:v3:code",
+  code: "sharpie:stop:v4:code",
 } as const;
 
 function available() {

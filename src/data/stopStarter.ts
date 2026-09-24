@@ -3,13 +3,17 @@ import type { StopBoard } from "../lib/stopBoard";
 
 const cleanValue = (value: string) => value.replace(/["\\\r\n]/g, "").trim() || "Ada";
 
+const TRAILING_BLANK_LINES = 11;
+
 export function stopStarter(name: string) {
   return [
     "// STOP RULES",
     "// 1. A string variable stores text.",
-    "// 2. The + sign joins text together.",
     `string answer1 = "${cleanValue(name)}";`,
+    "",
+    '// 2. Use the "+" sign to add the text and variable.',
     'Console.WriteLine("Name: " + answer1);',
+    ...Array.from({ length: TRAILING_BLANK_LINES }, () => ""),
   ].join("\n");
 }
 

@@ -344,11 +344,11 @@ export function buildStopBoard(code: string): StopBoard {
       continue;
     }
 
-    const key = cleanLabel(label) || (identifiers[0] ?? "").toUpperCase();
+    const columnLabel = cleanLabel(label) || (identifiers[0] ?? "").toUpperCase();
     const value = formatValue(evaluated);
-    columns.set(key, {
-      key,
-      label: key,
+    columns.set(columnLabel, {
+      key: columnLabel,
+      label: columnLabel,
       value,
       source: identifiers.join(" + "),
       built: valueTerms.length > 1 || identifiers.some((identifier) => variables.get(identifier)?.built),

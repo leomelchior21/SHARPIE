@@ -37,12 +37,29 @@ describe("STOP playground sheet", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "RUN" })).toBeEnabled());
 
     const editor = screen.getByRole("textbox", { name: "C# code" }) as HTMLTextAreaElement;
+    expect(editor.value).toContain("// STOP RULES");
+    expect(editor.value).toContain("// 1. A string variable stores text.");
     expect(editor.value).toContain('string answer1 = "Ada";');
+    expect(editor.value).toContain('// 2. Use the "+" sign to add the text and variable.');
     expect(editor.value).toContain('Console.WriteLine("Name: " + answer1);');
     expect(editor.value).not.toContain("Reuse answer1");
     expect(screen.getByText("NAME")).toBeInTheDocument();
     expect(screen.getByText("1/6 COLUMNS")).toBeInTheDocument();
     expect(document.querySelector(".challenge-bar")).not.toBeInTheDocument();
+  });
+
+  it("opens with at least ten blank lines below the sample command", async () => {
+    render(<StopPlayground name="Ada" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "RUN" })).toBeEnabled());
+
+    const editor = screen.getByRole("textbox", { name: "C# code" }) as HTMLTextAreaElement;
+    const lines = editor.value.split("\n");
+    const lastCommand = lines.findIndex((line) => line.includes('Console.WriteLine("Name: " + answer1);'));
+
+    expect(lastCommand).toBeGreaterThanOrEqual(0);
+    expect(lines.length - lastCommand - 1).toBeGreaterThanOrEqual(10);
+    expect(lines.slice(lastCommand + 1).every((line) => line.trim() === "")).toBe(true);
+    expect(screen.getByText(`${lines.length} LINES`)).toBeInTheDocument();
   });
 
   it("color codes the command in the empty sheet hint", async () => {
@@ -68,7 +85,7 @@ describe("STOP playground sheet", () => {
     expect(screen.getByText("CITY")).toBeInTheDocument();
     expect(screen.getByText("Aveiro")).toBeInTheDocument();
     expect(screen.getByText("VALID")).toBeInTheDocument();
-    expect(document.querySelectorAll(".stop-column footer svg")).toHaveLength(1);
+    expect(document.querySelectorAll(".stop-row-check svg")).toHaveLength(1);
     expect(screen.getByText("1/6 COLUMNS")).toBeInTheDocument();
   });
 
@@ -93,8 +110,43 @@ describe("STOP playground sheet", () => {
     expect(screen.getByText("Ana")).toBeInTheDocument();
     expect(screen.getByText("Braga")).toBeInTheDocument();
     expect(screen.getAllByText("VALID")).toHaveLength(2);
-    expect(document.querySelectorAll(".stop-column footer svg")).toHaveLength(2);
+    expect(document.querySelectorAll(".stop-row-check svg")).toHaveLength(2);
     expect(screen.getByText("2/6 COLUMNS")).toBeInTheDocument();
+  });
+
+  it("keeps one card per category label and updates it when printed again", async () => {
+    render(<StopPlayground name="Ada" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "RUN" })).toBeEnabled());
+
+    const editor = screen.getByRole("textbox", { name: "C# code" });
+    fireEvent.change(editor, {
+      target: {
+        value: [
+          'string answer1 = "Leo";',
+          'string answer2 = "Lilath";',
+          'string answer3 = "Laos";',
+          'string answer4 = "Lom";',
+          'string answer5 = "dsfsdf";',
+          'string answer6 = "sdf";',
+          'Console.WriteLine("Name: " + answer1);',
+          'Console.WriteLine("Color: " + answer2);',
+          'Console.WriteLine("CEP: " + answer3);',
+          'Console.WriteLine("Name: " + answer4);',
+          'Console.WriteLine("Color: " + answer5);',
+          'Console.WriteLine("CEP: " + answer6);',
+        ].join("\n"),
+      },
+    });
+
+    expect(screen.getAllByText("NAME")).toHaveLength(1);
+    expect(screen.getAllByText("COLOR")).toHaveLength(1);
+    expect(screen.getAllByText("CEP")).toHaveLength(1);
+    expect(screen.getByText("Lom")).toBeInTheDocument();
+    expect(screen.getByText("dsfsdf")).toBeInTheDocument();
+    expect(screen.getByText("sdf")).toBeInTheDocument();
+    expect(screen.queryByText("Leo")).not.toBeInTheDocument();
+    expect(screen.getAllByText("VALID")).toHaveLength(3);
+    expect(screen.getByText("3/6 COLUMNS")).toBeInTheDocument();
   });
 
   it("does not add a column for a bare variable print and explains why", async () => {

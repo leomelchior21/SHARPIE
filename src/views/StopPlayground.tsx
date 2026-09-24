@@ -43,6 +43,13 @@ export function StopPlayground({ name, onBack }: StopPlaygroundProps) {
 
   const extensions = useMemo(() => csharpEditorExtensions, []);
   const board = useMemo(() => buildStopBoard(code), [code]);
+  const previousColumnsRef = useRef(board.columns.length);
+  const [boardPulse, setBoardPulse] = useState(0);
+
+  useEffect(() => {
+    if (board.columns.length > previousColumnsRef.current) setBoardPulse((value) => value + 1);
+    previousColumnsRef.current = board.columns.length;
+  }, [board.columns.length]);
 
   useEffect(() => {
     let active = true;
@@ -261,7 +268,7 @@ export function StopPlayground({ name, onBack }: StopPlaygroundProps) {
             {hasRun && result?.error ? <StopErrorBanner error={result.error} /> : null}
 
             {board.columns.length > 0 ? (
-              <StopSheet board={board} complete={sheetComplete} />
+              <StopSheet board={board} complete={sheetComplete} pulse={boardPulse} />
             ) : (
               <div className="empty-output stop-empty">
                 <span>&gt;_</span>
@@ -321,7 +328,7 @@ export function StopPlayground({ name, onBack }: StopPlaygroundProps) {
   );
 }
 
-function StopSheet({ board, complete }: { board: StopBoard; complete: boolean }) {
+function StopSheet({ board, complete, pulse }: { board: StopBoard; complete: boolean; pulse: number }) {
   const ghostSlots = Math.max(0, stopBoardLimits.maxColumns - board.columns.length);
 
   return (
@@ -332,29 +339,29 @@ function StopSheet({ board, complete }: { board: StopBoard; complete: boolean })
         </span>
       </div>
 
-      <div className="stop-sheet">
+      <div className="stop-list">
         {board.columns.map((column, index) => (
-          <article className="stop-column" key={column.key} style={{ "--stop-order": index } as CSSProperties}>
-            <header>
-              <span className="stop-column-index">{String(index + 1).padStart(2, "0")}</span>
-            </header>
-            <strong className="stop-column-label" title={column.label}>{column.label}</strong>
-            <span className="stop-column-source" title={`Console.WriteLine("${column.label}: " + ${column.source});`}>
-              <SyntaxLine code={column.source} />
+          <article className="stop-row" key={column.key} style={{ "--stop-order": index } as CSSProperties}>
+            <span className="stop-row-index">{String(index + 1).padStart(2, "0")}</span>
+            <span className="stop-row-category">
+              <strong title={column.label}>{column.label}</strong>
+              <span className="stop-row-source" title={`Console.WriteLine("${column.label}: " + ${column.source});`}>
+                <SyntaxLine code={column.source} />
+              </span>
             </span>
-            <span className="stop-column-value">{column.value}</span>
-            <footer>
-              <Check size={13} /> {column.built ? "COMBO" : "VALID"}
-            </footer>
+            <span className="stop-row-value">{column.value}</span>
+            <span className="stop-row-check"><Check size={13} /> {column.built ? "COMBO" : "VALID"}</span>
           </article>
         ))}
         {Array.from({ length: ghostSlots }).map((_, index) => (
-          <div className="stop-column stop-column-ghost" key={`empty-${index}`} aria-hidden="true">
+          <div className="stop-row stop-row-ghost" key={`empty-${index}`} aria-hidden="true">
             <span>EMPTY SLOT</span>
             <i />
           </div>
         ))}
       </div>
+
+      {pulse > 0 && <span className="stop-flash" key={pulse} aria-hidden="true" />}
 
       <div className="stop-board-foot">
         <span>{board.columns.length}/{stopBoardLimits.maxColumns} COLUMNS</span>

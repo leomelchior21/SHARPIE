@@ -3579,6 +3579,7 @@ button.module-card { cursor: pointer; }
 }
 
 .stop-board {
+  position: relative;
   display: flex;
   min-height: 100%;
   padding-bottom: 54px;
@@ -3612,110 +3613,136 @@ button.module-card { cursor: pointer; }
   animation-delay: calc(var(--stop-order, 0) * 70ms);
 }
 
-.stop-sheet {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 9px;
-  align-content: start;
+.stop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.stop-column {
+.stop-row {
   --stop-accent: #65a2ff;
   --stop-accent-soft: rgba(101, 162, 255, 0.13);
   position: relative;
-  display: flex;
-  min-height: 128px;
-  padding: 11px 12px 10px;
+  display: grid;
+  min-height: 58px;
+  padding: 8px 14px 8px 10px;
   border: 1px solid rgba(117, 139, 199, 0.2);
   border-radius: 9px;
-  flex-direction: column;
-  gap: 5px;
+  grid-template-columns: 30px minmax(76px, 0.75fr) minmax(0, 1.35fr) auto;
+  gap: 11px;
+  align-items: center;
   overflow: hidden;
   background:
-    linear-gradient(168deg, var(--stop-accent-soft), rgba(5, 9, 24, 0.88) 58%),
-    rgba(5, 9, 24, 0.8);
+    linear-gradient(100deg, var(--stop-accent-soft), rgba(5, 9, 24, 0.9) 46%),
+    rgba(5, 9, 24, 0.82);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.03);
-  animation: stop-column-in 420ms cubic-bezier(0.22, 0.9, 0.35, 1) both;
-  animation-delay: calc(var(--stop-order, 0) * 60ms);
+  animation: stop-row-in 440ms cubic-bezier(0.22, 0.9, 0.35, 1) both;
+  animation-delay: calc(var(--stop-order, 0) * 55ms);
 }
 
-.stop-column::after {
+.stop-row::before {
   position: absolute;
   content: "";
-  left: 12px;
-  right: 12px;
-  top: 0;
-  height: 1px;
-  opacity: 0.7;
-  background: linear-gradient(90deg, transparent, var(--stop-accent), transparent);
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, transparent, var(--stop-accent), transparent);
+  box-shadow: 0 0 12px var(--stop-accent);
 }
 
-.stop-column:nth-child(6n + 1) { --stop-accent: #65a2ff; --stop-accent-soft: rgba(101, 162, 255, 0.13); }
-.stop-column:nth-child(6n + 2) { --stop-accent: #69dcff; --stop-accent-soft: rgba(105, 220, 255, 0.12); }
-.stop-column:nth-child(6n + 3) { --stop-accent: #b58cff; --stop-accent-soft: rgba(181, 140, 255, 0.13); }
-.stop-column:nth-child(6n + 4) { --stop-accent: #7be0a8; --stop-accent-soft: rgba(123, 224, 168, 0.12); }
-.stop-column:nth-child(6n + 5) { --stop-accent: #ffc45c; --stop-accent-soft: rgba(255, 196, 92, 0.12); }
-.stop-column:nth-child(6n) { --stop-accent: #ff9bb8; --stop-accent-soft: rgba(255, 155, 184, 0.12); }
+.stop-row::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(-110%);
+  background: linear-gradient(105deg, transparent 34%, rgba(255, 255, 255, 0.1) 50%, transparent 66%);
+  animation: stop-row-sweep 900ms ease-out 140ms both;
+}
 
-.stop-column header {
+.stop-row:nth-child(6n + 1) { --stop-accent: #65a2ff; --stop-accent-soft: rgba(101, 162, 255, 0.13); }
+.stop-row:nth-child(6n + 2) { --stop-accent: #69dcff; --stop-accent-soft: rgba(105, 220, 255, 0.12); }
+.stop-row:nth-child(6n + 3) { --stop-accent: #b58cff; --stop-accent-soft: rgba(181, 140, 255, 0.13); }
+.stop-row:nth-child(6n + 4) { --stop-accent: #7be0a8; --stop-accent-soft: rgba(123, 224, 168, 0.12); }
+.stop-row:nth-child(6n + 5) { --stop-accent: #ffc45c; --stop-accent-soft: rgba(255, 196, 92, 0.12); }
+.stop-row:nth-child(6n) { --stop-accent: #ff9bb8; --stop-accent-soft: rgba(255, 155, 184, 0.12); }
+
+.stop-row-index {
+  display: grid;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  place-items: center;
+  color: var(--stop-accent);
+  background: var(--stop-accent-soft);
+  font-family: var(--mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.04em;
+}
+
+.stop-row-category {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.stop-column-index {
-  color: #4f6cae;
-  font-family: var(--mono);
-  font-size: 0.44rem;
-}
-
-.stop-column-label {
+.stop-row-category strong {
   overflow: hidden;
-  color: #8a96b5;
+  color: #d3dfff;
   font-family: var(--mono);
-  font-size: 0.5rem;
-  font-weight: 500;
+  font-size: 0.6rem;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stop-column-source {
+.stop-row-source {
   overflow: hidden;
   color: #4b5f8c;
   font-family: var(--mono);
-  font-size: 0.42rem;
+  font-size: 0.46rem;
   letter-spacing: 0.04em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stop-column-value {
-  margin-top: auto;
+.stop-row-value {
+  overflow: hidden;
   color: #f0f5ff;
-  font-size: clamp(1rem, 1.45vw, 1.3rem);
+  font-size: clamp(0.98rem, 1.4vw, 1.22rem);
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-shadow: 0 0 20px rgba(129, 185, 255, 0.12);
 }
 
-.stop-column footer {
-  display: flex;
-  min-height: 16px;
+.stop-row-check {
+  display: inline-flex;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(95, 158, 130, 0.28);
+  border-radius: 6px;
   align-items: center;
   gap: 5px;
-  color: #5f9e82;
+  color: #6fe0a8;
+  background: rgba(17, 56, 40, 0.4);
   font-family: var(--mono);
-  font-size: 0.42rem;
+  font-size: 0.44rem;
   letter-spacing: 0.1em;
+  animation: stop-check-pop 520ms cubic-bezier(0.22, 1.5, 0.4, 1) 170ms both;
 }
 
-.stop-column-ghost {
-  min-height: 128px;
+.stop-row-ghost {
+  display: flex;
+  min-height: 44px;
+  padding: 0 14px;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
   border-style: dashed;
   border-color: rgba(117, 139, 199, 0.16);
@@ -3723,12 +3750,22 @@ button.module-card { cursor: pointer; }
   background: rgba(4, 8, 21, 0.42);
   box-shadow: none;
   font-family: var(--mono);
-  font-size: 0.44rem;
-  letter-spacing: 0.12em;
+  font-size: 0.46rem;
+  letter-spacing: 0.14em;
 }
 
-.stop-column-ghost::after { display: none; }
-.stop-column-ghost i { width: 24px; height: 1px; background: rgba(117, 139, 199, 0.22); }
+.stop-row-ghost::before,
+.stop-row-ghost::after { display: none; }
+.stop-row-ghost i { width: 42px; height: 1px; background: rgba(117, 139, 199, 0.22); }
+
+.stop-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 11px;
+  background: radial-gradient(circle at 22% 50%, rgba(80, 230, 165, 0.16), transparent 58%);
+  animation: stop-flash-fade 760ms ease-out both;
+}
 
 .stop-board-foot {
   display: flex;
@@ -3877,9 +3914,25 @@ button.module-card { cursor: pointer; }
   text-align: left;
 }
 
-@keyframes stop-column-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes stop-row-in {
+  from { opacity: 0; transform: translateX(-18px) scale(0.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes stop-row-sweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(110%); }
+}
+
+@keyframes stop-check-pop {
+  0% { opacity: 0; transform: scale(0.5); }
+  65% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes stop-flash-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @keyframes stop-tile-in {
@@ -3894,12 +3947,13 @@ button.module-card { cursor: pointer; }
 
 @media (max-height: 780px) {
   .stop-board { gap: 12px; padding-bottom: 46px; }
-  .stop-sheet { gap: 7px; }
-  .stop-column, .stop-column-ghost { min-height: 104px; }
+  .stop-list { gap: 6px; }
+  .stop-row { min-height: 48px; }
+  .stop-row-ghost { min-height: 36px; }
   .stop-surface { padding-top: 16px; padding-bottom: 16px; }
 }
 
 @media (max-width: 1100px) {
-  .stop-sheet { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
-  .stop-column-value { font-size: 1rem; }
+  .stop-row { grid-template-columns: 26px minmax(64px, 0.7fr) minmax(0, 1.3fr) auto; gap: 8px; }
+  .stop-row-value { font-size: 0.95rem; }
 }
