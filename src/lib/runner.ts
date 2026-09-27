@@ -120,7 +120,7 @@ export function prepareCSharp() {
   return readyPromise ?? createWorker();
 }
 
-export async function executeCSharp(code: string, signal?: AbortSignal): Promise<RunResult> {
+export async function executeCSharp(code: string, signal?: AbortSignal, inputs: string[] = []): Promise<RunResult> {
   await prepareCSharp();
   if (!worker) throw new Error("The in-browser C# engine is unavailable.");
   if (signal?.aborted) throw new DOMException("Run cancelled", "AbortError");
@@ -146,6 +146,6 @@ export async function executeCSharp(code: string, signal?: AbortSignal): Promise
     }
 
     pending.set(requestId, request);
-    worker!.postMessage({ requestId, code });
+    worker!.postMessage({ requestId, code, inputs });
   });
 }

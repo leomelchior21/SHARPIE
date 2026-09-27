@@ -1,0 +1,617 @@
+{
+  "source": "Turmas JK - Y9 (2026)",
+  "students": [
+    {
+      "login": "anazancaner",
+      "name": "Ana Beatriz Lerio Zancaner",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "anamascarenhas",
+      "name": "Ana Luiza Netto Mascarenhas",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "anazimmermann",
+      "name": "Ana Teresa Ferreira da Rosa Zimmermann",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "antoniobiagi",
+      "name": "Antonio Augusto Sandoval Biagi",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "aymanayache",
+      "name": "Ayman Ayache",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "beatrizsantos",
+      "name": "Beatriz Uliana dos Santos",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "bernardomagalhaes",
+      "name": "Bernardo Marcondes Magalhães",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "catarinamoreira",
+      "name": "Catarina Sá Moreira",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "felipejardim",
+      "name": "Felipe Duarte Jardim",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "felipeceneviva",
+      "name": "Felipe Serra Ceneviva",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "gabrielszego",
+      "name": "Gabriel Kenzo Sakai Szego",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "giuliapinto",
+      "name": "Giulia Borghi Pinto",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "henriquemarsaioli",
+      "name": "Henrique Botelho Marsaioli",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "isabelalogiodice",
+      "name": "Isabela Manzini Logiodice",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "joaodedivitis",
+      "name": "João Pedro Dedivitis",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "juliacastro",
+      "name": "Julia O'Reilly de Araujo Castro",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "julietaribeiro",
+      "name": "Julieta Bresser Pereira de Oliveira Ribeiro",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "lauramendonca",
+      "name": "Laura Bellinato Mendonça",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "lorenacoffone",
+      "name": "Lorena Hirsch Coffone",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "lorenzoviccari",
+      "name": "Lorenzo Giacomazzi Viccari",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "manuelamoraes",
+      "name": "Manuela Pekelman Levy Leite de Moraes",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "mariagomes",
+      "name": "Maria Luiza Neiva Ferreira Gomes",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "marianavarella",
+      "name": "Mariana Orlandi Varella",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "pedromurata",
+      "name": "Pedro Barros Murata",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "rafaelandrade",
+      "name": "Rafael Martin Soares de Andrade",
+      "classCode": "9A",
+      "group": "Amarelo"
+    },
+    {
+      "login": "raphaelsalerno",
+      "name": "Raphael Bogus Salerno",
+      "classCode": "9A",
+      "group": "Branco"
+    },
+    {
+      "login": "anawerneck",
+      "name": "Ana Beatriz da Silva Werneck",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "catherinekassis",
+      "name": "Catherine Ajaj Kassis",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "fernandasantos",
+      "name": "Fernanda Uliana dos Santos",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "guilhermeminders",
+      "name": "Guilherme Castilho de Nicola Minders",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "henriquemovizzo",
+      "name": "Henrique Arana Movizzo",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "henriquesilva",
+      "name": "Henrique Junqueira de Freitas e Silva",
+      "classCode": "9B",
+      "group": null
+    },
+    {
+      "login": "joaojereissati",
+      "name": "Joao Pedro Gasparian Jereissati",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "joaquimcardoso",
+      "name": "Joaquim Lehmkuhl Cardoso",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "joaomandur",
+      "name": "João Pinheiro Esberard Mandur",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "lauramartins",
+      "name": "Laura Merêncio Martins",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "lucabertocco",
+      "name": "Luca Just Bertocco",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "manuelaamendoeira",
+      "name": "Manuela Amendoeira",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "manuelatognotti",
+      "name": "Manuela Tognotti",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "marcelovalente",
+      "name": "Marcelo Mota Valente",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "mariamachado",
+      "name": "Maria Luiza Brandão Machado",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "mariacarneiro",
+      "name": "Maria de Souza Carneiro",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "matheuscarnevalli",
+      "name": "Matheus Gazal Carnevalli",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "nicolaslopes",
+      "name": "Nicolas Lopes",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "omarabissamra",
+      "name": "Omar Fletcher Abissamra",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "rafaelmestieri",
+      "name": "Rafael Braga Mestieri",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "rafaelagiacchetta",
+      "name": "Rafaela Azzi Giacchetta",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "ricardonogueira",
+      "name": "Ricardo Mckenzie Nogueira",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "robertalepiani",
+      "name": "Roberta Barbieri Lepiani",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "saralima",
+      "name": "Sara Ribeiro dos Santos Lima",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "stelanahas",
+      "name": "Stela Amaral Nahas",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "theopires",
+      "name": "Theo Baracat Guedes Pires",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "tomasbranco",
+      "name": "Tomás Vaccaro Castelo Branco",
+      "classCode": "9B",
+      "group": "Branco"
+    },
+    {
+      "login": "vitorgarofallo",
+      "name": "Vitor Eduardo Bedotti Garofallo",
+      "classCode": "9B",
+      "group": "Amarelo"
+    },
+    {
+      "login": "alinesako",
+      "name": "Aline Jacobini Sako",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "bernardozelazo",
+      "name": "Bernardo David Zelazo",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "brunoalves",
+      "name": "Bruno Valdemarin Alves",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "eduardoviegas",
+      "name": "Eduardo Martins Vieira Viegas",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "eleonoratchalian",
+      "name": "Eleonora Palenga Tchalian",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "fabiomattos",
+      "name": "Fabio Dias da Silva Nagliati Mattos",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "franciscoarantes",
+      "name": "Francisco Teodoro Arantes",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "gabrielametzger",
+      "name": "Gabriela Alonso Metzger",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "gabrielamarques",
+      "name": "Gabriela Chevrier Marques",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "gabrielasantos",
+      "name": "Gabriela Uliana dos Santos",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "giancarloblumetti",
+      "name": "Giancarlo Pinto Blumetti",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "joaoschlochauer",
+      "name": "João Kohl Schlochauer",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "juliajereissati",
+      "name": "Julia Gasparian Jereissati",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "julialeite",
+      "name": "Julia Salles Leite",
+      "classCode": "9C",
+      "group": null
+    },
+    {
+      "login": "leonardopinto",
+      "name": "Leonardo Peres Goettert Pinto",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "lorenzoprado",
+      "name": "Lorenzo Manini Prado",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "luistoscano",
+      "name": "Luis Felipe Borges Berardo Toscano",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "marcelladomingues",
+      "name": "Marcella Ferraro Domingues",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "matheusmaiorano",
+      "name": "Matheus Panzan Maiorano",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "paolalarocca",
+      "name": "Paola Prada Larocca",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "rodrigomaggioli",
+      "name": "Rodrigo Maggioli",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "samiramani",
+      "name": "Samira Mani",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "sophiaandrade",
+      "name": "Sophia Valente Andrade",
+      "classCode": "9C",
+      "group": "Branco"
+    },
+    {
+      "login": "vickyxie",
+      "name": "Vicky Zhuo Qi Xie",
+      "classCode": "9C",
+      "group": "Amarelo"
+    },
+    {
+      "login": "carolinaramos",
+      "name": "Carolina de Oliveira Ramos",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "constanzacampofiorito",
+      "name": "Constanza Ferreira Campofiorito",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "elenaantiquera",
+      "name": "Elena Massara Antiquera",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "felipefranklin",
+      "name": "Felipe de Almeida Franklin",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "fredericomaligo",
+      "name": "Frederico Vianna Maligo",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "gabrielacuram",
+      "name": "Gabriela Mello Curam",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "gianlucabarone",
+      "name": "Gianluca Sciallis Barone",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "guilhermelitwin",
+      "name": "Guilherme Moraes Stolf Litwin",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "gustavocheli",
+      "name": "Gustavo Velasco Oliveira Cheli",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "henriquesantos",
+      "name": "Henrique Gomes dos Santos",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "isabellajafet",
+      "name": "Isabella Saad Jafet",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "joaquimrosa",
+      "name": "Joaquim Soto Garcia Rosa",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "joaoronzella",
+      "name": "João Taddei Ronzella",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "larasarhan",
+      "name": "Lara Boscardin Sarhan",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "luizapato",
+      "name": "Luiza Bresser Pato",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "manuelaloureiro",
+      "name": "Manuela Licio Trigo de Loureiro",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "mariaveloso",
+      "name": "Maria Beatriz Pinto Veloso",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "miguelcoxo",
+      "name": "Miguel Figueiredo Baldaia Coxo",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "oliviamanssur",
+      "name": "Olivia Zanchet Manssur",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "patriciapierotti",
+      "name": "Patricia Vianna Pierotti",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "patrickcollard",
+      "name": "Patrick Martino Collard",
+      "classCode": "9D",
+      "group": "Branco"
+    },
+    {
+      "login": "rafaelcampos",
+      "name": "Rafael Renda Campos",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "rodrigoszlejf",
+      "name": "Rodrigo Szlejf",
+      "classCode": "9D",
+      "group": "Amarelo"
+    },
+    {
+      "login": "stellaazzi",
+      "name": "Stella Paranhos Azzi",
+      "classCode": "9D",
+      "group": "Amarelo"
+    }
+  ]
+}

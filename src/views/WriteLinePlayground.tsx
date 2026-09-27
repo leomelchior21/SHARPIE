@@ -22,6 +22,7 @@ import { isMorningSignalCode } from "../lib/morningSignal";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
 import { getIntroductionMessage, isFrameSignalCode, isGapFlightCode } from "../lib/specialOutputs";
+import { useLiveCode } from "../lib/useLiveCode";
 import type { RunResult } from "../types";
 
 type PlaygroundProps = {
@@ -40,6 +41,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const challenge = challenges[challengeId - 1];
   const savedCodes = session.getCodes();
   const [code, setCode] = useState(savedCodes[challengeId] ?? challenge.starterCode(name));
+  useLiveCode("writeline", code, challenge.title);
   const [lastRunCode, setLastRunCode] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(challengeId === 1 ? defaultResult : null);
   const [hasRun, setHasRun] = useState(false);
@@ -48,8 +50,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const [completed, setCompleted] = useState<number[]>(session.getCompleted());
   const [visited, setVisited] = useState<number[]>(() => [...new Set([...session.getVisited(), ...session.getCompleted()])]);
   const [runPulse, setRunPulse] = useState(0);
-  const [hintIndex, setHintIndex] = useState(-1);
-  const [showHelp, setShowHelp] = useState(false);
+  const [hintIndex, setHintIndex] = useState(-1);  const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<EditorView | null>(null);

@@ -15,9 +15,9 @@ function createRunner() {
   };
   vm.runInNewContext(readFileSync("public/sharpie-runner.worker.js", "utf8"), sandbox);
 
-  return (code) => {
+  return (code, inputs = []) => {
     messages.length = 0;
-    handler({ data: { requestId: "test", code } });
+    handler({ data: { requestId: "test", code, inputs } });
     return messages.find((message) => message.type === "response").result;
   };
 }
@@ -82,5 +82,70 @@ describe("browser C# basics runner", () => {
     const result = run('int age = "seven";');
     expect(result.success).toBe(false);
     expect(result.error.code).toBe("CS0029");
+  });
+
+  it("feeds hidden inputs into double.Parse(Console.ReadLine()!)", () => {
+    const code = `
+      double a = double.Parse(Console.ReadLine()!);
+      double b = double.Parse(Console.ReadLine()!);
+      double result = a + b;
+      Console.WriteLine(result);
+    `;
+    expect(run(code, ["8.5", "4"])).toMatchObject({ success: true, output: "12.5\n" });
+    expect(run(code, ["8", "4"])).toMatchObject({ success: true, output: "12\n" });
+  });
+
+  it("accepts ReadLine without the null-forgiving operator and evaluates equivalent formulas", () => {
+    const code = `
+      double a = double.Parse(Console.ReadLine());
+      double b = double.Parse(Console.ReadLine());
+      double result = b + a;
+      Console.WriteLine(result);
+    `;
+    expect(run(code, ["2.5", "3"])).toMatchObject({ success: true, output: "5.5\n" });
+  });
+
+  it("supports Math.Floor, Math.Sqrt, and the double remainder operator", () => {
+    const time = `
+      double seconds = double.Parse(Console.ReadLine()!);
+      double minutes = Math.Floor(seconds / 60);
+      double left = seconds % 60;
+      Console.WriteLine(minutes);
+      Console.WriteLine(left);
+    `;
+    expect(run(time, ["125"])).toMatchObject({ success: true, output: "2\n5\n" });
+    expect(run(time, ["90"])).toMatchObject({ success: true, output: "1\n30\n" });
+
+    const hypotenuse = `
+      double a = double.Parse(Console.ReadLine()!);
+      double b = double.Parse(Console.ReadLine()!);
+      double c = Math.Sqrt(a * a + b * b);
+      Console.WriteLine(c);
+    `;
+    expect(run(hypotenuse, ["3", "4"])).toMatchObject({ success: true, output: "5\n" });
+    expect(run(hypotenuse, ["2", "3"])).toMatchObject({ success: true, output: "3.605551275463989\n" });
+  });
+
+  it("reports a friendly error when an input is not a number", () => {
+    const code = 'double a = double.Parse(Console.ReadLine()!); Console.WriteLine(a);';
+    const result = run(code, ["hello"]);
+    expect(result.success).toBe(false);
+    expect(result.error.code).toBe("SHARP003");
+  });
+
+  it("reads hidden inputs through the ? placeholder", () => {
+    const code = `
+      double a = ?; // random number
+      double b = ?; // random number
+      double result = a + b;
+      Console.WriteLine(result);
+    `;
+    expect(run(code, ["8.5", "4"])).toMatchObject({ success: true, output: "12.5\n" });
+    expect(run(code, ["-2", "7"])).toMatchObject({ success: true, output: "5\n" });
+  });
+
+  it("keeps reading empty strings when no inputs are provided", () => {
+    const code = 'string name = Console.ReadLine(); Console.WriteLine("Hello " + name);';
+    expect(run(code)).toMatchObject({ success: true, output: "Hello \n" });
   });
 });

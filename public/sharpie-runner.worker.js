@@ -26,6 +26,8 @@ function errorDetails(error) {
     CS1501: ["CHECK THE METHOD", "That method does not have an overload for those arguments."],
     CS1525: ["CHECK THIS LINE", "C# could not compile this line as written."],
     SHARP002: ["PROGRAM TOO LARGE", "This browser run is too large to execute safely."],
+    SHARP003: ["INPUT IS NOT A NUMBER", "One of the program's inputs could not be read as a number."],
+    SHARP004: ["NOT A NUMBER", "The calculation produced a value that cannot be used."],
   };
   const [title, friendly] = messages[error.code] ?? messages.CS1525;
   return {
@@ -172,6 +174,156 @@ const value = (kind, raw) => ({ kind, value: raw });
 const isNumber = (item) => item.kind === "int" || item.kind === "double";
 const formatValue = (item) => item.kind === "bool" ? (item.value ? "True" : "False") : String(item.value);
 
+const inputState = { queue: [], cursor: 0 };
+
+function resetInputs(inputs) {
+  inputState.queue = Array.isArray(inputs) ? inputs.map((item) => String(item)) : [];
+  inputState.cursor = 0;
+}
+
+function nextInput() {
+  if (inputState.cursor < inputState.queue.length) return inputState.queue[inputState.cursor++];
+  return "";
+}
+
+function quoteString(text) {
+  return `"${String(text)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")}"`;
+}
+
+function numberLiteral(raw, forceDouble, line, column) {
+  let numeric = Number(raw);
+  if (typeof raw === "string" && (raw.trim() === "" || Number.isNaN(numeric))) {
+    throw new SharpieError("SHARP003", "One of the program's inputs could not be read as a number.", line, column);
+  }
+  if (!Number.isFinite(numeric)) {
+    throw new SharpieError("SHARP004", "The calculation produced a value that cannot be used.", line, column);
+  }
+  if (Object.is(numeric, -0)) numeric = 0;
+  const text = String(numeric);
+  if (forceDouble && Number.isInteger(numeric)) return `${text}.0`;
+  if (!/e/i.test(text)) return text;
+  const expanded = numeric.toFixed(20).replace(/0+$/, "").replace(/\.$/, "");
+  return expanded || "0";
+}
+
+function findMatchingParen(text, openIndex) {
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = openIndex; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === "\\" && !escaped) {
+        escaped = true;
+        continue;
+      }
+      if (char === quote && !escaped) quote = "";
+      escaped = false;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+const specialCalls = [
+  { pattern: /^Console\s*\.\s*ReadLine\s*\(/, kind: "ReadLine" },
+  { pattern: /^double\s*\.\s*Parse\s*\(/, kind: "double.Parse" },
+  { pattern: /^int\s*\.\s*Parse\s*\(/, kind: "int.Parse" },
+  { pattern: /^Math\s*\.\s*Floor\s*\(/, kind: "Math.Floor" },
+  { pattern: /^Math\s*\.\s*Sqrt\s*\(/, kind: "Math.Sqrt" },
+];
+
+function specialCallAt(text) {
+  for (const candidate of specialCalls) {
+    const match = candidate.pattern.exec(text);
+    if (match) return { kind: candidate.kind, length: match[0].length };
+  }
+  return null;
+}
+
+function applySpecialCall(kind, argument, line, column) {
+  if (kind === "double.Parse" || kind === "int.Parse") {
+    if (argument.kind !== "string" && !isNumber(argument)) {
+      throw new SharpieError("CS0029", `Cannot convert '${argument.kind}' with ${kind}`, line, column);
+    }
+    const raw = argument.kind === "string" ? argument.value.trim() : String(argument.value);
+    return numberLiteral(raw, kind === "double.Parse", line, column);
+  }
+  if (!isNumber(argument)) throw new SharpieError("CS0019", `Operator '${kind}' requires a number`, line, column);
+  const computed = kind === "Math.Floor" ? Math.floor(argument.value) : Math.sqrt(argument.value);
+  return numberLiteral(computed, true, line, column);
+}
+
+function resolveSpecialCalls(text, variables, line, column) {
+  let result = "";
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === '"' || char === "'") {
+      const quote = char;
+      let escaped = false;
+      result += char;
+      index += 1;
+      while (index < text.length) {
+        const current = text[index];
+        result += current;
+        index += 1;
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (current === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (current === quote) break;
+      }
+      continue;
+    }
+    const previous = index > 0 ? text[index - 1] : "";
+    const special = /[A-Za-z0-9_]/.test(previous) ? null : specialCallAt(text.slice(index));
+    if (!special) {
+      result += char;
+      index += 1;
+      continue;
+    }
+    const openIndex = index + special.length - 1;
+    const closeIndex = findMatchingParen(text, openIndex);
+    if (closeIndex === -1) throw new SharpieError("CS1026", ") expected", line, column + index);
+    const rawArgument = resolveSpecialCalls(text.slice(openIndex + 1, closeIndex), variables, line, column + openIndex + 1);
+    let replacement;
+    if (special.kind === "ReadLine") {
+      if (rawArgument.trim()) throw new SharpieError("CS1501", "No overload for method 'ReadLine' takes arguments", line, column + index);
+      replacement = quoteString(nextInput());
+    } else {
+      const argument = rawArgument.trim()
+        ? evaluateExpression(rawArgument, variables, line, column + openIndex + 1)
+        : value("string", "");
+      replacement = applySpecialCall(special.kind, argument, line, column + index);
+    }
+    result += replacement;
+    let cursor = closeIndex + 1;
+    while (cursor < text.length && /[ \t]/.test(text[cursor])) cursor += 1;
+    index = text[cursor] === "!" ? cursor + 1 : closeIndex + 1;
+  }
+  return result;
+}
+
+
 function binary(operator, left, right, line, column) {
   if (operator === "+" && [left.kind, right.kind].some((kind) => kind === "string" || kind === "char")) {
     return value("string", formatValue(left) + formatValue(right));
@@ -273,6 +425,11 @@ function tokenize(expression, line, column) {
       index += 1;
       continue;
     }
+    if (char === "?") {
+      tokens.push({ type: "input", value: char, position });
+      index += 1;
+      continue;
+    }
     throw new SharpieError("CS1525", `Invalid expression term '${char}'`, line, column + position);
   }
   tokens.push({ type: "eof", value: "", position: expression.length });
@@ -330,10 +487,7 @@ function interpolate(content, variables, line, column) {
 }
 
 function evaluateExpression(expression, variables, line, column) {
-  const readLineCall = /\bConsole\s*\.\s*ReadLine\s*\(([^)]*)\)/.exec(expression);
-  if (readLineCall?.[1].trim()) throw new SharpieError("CS1501", "No overload for method 'ReadLine' takes arguments", line, column + readLineCall.index);
-  const expressionWithInput = expression.replace(/\bConsole\s*\.\s*ReadLine\s*\(\s*\)/g, '""');
-  const tokens = tokenize(expressionWithInput, line, column);
+  const tokens = tokenize(resolveSpecialCalls(expression, variables, line, column), line, column);
   let current = 0;
   const peek = () => tokens[current];
   const take = () => tokens[current++];
@@ -342,6 +496,14 @@ function evaluateExpression(expression, variables, line, column) {
   function parsePrimary() {
     const token = take();
     if (token.type === "number") return value(token.value.includes(".") ? "double" : "int", Number(token.value));
+    if (token.type === "input") {
+      const raw = nextInput();
+      const trimmed = raw.trim();
+      if (trimmed === "") return value("string", "");
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric)) return value(trimmed.includes(".") ? "double" : "int", numeric);
+      return value("string", raw);
+    }
     if (token.type === "string") return value("string", decodeEscapes(token.value, line, column + token.position));
     if (token.type === "char") {
       const decoded = decodeEscapes(token.value, line, column + token.position);
@@ -428,7 +590,8 @@ function appendOutput(current, addition) {
   return { output: remaining > 0 ? current + addition.slice(0, remaining) : current, truncated: addition.length > remaining };
 }
 
-function runBasics(code) {
+function runBasics(code, inputs) {
+  resetInputs(inputs);
   const started = performance.now();
   if (!code.trim()) return { success: true, output: "", durationMs: 0 };
   if (code.length > CODE_LIMIT) throw new SharpieError("SHARP002", `Keep the experiment under ${CODE_LIMIT} characters.`);
@@ -466,6 +629,7 @@ function runBasics(code) {
     const readLine = /^Console\s*\.\s*ReadLine\s*\(([\s\S]*)\)$/.exec(statement.text);
     if (readLine) {
       if (readLine[1].trim()) throw new SharpieError("CS1501", "No overload for method 'ReadLine' takes arguments", statement.line, statement.column);
+      nextInput();
       continue;
     }
     const write = /^Console\s*\.\s*(WriteLine|Write)\s*\(([\s\S]*)\)$/.exec(statement.text);
@@ -483,12 +647,13 @@ function runBasics(code) {
 }
 
 self.addEventListener("message", (event) => {
-  const { requestId, code } = event.data ?? {};
+  const { requestId, code, inputs } = event.data ?? {};
   if (!requestId || typeof code !== "string") return;
+  const feed = Array.isArray(inputs) ? inputs.map((item) => String(item)) : [];
   self.postMessage({ type: "compiled", requestId });
   setTimeout(() => {
     try {
-      self.postMessage({ type: "response", requestId, result: runBasics(code) });
+      self.postMessage({ type: "response", requestId, result: runBasics(code, feed) });
     } catch (error) {
       const sharpieError = error instanceof SharpieError ? error : new SharpieError("CS1525", error instanceof Error ? error.message : String(error));
       self.postMessage({ type: "response", requestId, result: { success: false, output: "", durationMs: 1, error: errorDetails(sharpieError) } });

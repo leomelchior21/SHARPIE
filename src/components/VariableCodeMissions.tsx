@@ -14,6 +14,7 @@ import type { VariableBuildChallenge } from "../data/variableCodeChallenges";
 import { csharpEditorBasicSetup, csharpEditorExtensions } from "../lib/csharpSyntax";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import type { RunResult } from "../types";
+import { useLiveCode } from "../lib/useLiveCode";
 import { Brand } from "./Brand";
 
 type MissionMode = "practice" | "sprint";
@@ -62,6 +63,7 @@ export function VariableCodeMissions({ mode, onBack, onFinish }: Props) {
   const [buildResult, setBuildResult] = useState<"correct" | "wrong" | null>(null);
   const challenge = challenges[challengeIndex];
   const [code, setCode] = useState(challenge.starter);
+  useLiveCode(isSprint ? "variable-sprint" : "variable-run", code, challenge.title);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<"loading" | "ready" | "error">("loading");

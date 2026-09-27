@@ -1,13 +1,17 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowUpRight, Braces, Database, LockKeyhole } from "lucide-react";
+import { ArrowUpRight, Braces, Database, LayoutDashboard, LockKeyhole } from "lucide-react";
 import { Brand } from "../components/Brand";
+import { FINAL_BOSSES_STUDENT_ACCESS } from "../data/finalBosses";
 
 type HubProps = {
   name: string;
+  isTeacher?: boolean;
+  onOpenTeacher?: () => void;
   onOpenWriteLine: () => void;
   onOpenStop: () => void;
   onOpenMemoryMachine: () => void;
+  onOpenFinalBosses: () => void;
 };
 
 type Module = {
@@ -19,7 +23,7 @@ type Module = {
   onClick?: () => void;
 };
 
-export function Hub({ name, onOpenWriteLine, onOpenStop, onOpenMemoryMachine }: HubProps) {
+export function Hub({ name, isTeacher, onOpenTeacher, onOpenWriteLine, onOpenStop, onOpenMemoryMachine, onOpenFinalBosses }: HubProps) {
   const [notice, setNotice] = useState(false);
 
   const locked = () => {
@@ -27,12 +31,13 @@ export function Hub({ name, onOpenWriteLine, onOpenStop, onOpenMemoryMachine }: 
     window.setTimeout(() => setNotice(false), 1800);
   };
 
+  const finalBossesOpen = Boolean(isTeacher) || FINAL_BOSSES_STUDENT_ACCESS;
   const modules: Module[] = [
     { id: "01", name: "WriteLine Playground", subtitle: "Make C# talk.", glyph: <Braces size={28} />, state: "available", onClick: onOpenWriteLine },
     { id: "02", name: "Memory Machine", subtitle: "Discover how programs remember.", glyph: <Database size={28} />, state: "featured", onClick: onOpenMemoryMachine },
     { id: "03", name: "STOP", subtitle: "Basic String Formatting", glyph: "Aa", state: "available", onClick: onOpenStop },
     { id: "04", name: "Wordle", subtitle: "Basic Operations", glyph: "◇", state: "locked" },
-    { id: "05", name: "Final Boss", subtitle: "Secret Challenge", glyph: "?", state: "locked" },
+    { id: "05", name: "Final Bosses", subtitle: "Build the formula.", glyph: "?", state: finalBossesOpen ? "available" : "locked", onClick: onOpenFinalBosses },
   ];
 
   const renderCard = (module: Module) => {
@@ -65,9 +70,16 @@ export function Hub({ name, onOpenWriteLine, onOpenStop, onOpenMemoryMachine }: 
     <section className="hub screen-enter" aria-labelledby="hub-title">
       <header className="hub-header">
         <Brand compact />
-        <div className="hub-student">
-          <span>ACTIVE STUDENT</span>
-          <strong>{name}</strong>
+        <div className="hub-tools">
+          {isTeacher && (
+            <button className="icon-text-button" onClick={onOpenTeacher}>
+              <LayoutDashboard size={15} /> <span>PAINEL</span>
+            </button>
+          )}
+          <div className="hub-student">
+            <span>ACTIVE STUDENT</span>
+            <strong>{name}</strong>
+          </div>
         </div>
       </header>
 

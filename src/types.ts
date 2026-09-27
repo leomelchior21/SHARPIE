@@ -6,7 +6,10 @@ export type Screen =
   | "memory-hub"
   | "memory-experience"
   | "variable-run"
-  | "variable-sprint";
+  | "variable-sprint"
+  | "final-bosses"
+  | "teacher"
+  | "teacher-live";
 
 export type RunnerError = {
   title: string;
