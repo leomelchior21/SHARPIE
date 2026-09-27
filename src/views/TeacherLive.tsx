@@ -1,6 +1,7 @@
 import { ArrowLeft, Eye, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
+import { SyntaxLine } from "../components/SyntaxLine";
 import { CLASS_CODES, findStudent } from "../data/roster";
 import type { ClassCode } from "../data/roster";
 import { supabase } from "../lib/supabase";
@@ -213,7 +214,7 @@ export function TeacherLive({ onBack }: TeacherLiveProps) {
                     {row.detail && <em>{row.detail}</em>}
                     <small>{ageLabel(row.updated_at, now)}</small>
                   </div>
-                  <pre>{row.code.trim() || "// empty editor"}</pre>
+                  <LiveCode code={row.code} className="live-card-code" />
                 </button>
               );
             })}
@@ -236,10 +237,26 @@ export function TeacherLive({ onBack }: TeacherLiveProps) {
             <p className="live-modal-meta">
               {selectedStudent?.classCode ?? "—"} · {selectedStudent?.group ?? "no group"} · {ageLabel(selected.updated_at, now)}
             </p>
-            <pre className="live-modal-code">{selected.code.trim() || "// empty editor"}</pre>
+            <LiveCode code={selected.code} className="live-modal-code" />
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function LiveCode({ code, className }: { code: string; className: string }) {
+  const lines = code.replace(/\s+$/, "").split("\n");
+  if (!code.trim()) {
+    return <div className={`${className} is-empty`}><span className="live-code-empty">// empty editor</span></div>;
+  }
+  return (
+    <div className={className}>
+      {lines.map((line, index) => (
+        <div className="live-code-line" key={`${index}-${line}`}>
+          <code><SyntaxLine code={line || " "} /></code>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -43,6 +43,10 @@ function row(login: string, overrides: Partial<LiveRow> = {}): LiveRow {
   };
 }
 
+function liveCodeText(scope: ParentNode = document) {
+  return Array.from(scope.querySelectorAll(".live-code-line code")).map((node) => node.textContent).join("\n");
+}
+
 describe("teacher live view", () => {
   afterEach(cleanup);
 
@@ -58,8 +62,17 @@ describe("teacher live view", () => {
     await waitFor(() => expect(screen.getByText("João Pedro Dedivitis")).toBeInTheDocument());
     expect(screen.getByText("9A · Amarelo")).toBeInTheDocument();
     expect(screen.getByText("FINAL BOSSES")).toBeInTheDocument();
-    expect(screen.getByText(/double result = a \+ b;/)).toBeInTheDocument();
+    expect(liveCodeText()).toContain("double result = a + b;");
     expect(screen.getByText("1 ACTIVE")).toBeInTheDocument();
+  });
+
+  it("colors the code with the SHARPIE syntax classes", async () => {
+    db.rows = [row("joaodedivitis", { module: "stop", detail: "STOP · String Sheet", code: 'print("Name: " + answer1)' })];
+    render(<TeacherLive onBack={() => undefined} />);
+
+    await waitFor(() => expect(screen.getByText("João Pedro Dedivitis")).toBeInTheDocument());
+    expect(document.querySelector(".live-card-code .syn-string")?.textContent).toBe('"Name: "');
+    expect(liveCodeText()).toContain('print("Name: " + answer1)');
   });
 
   it("updates the grid as new code arrives in real time", async () => {
@@ -73,7 +86,7 @@ describe("teacher live view", () => {
 
     await waitFor(() => expect(screen.getByText("Ana Luiza Netto Mascarenhas")).toBeInTheDocument());
     expect(screen.getByText("STOP")).toBeInTheDocument();
-    expect(screen.getByText(/print\("Name: " \+ answer1\)/)).toBeInTheDocument();
+    expect(liveCodeText()).toContain('print("Name: " + answer1)');
     expect(screen.getByText("2 ACTIVE")).toBeInTheDocument();
   });
 
@@ -92,6 +105,6 @@ describe("teacher live view", () => {
     fireEvent.click(screen.getByRole("tab", { name: "ALL" }));
     fireEvent.click(screen.getByText("João Pedro Dedivitis"));
     const dialog = screen.getByRole("dialog", { name: "Student code" });
-    expect(within(dialog).getByText("double a = ?;")).toBeInTheDocument();
+    expect(liveCodeText(dialog)).toContain("double a = ?;");
   });
 });
