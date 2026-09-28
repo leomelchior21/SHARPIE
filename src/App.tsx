@@ -226,6 +226,7 @@ export default function App() {
               name={name}
               isTeacher={isTeacher}
               onOpenTeacher={() => navigate("teacher")}
+              onSignOut={signOut}
               onOpenWriteLine={() => navigate("writeline")}
               onOpenStop={() => navigate("stop")}
               onOpenMemoryMachine={() => navigate("memory-hub")}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowUpRight, Braces, Database, LayoutDashboard, LockKeyhole } from "lucide-react";
+import { ArrowUpRight, Braces, Database, LayoutDashboard, LockKeyhole, LogOut } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { FINAL_BOSSES_STUDENT_ACCESS } from "../data/finalBosses";
 
@@ -8,6 +8,7 @@ type HubProps = {
   name: string;
   isTeacher?: boolean;
   onOpenTeacher?: () => void;
+  onSignOut: () => void;
   onOpenWriteLine: () => void;
   onOpenStop: () => void;
   onOpenMemoryMachine: () => void;
@@ -23,7 +24,7 @@ type Module = {
   onClick?: () => void;
 };
 
-export function Hub({ name, isTeacher, onOpenTeacher, onOpenWriteLine, onOpenStop, onOpenMemoryMachine, onOpenFinalBosses }: HubProps) {
+export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine, onOpenStop, onOpenMemoryMachine, onOpenFinalBosses }: HubProps) {
   const [notice, setNotice] = useState(false);
 
   const locked = () => {
@@ -80,6 +81,9 @@ export function Hub({ name, isTeacher, onOpenTeacher, onOpenWriteLine, onOpenSto
             <span>ACTIVE STUDENT</span>
             <strong>{name}</strong>
           </div>
+          <button className="icon-text-button logout-button" onClick={onSignOut}>
+            <LogOut size={15} /> <span>LOG OUT</span>
+          </button>
         </div>
       </header>
 

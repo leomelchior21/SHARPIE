@@ -4446,6 +4446,8 @@ button.module-card { cursor: pointer; }
 
 .hub-tools { display: flex; align-items: center; gap: 12px; }
 
+.logout-button:hover { color: #ffb3c8; border-color: rgba(255, 109, 145, 0.4); background: rgba(66, 15, 34, 0.4); }
+
 .login-panel { min-height: min(82vh, 700px); }
 .login-form { padding-top: 26px; }
 .login-form label { margin-bottom: 10px; }
