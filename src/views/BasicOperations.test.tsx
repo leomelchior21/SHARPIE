@@ -116,7 +116,7 @@ describe("BasicOperations module intro", () => {
 
   it("keeps the Target editor keypad-only on touch devices", () => {
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)");
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
     const editor = screen.getByRole("textbox", { name: "C# expression after double result" });
     expect(editor).toHaveAttribute("readonly");
@@ -168,25 +168,24 @@ describe("BasicOperations module intro", () => {
     expect(screen.getByText(/Multiplication is \*/)).toBeInTheDocument();
   });
 
-  it("keeps Target locked until the combined run is complete", () => {
+  it("shows all three Mathler activities as available from the start", () => {
     render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
-    const targetCard = screen.getByText("WARM UP").closest("button");
-    expect(targetCard).toBeDisabled();
-    expect(screen.getByText("UNLOCK: TRANSLATE THE FORMULAS")).toBeInTheDocument();
-    expect(screen.getByText("MATHLER GAME").closest("button")).toBeDisabled();
+    expect(screen.getByText("WARM UP").closest("button")).toBeEnabled();
+    expect(screen.getByText("MATHLER GAME").closest("button")).toBeEnabled();
+    expect(screen.queryByText("UNLOCK: TRANSLATE THE FORMULAS")).not.toBeInTheDocument();
+    expect(screen.queryByText("UNLOCK: WARM UP")).not.toBeInTheDocument();
   });
 
-  it("unlocks guided Warm Up before Mathler Game", () => {
-    const progress = createBasicOpsProgress();
-    progress.translate.warmupSolved = WARMUP_TOTAL;
-    progress.rush.completed = true;
-    saveBasicOpsProgress(progress, "ada");
-    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
-
-    expect(screen.getByText("WARM UP").closest("button")).toBeEnabled();
-    expect(screen.getByText("MATHLER GAME").closest("button")).toBeDisabled();
+  it("opens the guided Warm Up and the Mathler Game without prerequisites", () => {
+    const warm = render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
     expect(screen.getByRole("heading", { name: "TARGET — Find the expression" })).toBeInTheDocument();
+    warm.unmount();
+
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByText("MATHLER GAME"));
+    expect(screen.getByRole("heading", { name: /Mathler Game/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /TIME ATTACK$/ })).toBeInTheDocument();
   });
 
   it("continues through three examples per operator before opening the timer explanation", () => {
@@ -265,7 +264,7 @@ describe("BasicOperations module intro", () => {
   });
 
   it("opens every activity for leleomaker", () => {
-    render(<BasicOperations name="Leleomaker" studentKey="leleomaker" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Leleomaker" studentKey="leleomaker" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
     expect(screen.getByRole("heading", { name: "TARGET — Find the expression" })).toBeInTheDocument();
     expect(screen.getByText("CODE KEYPAD")).toBeInTheDocument();
@@ -280,7 +279,7 @@ describe("BasicOperations module intro", () => {
     }
     warmup.unmount();
 
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
     for (const key of ["divide", "multiply", "open parenthesis", "close parenthesis", "minus", "remainder"]) {
       expect(screen.getByRole("button", { name: key })).toBeEnabled();
@@ -311,7 +310,7 @@ describe("BasicOperations module intro", () => {
     const progress = createBasicOpsProgress();
     progress.target.tutorialSeed = seed;
     saveBasicOpsProgress(progress, "ada");
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
 
     fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), {
@@ -335,7 +334,7 @@ describe("BasicOperations module intro", () => {
     const progress = createBasicOpsProgress();
     progress.target.tutorialSeed = seed;
     saveBasicOpsProgress(progress, "ada");
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
 
     expect(screen.getByRole("button", { name: /NEED SOME HELP/ })).toBeDisabled();
@@ -378,7 +377,7 @@ describe("BasicOperations module intro", () => {
     progress.target.tutorialSeed = seed;
     progress.target.completed = ["target-01", "target-02"];
     saveBasicOpsProgress(progress, "ada");
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("WARM UP"));
 
     expect(screen.getByText("STEP 3 / 12")).toBeInTheDocument();
@@ -411,7 +410,7 @@ describe("Mathler Game modes", () => {
   });
 
   function openGame(mode: "TIME ATTACK" | "SURVIVAL") {
-    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
     fireEvent.click(screen.getByText("MATHLER GAME"));
     fireEvent.click(screen.getByRole("button", { name: new RegExp(`${mode}$`) }));
   }

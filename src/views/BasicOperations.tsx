@@ -16,11 +16,10 @@ type Stage = "intro" | "translate" | "rush" | "target" | "game" | "complete";
 type BasicOperationsProps = {
   name: string;
   studentKey?: string;
-  fullAccess?: boolean;
   onBack: () => void;
 };
 
-export function BasicOperations({ name, studentKey, fullAccess = false, onBack }: BasicOperationsProps) {
+export function BasicOperations({ name, studentKey, onBack }: BasicOperationsProps) {
   const [progress, setProgress] = useState<BasicOpsProgress>(() => loadBasicOpsProgress(studentKey));
   const [stage, setStage] = useState<Stage>("intro");
   const [replayTarget, setReplayTarget] = useState(false);
@@ -110,7 +109,6 @@ export function BasicOperations({ name, studentKey, fullAccess = false, onBack }
     <ModuleIntro
       name={name}
       progress={progress}
-      fullAccess={fullAccess}
       soundOn={progress.sound}
       onToggleSound={toggleSound}
       onBack={onBack}

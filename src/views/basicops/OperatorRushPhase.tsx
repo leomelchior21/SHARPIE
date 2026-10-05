@@ -478,7 +478,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
             <span className="bo-complete-mark"><Check size={30} /></span>
             <span className="bo-kicker">OPERATOR RUSH COMPLETE</span>
             <h1>{score.toLocaleString("en-US")} POINTS</h1>
-            <p>Best combo x{Math.max(bestCombo, combo)}. The Target warm up is now unlocked.</p>
+            <p>Best combo x{Math.max(bestCombo, combo)}. The Target warm up is ready when you are.</p>
             <div className="bo-complete-badges">
               {earnedXp > 0 && <span>+{earnedXp} XP</span>}
               <span>BEST {Math.max(progress.rush.bestScore, score).toLocaleString("en-US")}</span>

@@ -13,7 +13,6 @@ type Stage = "intro" | "translate" | "rush" | "target" | "game" | "complete";
 type ModuleIntroProps = {
   name: string;
   progress: BasicOpsProgress;
-  fullAccess?: boolean;
   soundOn: boolean;
   onToggleSound: () => void;
   onBack: () => void;
@@ -25,7 +24,7 @@ type ModuleIntroProps = {
 
 type TrackState = "open" | "current" | "locked" | "done";
 
-export function ModuleIntro({ name, progress, fullAccess = false, soundOn, onToggleSound, onBack, onStart, onOpenStage, onReplayWarmup, onReplayTarget }: ModuleIntroProps) {
+export function ModuleIntro({ name, progress, soundOn, onToggleSound, onBack, onStart, onOpenStage, onReplayWarmup, onReplayTarget }: ModuleIntroProps) {
   const [showHow, setShowHow] = useState(false);
   const translateDone = translateComplete(progress);
   const rushDone = rushComplete(progress);
@@ -54,8 +53,8 @@ export function ModuleIntro({ name, progress, fullAccess = false, soundOn, onTog
       number: "02",
       title: "WARM UP",
       copy: "Learn to reach a target in 12 guided challenges.",
-      detail: !rushDone && !fullAccess ? "UNLOCK: TRANSLATE THE FORMULAS" : `${progress.target.completed.length} / ${TARGET_PUZZLES.length} guided steps`,
-      state: !rushDone && !fullAccess ? "locked" : targetDone ? "done" : "open",
+      detail: `${progress.target.completed.length} / ${TARGET_PUZZLES.length} guided steps`,
+      state: targetDone ? "done" : "open",
       icon: <Crosshair size={26} />,
     },
     {
@@ -63,8 +62,8 @@ export function ModuleIntro({ name, progress, fullAccess = false, soundOn, onTog
       number: "03",
       title: "MATHLER GAME",
       copy: "Race the clock in Time Attack or keep your streak in Survival.",
-      detail: !targetDone && !fullAccess ? "UNLOCK: WARM UP" : `TIME ${progress.target.timeAttackBest} · SURVIVAL ${progress.target.survivalBestStreak}`,
-      state: !targetDone && !fullAccess ? "locked" : "open",
+      detail: `TIME ${progress.target.timeAttackBest} · SURVIVAL ${progress.target.survivalBestStreak}`,
+      state: "open",
       icon: <Trophy size={26} />,
     },
   ];

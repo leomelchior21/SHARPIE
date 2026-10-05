@@ -286,7 +286,6 @@ export default function App() {
               <BasicOperations
                 name={name}
                 studentKey={login || name.toLowerCase()}
-                fullAccess={fullAccess}
                 onBack={() => navigate("hub")}
               />
             </Suspense>
