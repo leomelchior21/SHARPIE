@@ -4500,16 +4500,22 @@ button.module-card { cursor: pointer; }
 .teacher-when { color: #5d6b8c; font: 0.5rem var(--mono); }
 .teacher-mathler-cell { display: inline-flex; gap: 5px; }
 .teacher-mathler-cell b {
-  display: grid;
-  width: 24px;
-  height: 24px;
+  display: flex;
+  width: 26px;
+  height: 30px;
   border: 1px solid rgba(117, 139, 199, 0.3);
   border-radius: 7px;
-  place-items: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   color: #5f6f96;
   background: rgba(11, 17, 38, 0.6);
   font: 700 0.56rem var(--mono);
+  line-height: 1;
 }
+.teacher-mathler-cell b small { color: inherit; font: 600 0.42rem var(--mono); opacity: 0.9; }
+.teacher-mathler-cell b.is-progress { border-color: rgba(255, 190, 92, 0.55); color: #ffd79f; background: rgba(70, 45, 10, 0.6); box-shadow: 0 0 10px rgba(255, 190, 92, 0.15); }
 .teacher-mathler-cell b.is-done { border-color: rgba(91, 219, 158, 0.55); color: #8ce2b8; background: rgba(10, 45, 43, 0.7); box-shadow: 0 0 10px rgba(91, 219, 158, 0.2); }
 
 .teacher-mathler { display: flex; padding: 10px 12px; border: 1px solid rgba(110, 140, 211, 0.18); border-radius: 9px; flex-direction: column; gap: 9px; background: rgba(8, 14, 32, 0.55); }

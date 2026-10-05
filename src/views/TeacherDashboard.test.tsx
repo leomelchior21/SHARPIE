@@ -109,4 +109,41 @@ describe("Teacher dashboard", () => {
     expect(screen.getByText("12 / 12 · RUSH ✓")).toBeInTheDocument();
     expect(screen.getByText("TA 9 · SV 4 · 800 pts")).toBeInTheDocument();
   });
+
+  it("shows partial Mathler progress counts in the student list", async () => {
+    vi.mocked(fetchClassMathlerScores).mockResolvedValueOnce([]);
+    vi.mocked(fetchClassMathlerProgress).mockResolvedValueOnce([]);
+    vi.mocked(fetchClassProgress).mockResolvedValueOnce([
+      {
+        student: { login: "linus", name: "Linus Torvalds", classCode: "9C", group: "Amarelo" },
+        completedBosses: [],
+        xp: 0,
+        updatedAt: "2026-10-04T10:00:00Z",
+        codes: {},
+        attempts: {},
+        mathlerSteps: {
+          login: "linus",
+          display_name: "Linus Torvalds",
+          class_code: "9C",
+          warmup_solved: 12,
+          rush_completed: false,
+          rush_rounds: 4,
+          target_completed: 7,
+          updated_at: "2026-10-04T10:00:00Z",
+        },
+      },
+    ]);
+
+    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    await waitFor(() => expect(screen.getByText("Linus Torvalds")).toBeInTheDocument());
+
+    const badges = screen.getByText("Linus Torvalds").closest(".teacher-row")!.querySelectorAll(".teacher-mathler-cell b");
+    expect(badges).toHaveLength(3);
+    expect(badges[0]).toHaveClass("is-progress");
+    expect(badges[0].textContent).toBe("T12");
+    expect(badges[1]).toHaveClass("is-progress");
+    expect(badges[1].textContent).toBe("W7");
+    expect(badges[2].textContent).toBe("G0");
+    expect(badges[2].className).toBe("");
+  });
 });

@@ -277,9 +277,13 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               const active = row.student.login === selectedLogin;
               const mathler = mathlerByLogin.get(row.student.login);
               const steps = mathlerStepsByLogin.get(row.student.login);
-              const translateDone = Boolean(steps && steps.warmup_solved >= WARMUP_TOTAL && steps.rush_completed);
-              const targetDone = Boolean(steps && steps.target_completed >= TARGET_PUZZLES.length);
-              const gamePlayed = Boolean(mathler && (mathler.time_attack_best > 0 || mathler.best_streak > 0));
+              const warmupCount = steps ? Math.min(steps.warmup_solved, WARMUP_TOTAL) : 0;
+              const targetCount = steps ? Math.min(steps.target_completed, TARGET_PUZZLES.length) : 0;
+              const gameCount = mathler ? Math.max(mathler.time_attack_best, mathler.best_streak) : 0;
+              const translateDone = Boolean(steps && warmupCount >= WARMUP_TOTAL && steps.rush_completed);
+              const targetDone = targetCount >= TARGET_PUZZLES.length;
+              const gamePlayed = gameCount > 0;
+              const badgeState = (done: boolean, started: boolean) => (done ? "is-done" : started ? "is-progress" : "");
               return (
                 <button
                   key={row.student.login}
@@ -294,9 +298,15 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                   <span role="cell">{row.student.classCode}</span>
                   <span role="cell">{row.student.group ?? "—"}</span>
                   <span role="cell" className="teacher-mathler-cell">
-                    <b className={translateDone ? "is-done" : ""} title={steps ? `Translate: ${steps.warmup_solved}/${WARMUP_TOTAL} examples · rush ${steps.rush_completed ? "complete" : `${steps.rush_rounds}/5`}` : "Translate: not started"}>T</b>
-                    <b className={targetDone ? "is-done" : ""} title={steps ? `Warm up: ${steps.target_completed}/${TARGET_PUZZLES.length} steps` : "Warm up: not started"}>W</b>
-                    <b className={gamePlayed ? "is-done" : ""} title={mathler ? `Mathler game: TA ${mathler.time_attack_best} · SV ${mathler.best_streak}` : "Mathler game: not played"}>G</b>
+                    <b className={badgeState(translateDone, warmupCount > 0)} title={steps ? `Translate: ${warmupCount}/${WARMUP_TOTAL} examples · rush ${steps.rush_completed ? "complete" : `${steps.rush_rounds}/5`}` : "Translate: not started"}>
+                      T<small>{warmupCount}</small>
+                    </b>
+                    <b className={badgeState(targetDone, targetCount > 0)} title={steps ? `Warm up: ${targetCount}/${TARGET_PUZZLES.length} steps` : "Warm up: not started"}>
+                      W<small>{targetCount}</small>
+                    </b>
+                    <b className={badgeState(gamePlayed, gameCount > 0)} title={mathler ? `Mathler game: TA ${mathler.time_attack_best} · SV ${mathler.best_streak}` : "Mathler game: not played"}>
+                      G<small>{gameCount}</small>
+                    </b>
                   </span>
                   <span role="cell" className={`teacher-progress ${done === finalBosses.length ? "is-done" : ""}`}>
                     {done === finalBosses.length && <Check size={12} />}
