@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowUpRight, Braces, Database, LayoutDashboard, LockKeyhole, LogOut } from "lucide-react";
 import { Brand } from "../components/Brand";
-import { FINAL_BOSSES_STUDENT_ACCESS } from "../data/finalBosses";
+import { FINAL_BOSSES_ENABLED, FINAL_BOSSES_STUDENT_ACCESS } from "../data/finalBosses";
 
 type HubProps = {
   name: string;
@@ -33,7 +33,7 @@ export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine
     window.setTimeout(() => setNotice(false), 1800);
   };
 
-  const finalBossesOpen = Boolean(isTeacher) || FINAL_BOSSES_STUDENT_ACCESS;
+  const finalBossesOpen = FINAL_BOSSES_ENABLED && (Boolean(isTeacher) || FINAL_BOSSES_STUDENT_ACCESS);
   const modules: Module[] = [
     { id: "01", name: "WriteLine Playground", subtitle: "Make C# talk.", glyph: <Braces size={28} />, state: "available", onClick: onOpenWriteLine },
     { id: "02", name: "Memory Machine", subtitle: "Discover how programs remember.", glyph: <Database size={28} />, state: "featured", onClick: onOpenMemoryMachine },

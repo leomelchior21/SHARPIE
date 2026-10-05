@@ -34,11 +34,13 @@ describe("Hub module access", () => {
     expect(openFinalBosses).not.toHaveBeenCalled();
   });
 
-  it("opens Final Bosses for the teacher", () => {
+  it("keeps Final Bosses locked for the teacher while the module is paused", () => {
     const { openFinalBosses } = renderHub({ isTeacher: true });
-    fireEvent.click(screen.getByText("Final Bosses"));
-    expect(openFinalBosses).toHaveBeenCalledTimes(1);
-    expect(screen.queryAllByText("COMING SOON")).toHaveLength(0);
+    const card = screen.getByText("Final Bosses").closest("button");
+    expect(card).toHaveAttribute("aria-disabled", "true");
+    expect(within(card!).getByText("COMING SOON")).toBeInTheDocument();
+    fireEvent.click(card!);
+    expect(openFinalBosses).not.toHaveBeenCalled();
   });
 
   it("shows a log out button on the top right", () => {

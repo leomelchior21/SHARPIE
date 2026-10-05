@@ -16,8 +16,8 @@ export {
 
 type Result = "correct" | "wrong" | null;
 
-export function VariableRun({ onBack, onFinish }: { onBack: () => void; onFinish: () => void }) {
-  const unlocked = memoryProgress.isVariableRunUnlocked();
+export function VariableRun({ onBack, onFinish, fullAccess = false }: { onBack: () => void; onFinish: () => void; fullAccess?: boolean }) {
+  const unlocked = fullAccess || memoryProgress.isVariableRunUnlocked();
   const [lessonIndex, setLessonIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [selectedBlocks, setSelectedBlocks] = useState<number[]>([]);

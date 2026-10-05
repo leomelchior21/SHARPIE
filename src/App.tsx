@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { FINAL_BOSSES_STUDENT_ACCESS } from "./data/finalBosses";
+import { FINAL_BOSSES_ENABLED, FINAL_BOSSES_STUDENT_ACCESS } from "./data/finalBosses";
 import { findStudent } from "./data/roster";
 import { activeStudent } from "./lib/activeStudent";
 import type { BossProgressState } from "./lib/bossProgress";
@@ -198,8 +198,9 @@ export default function App() {
 
   const authenticated = authState === "student" || authState === "teacher";
   const isTeacher = authState === "teacher";
+  const fullAccess = isTeacher || login.toLowerCase() === TEACHER_LOGIN || name.toLowerCase() === TEACHER_LOGIN;
   const teacherOnly = screen === "teacher" || screen === "teacher-live";
-  const finalBossesLocked = screen === "final-bosses" && !isTeacher && !FINAL_BOSSES_STUDENT_ACCESS;
+  const finalBossesLocked = screen === "final-bosses" && (!FINAL_BOSSES_ENABLED || (!isTeacher && !FINAL_BOSSES_STUDENT_ACCESS));
   const activeScreen: Screen = teacherOnly && !isTeacher ? "hub" : finalBossesLocked ? "hub" : screen;
 
   return (
@@ -253,6 +254,7 @@ export default function App() {
             <Suspense fallback={<ModuleLoader />}>
               <MemoryMachineHub
                 name={name}
+                fullAccess={fullAccess}
                 onBack={() => navigate("hub")}
                 onOpenExperience={() => navigate("memory-experience")}
                 onOpenVariableRun={() => navigate("variable-run")}
@@ -271,12 +273,12 @@ export default function App() {
           )}
           {activeScreen === "variable-run" && (
             <Suspense fallback={<ModuleLoader />}>
-              <VariableRun onBack={() => navigate("memory-hub")} onFinish={() => navigate("memory-hub")} />
+              <VariableRun fullAccess={fullAccess} onBack={() => navigate("memory-hub")} onFinish={() => navigate("memory-hub")} />
             </Suspense>
           )}
           {activeScreen === "variable-sprint" && (
             <Suspense fallback={<ModuleLoader />}>
-              <VariableSprint onBack={() => navigate("memory-hub")} />
+              <VariableSprint fullAccess={fullAccess} onBack={() => navigate("memory-hub")} />
             </Suspense>
           )}
           {activeScreen === "mathler" && (
@@ -284,7 +286,7 @@ export default function App() {
               <BasicOperations
                 name={name}
                 studentKey={login || name.toLowerCase()}
-                fullAccess={isTeacher || login.toLowerCase() === "leleomaker" || name.toLowerCase() === "leleomaker"}
+                fullAccess={fullAccess}
                 onBack={() => navigate("hub")}
               />
             </Suspense>

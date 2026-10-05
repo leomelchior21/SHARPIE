@@ -3,8 +3,8 @@ import { useState } from "react";
 import { VariableCodeMissions } from "../components/VariableCodeMissions";
 import { memoryProgress } from "../lib/memoryProgress";
 
-export function VariableSprint({ onBack }: { onBack: () => void }) {
-  const unlocked = memoryProgress.isVariableSprintUnlocked();
+export function VariableSprint({ onBack, fullAccess = false }: { onBack: () => void; fullAccess?: boolean }) {
+  const unlocked = fullAccess || memoryProgress.isVariableSprintUnlocked();
   const [finished, setFinished] = useState(false);
   const [earnedXp, setEarnedXp] = useState(0);
 
