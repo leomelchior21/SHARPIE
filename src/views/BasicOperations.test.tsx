@@ -201,8 +201,10 @@ describe("BasicOperations module intro", () => {
     fireEvent.click(screen.getByRole("button", { name: /SURVIVAL$/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), { target: { value: puzzle.referenceExpression } });
     fireEvent.click(screen.getByRole("button", { name: "RUN" }));
-    expect(await screen.findByRole("button", { name: /NEXT CHALLENGE/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /NEXT CHALLENGE/ }));
+    const next = await screen.findByRole("button", { name: /NEXT PUZZLE/ });
+    expect(next).toHaveClass("is-next");
+    expect(screen.queryByText("CHALLENGE CLEARED")).not.toBeInTheDocument();
+    fireEvent.click(next);
     expect(screen.getByText("SURVIVAL · CHALLENGE 2")).toBeInTheDocument();
   });
 
@@ -262,8 +264,12 @@ describe("BasicOperations module intro", () => {
     fireEvent.click(screen.getByRole("button", { name: /^RUN/ }));
 
     expect(await screen.findByText("MATCHED TARGET")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /NEXT PUZZLE/ })).toBeInTheDocument();
+    const next = screen.getByRole("button", { name: /NEXT PUZZLE/ });
+    expect(next).toHaveClass("is-next");
+    expect(screen.queryByRole("button", { name: "TRY ANOTHER" })).not.toBeInTheDocument();
     expect(screen.queryByText("You cracked the target.")).not.toBeInTheDocument();
+    fireEvent.click(next);
+    expect(screen.getByText("STEP 2 / 12")).toBeInTheDocument();
   });
 
   it("unlocks the Target answer help only after a mistake", async () => {

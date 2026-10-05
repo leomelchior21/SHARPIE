@@ -1603,9 +1603,7 @@
 .bo-target .bo-attempts-panel { grid-template-rows: 28px minmax(0, 1fr); border-top: 0 !important; }
 .bo-target .bo-attempts-panel .panel-header { border-top: 1px solid rgba(62, 125, 228, .22); }
 .bo-target-attempt-actions { display: flex; align-items: center; gap: 8px; }
-.bo-target-text-action,
-.bo-target-next { display: inline-flex; min-height: 23px; border: 1px solid #315ca0; border-radius: 5px; padding: 2px 8px; align-items: center; gap: 4px; color: #b6d4ff; background: #112a56; cursor: pointer; font: 600 .56rem var(--mono); letter-spacing: .06em; }
-.bo-target-next { border-color: #487cfa; color: white; background: #2458df; }
+.bo-target-text-action { display: inline-flex; min-height: 23px; border: 1px solid #315ca0; border-radius: 5px; padding: 2px 8px; align-items: center; gap: 4px; color: #b6d4ff; background: #112a56; cursor: pointer; font: 600 .56rem var(--mono); letter-spacing: .06em; }
 .bo-target .bo-attempts-list { padding: 2px 4px 0; gap: 4px; }
 .bo-target .bo-attempt {
   display: grid;
@@ -1926,6 +1924,20 @@
 .bo-target-run-button:hover:not(:disabled) { filter: brightness(1.14); }
 .bo-target-run-button:disabled { opacity: .42; cursor: default; }
 .bo-target-run-button kbd { border-radius: 6px; padding: 6px 8px; color: #dbe9ff; background: rgba(5, 31, 140, .36); font: 500 clamp(.55rem, .88vw, .9rem) var(--mono); letter-spacing: 0; white-space: nowrap; }
+.bo-target-run-button.is-next,
+.bo-mathler-game .bo-run-button.is-next {
+  border-color: #3ee19b;
+  color: #f2fff9;
+  background: linear-gradient(145deg, #22c97e, #0f9159);
+  box-shadow: 0 0 24px rgba(45, 220, 150, .42);
+  animation: bo-next-pulse 1.8s ease-in-out infinite;
+}
+.bo-target-run-button.is-next kbd { background: rgba(4, 66, 44, .45); }
+
+@keyframes bo-next-pulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(45, 220, 150, .3); }
+  50% { box-shadow: 0 0 32px rgba(45, 220, 150, .62); }
+}
 
 .bo-target-attempt-area { display: grid; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .bo-target-attempt-area .bo-target-section-heading { min-height: 28px; }
@@ -2806,5 +2818,7 @@
 .bo-rush-rounds button.is-done:hover { transform: translateY(-2px); box-shadow: 0 0 12px rgba(91, 219, 158, .5); }
 
 @media (prefers-reduced-motion: reduce) {
-  .bo-help-button.is-ready { animation: none; }
+  .bo-help-button.is-ready,
+  .bo-target-run-button.is-next,
+  .bo-mathler-game .bo-run-button.is-next { animation: none; }
 }

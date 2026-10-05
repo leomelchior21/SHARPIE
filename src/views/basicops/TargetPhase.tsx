@@ -206,11 +206,19 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
     }
   }, [checking, win, exhausted, value, attemptsUsed, progress, puzzle, onProgress, replay, wave]);
 
+  const winRef = useRef(win);
+  winRef.current = win;
+  const nextPuzzleRef = useRef<() => void>(() => undefined);
+
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
         wave.fire();
+        if (winRef.current) {
+          nextPuzzleRef.current();
+          return;
+        }
         void runCheck();
       }
     };
@@ -246,6 +254,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
     setPuzzleIndex(next);
     basicOpsSound.click();
   };
+  nextPuzzleRef.current = nextPuzzle;
 
   const retryPuzzle = () => {
     if (!replay) onProgress(resetTargetAttempts(progress, puzzle.id));
@@ -262,13 +271,6 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
     if (step === puzzleIndex) return;
     setPuzzleIndex(step);
     basicOpsSound.click();
-  };
-
-  const tryAnother = () => {
-    setWin(null);
-    setValue("");
-    setCheck(null);
-    editorRef.current?.focus();
   };
 
   const resetCode = () => {
@@ -378,8 +380,22 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
                   {check && <><strong>{check.title}: {check.message}</strong>{check.detail && <span>{check.detail}</span>}</>}
                   {hintsRevealed > 0 && <span className={hintFlash ? "is-fresh" : ""}><Lightbulb size={13} /> {puzzle.hints[hintsRevealed - 1]}</span>}
                 </div>
-                <button type="button" className="bo-target-run-button" onClick={(event) => { wave.fire(event); void runCheck(); }} disabled={checking || Boolean(win) || exhausted}>
-                  <Play size={21} fill="currentColor" /><span>{checking ? "CHECKING" : "RUN"}</span><kbd>Ctrl ↵</kbd>
+                <button
+                  type="button"
+                  className={`bo-target-run-button ${win ? "is-next" : ""}`}
+                  onClick={(event) => {
+                    wave.fire(event);
+                    if (win) {
+                      nextPuzzle();
+                      return;
+                    }
+                    void runCheck();
+                  }}
+                  disabled={checking || exhausted}
+                >
+                  {win ? <ArrowRight size={21} /> : <Play size={21} fill="currentColor" />}
+                  <span>{win ? (puzzleIndex === puzzles.length ? "PLAY MATHLER GAME" : "NEXT PUZZLE") : checking ? "CHECKING" : "RUN"}</span>
+                  <kbd>Ctrl ↵</kbd>
                 </button>
               </div>
             </div>
@@ -389,9 +405,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
                 <h2>ATTEMPTS</h2>
                 <div className="bo-target-attempt-actions">
                   <span className="bo-attempts-count">{remaining} LEFT</span>
-                {win && remaining > 0 && <button type="button" className="bo-target-text-action" onClick={tryAnother}>TRY ANOTHER</button>}
                 {win && puzzleIndex === puzzles.length && onReplay && <button type="button" className="bo-target-text-action" onClick={onReplay}>REPLAY TARGET</button>}
-                {win && <button type="button" className="bo-target-next" onClick={nextPuzzle}>{puzzleIndex === puzzles.length ? "PLAY MATHLER GAME" : "NEXT PUZZLE"} <ArrowRight size={14} /></button>}
                 </div>
               </div>
               <div className="bo-target-attempt-list">

@@ -385,10 +385,16 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                   {tone === "good" && lastGain > 0 && <b className="bo-score-pop" key={`${history.length}-gain`}>+{lastGain}</b>}
                 </span>
                 <div className="bo-run-cluster">
-                  <span className="bo-run-note">Ctrl + Enter</span>
-                  <button className="bo-primary bo-run-button" onClick={(event) => { wave.fire(event); void runCheck(); }} disabled={checking || phase !== "playing" || !value.trim()}>
-                    <Play size={15} fill="currentColor" aria-hidden="true" /> {checking ? "CHECKING" : "RUN"}
-                  </button>
+                  <span className="bo-run-note">{phase === "won" ? "PUZZLE CLEARED" : "Ctrl + Enter"}</span>
+                  {phase === "won" ? (
+                    <button className="bo-primary bo-run-button is-next" onClick={(event) => { wave.fire(event); nextPuzzle(); }}>
+                      <ArrowRight size={15} aria-hidden="true" /> NEXT PUZZLE
+                    </button>
+                  ) : (
+                    <button className="bo-primary bo-run-button" onClick={(event) => { wave.fire(event); void runCheck(); }} disabled={checking || phase !== "playing" || !value.trim()}>
+                      <Play size={15} fill="currentColor" aria-hidden="true" /> {checking ? "CHECKING" : "RUN"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -424,17 +430,17 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                 ))}
               </div>
             </div>
-          </div>{(phase === "won" || phase === "ended") && (
+          </div>{phase === "ended" && (
             <div className="bo-target-overlay"><div className="bo-win-card">
-              <span className="bo-kicker">{phase === "won" ? "CHALLENGE CLEARED" : mode === "time" ? "TIME IS UP" : "RUN COMPLETE"}</span>
+              <span className="bo-kicker">{mode === "time" ? "TIME IS UP" : "RUN COMPLETE"}</span>
               <h2>{solved} {solved === 1 ? "puzzle" : "puzzles"} cleared</h2>
-              {phase === "ended" && mode === "survival" && <>
+              {mode === "survival" && <>
                 <p>You survived {formatTime(elapsed)} before losing your last life.</p>
                 <p>{message}</p>
                 <p>Reference expression: <code>{puzzle.referenceExpression}</code></p>
               </>}
               <div className="bo-complete-actions">
-                {phase === "won" ? <button className="bo-primary" onClick={nextPuzzle}>NEXT CHALLENGE <ArrowRight size={16} /></button> : <button className="bo-primary" onClick={() => start(mode!)}><RotateCcw size={16} /> PLAY AGAIN</button>}
+                <button className="bo-primary" onClick={() => start(mode!)}><RotateCcw size={16} /> PLAY AGAIN</button>
                 <button className="bo-secondary" onClick={() => { runIdRef.current += 1; changePhase("menu"); }}>CHOOSE MODE</button>
               </div>
             </div></div>
