@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowUpRight, Check, Crosshair, LockKeyhole, Trophy, X, Zap } from "lucide-react";
+import { SyntaxLine } from "../../components/SyntaxLine";
 import { PhaseHeader } from "../../components/basicops/PhaseHeader";
 import { TokenLegend } from "../../components/basicops/AttemptTiles";
 import { CONCEPT_SYMBOLS, TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
@@ -113,7 +114,7 @@ export function ModuleIntro({ name, progress, fullAccess = false, soundOn, onTog
                     <span className="bo-track-translate-art">
                       <span className="bo-track-math-line">8 + 3 × 2</span>
                       <span className="bo-track-translation-arrow">↓</span>
-                      <code><em>double</em> result = <b>8 + 3 * 2</b>;</code>
+                      <code><SyntaxLine code="double result = 8 + 3 * 2;" /></code>
                     </span>
                   ) : track.id === "target" ? (
                     <span className="bo-track-target-art">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, Calculator, Check, Hash, LayoutGrid, LifeBuoy, Lightbulb, LogOut, Play, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Brand } from "../../components/Brand";
+import { SyntaxLine } from "../../components/SyntaxLine";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
 import { KeypadPanel } from "../../components/basicops/KeypadPanel";
@@ -368,11 +369,12 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
                 disabled={checking || Boolean(win) || exhausted}
                 placeholder="type the C# expression"
                 compact
+                keypadOnlyOnTouch
               />
               {helpOpen && !win && (
                 <div className="bo-answer-help" role="status">
                   <span><LifeBuoy size={13} aria-hidden="true" /> CORRECT ANSWER</span>
-                  <code>double result = {puzzle.referenceExpression};</code>
+                  <code><SyntaxLine code={`double result = ${puzzle.referenceExpression};`} /></code>
                 </div>
               )}
               <div className="bo-target-code-bottom">
@@ -412,7 +414,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
               {history.map((record) => (
                 <div className={`bo-target-attempt-row is-${record.status}`} key={`${record.n}-${record.expression}`}>
                   <span className="bo-target-attempt-index">{record.status === "invalid" ? "—" : record.n}</span>
-                  <code className="bo-target-attempt-expression">{record.expression}</code>
+                  <code className="bo-target-attempt-expression"><SyntaxLine code={record.expression} /></code>
                   <span className="bo-target-attempt-arrow" aria-hidden="true">→</span>
                   <span className="bo-target-attempt-output">{record.output ?? "!"}</span>
                   {record.status === "win" && <span className="bo-target-attempt-match"><Check size={16} /> MATCHED TARGET</span>}
@@ -430,7 +432,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
                 <span className="bo-win-mark is-warn"><X size={24} /></span>
                 <span className="bo-kicker">NO ATTEMPTS LEFT</span>
                 <h2>Reference expression:</h2>
-                <code className="bo-win-code">double result = {puzzle.referenceExpression};</code>
+                <code className="bo-win-code"><SyntaxLine code={`double result = ${puzzle.referenceExpression};`} /></code>
                 <small className="bo-win-note">Read it, then try this puzzle again — repetition is how the syntax sticks.</small>
                 <div className="bo-complete-actions">
                   <button className="bo-primary" onClick={retryPuzzle}>

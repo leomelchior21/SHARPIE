@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Clock, Flame, LifeBuoy, Lightbulb, Play, RotateCcw, X, Zap } from "lucide-react";
+import { SyntaxLine } from "../../components/SyntaxLine";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
 import { KeypadPanel } from "../../components/basicops/KeypadPanel";
@@ -375,13 +376,13 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
                     placeholder="type the C# expression"
                     compact
                     focusOnMount
-                    keypadOnlyOnIPad
+                    keypadOnlyOnTouch
                   />
 
                   {helpOpen && (
                     <div className="bo-answer-help" role="status">
                       <span><LifeBuoy size={13} aria-hidden="true" /> CORRECT ANSWER</span>
-                      <code>double result = {current.referenceExpression};</code>
+                      <code><SyntaxLine code={`double result = ${current.referenceExpression};`} /></code>
                     </div>
                   )}
 
@@ -445,7 +446,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
             <span className="bo-kicker">RUSH PAUSED · PHASE {round.round} / {RUSH_ROUNDS.length}</span>
             <h1>Try the run again.</h1>
             <p>{retryReason} Restart {round.label} with four new expressions.</p>
-            {lastMissed && <code className="bo-win-code">double result = {lastMissed};</code>}
+            {lastMissed && <code className="bo-win-code"><SyntaxLine code={`double result = ${lastMissed};`} /></code>}
             <div className="bo-complete-actions">
               <button className="bo-primary" onClick={retry}><RotateCcw size={17} /> RESTART ROUND</button>
               <button className="bo-secondary" onClick={onHome}>MODULE HOME</button>

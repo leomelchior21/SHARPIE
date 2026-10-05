@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
+import { SyntaxLine } from "../SyntaxLine";
 
 export type ExpressionEditorHandle = {
   insert: (symbol: string) => void;
@@ -19,25 +20,37 @@ type ExpressionEditorProps = {
   placeholder?: string;
   compact?: boolean;
   focusOnMount?: boolean;
-  keypadOnlyOnIPad?: boolean;
+  keypadOnlyOnTouch?: boolean;
 };
 
-function isIPad() {
+function isTouchDevice() {
   if (typeof navigator === "undefined") return false;
-  return /iPad/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (/iPad|iPhone|iPod|Android|Mobile|Tablet|Silk|Kindle|Windows Phone/i.test(navigator.userAgent)) return true;
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches) return true;
+  return false;
 }
 
 export const ExpressionEditor = forwardRef<ExpressionEditorHandle, ExpressionEditorProps>(function ExpressionEditor(
-  { value, onChange, onRun, disabled = false, label = "double result =", ariaLabel = "C# expression after double result", placeholder = "", compact = false, focusOnMount = false, keypadOnlyOnIPad = false },
+  { value, onChange, onRun, disabled = false, label = "double result =", ariaLabel = "C# expression after double result", placeholder = "", compact = false, focusOnMount = false, keypadOnlyOnTouch = false },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pulseKey, setPulseKey] = useState(0);
-  const keypadOnly = keypadOnlyOnIPad && isIPad();
+  const keypadOnly = keypadOnlyOnTouch && isTouchDevice();
 
   useEffect(() => {
     if (focusOnMount && !keypadOnly && !disabled) inputRef.current?.focus();
   }, [focusOnMount, keypadOnly, disabled]);
+
+  useEffect(() => {
+    if (!keypadOnly) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.setAttribute("virtualkeyboardpolicy", "manual");
+    input.setAttribute("autocapitalize", "off");
+    input.setAttribute("autocorrect", "off");
+  }, [keypadOnly]);
 
   const placeCaret = (position: number) => {
     window.requestAnimationFrame(() => {
@@ -119,25 +132,28 @@ export const ExpressionEditor = forwardRef<ExpressionEditorHandle, ExpressionEdi
           key={pulseKey}
           className={`bo-code-locked bo-code-prefix ${pulseKey ? (pulseKey % 2 ? "is-pulse-a" : "is-pulse-b") : ""}`}
         >
-          {label === "double result =" ? <><span className="bo-code-keyword">double</span> result =</> : label}
+          {label === "double result =" ? <><span className="syn-type">double</span> <span className="syn-variable">result</span> =</> : label}
         </span>
-        <input
-          ref={inputRef}
-          className="bo-code-input"
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          readOnly={keypadOnly}
-          inputMode={keypadOnly ? "none" : undefined}
-          aria-label={ariaLabel}
-          placeholder={placeholder}
-          spellCheck={false}
-          autoComplete="off"
-          autoCapitalize="off"
-          autoCorrect="off"
-          style={{ width: `${Math.max(placeholder.length, value.length, 2) + 1}ch` }}
-        />
+        <span className="bo-code-field">
+          <span className="bo-code-mirror" aria-hidden="true"><SyntaxLine code={value} /></span>
+          <input
+            ref={inputRef}
+            className="bo-code-input"
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            readOnly={keypadOnly}
+            inputMode={keypadOnly ? "none" : undefined}
+            aria-label={ariaLabel}
+            placeholder={placeholder}
+            spellCheck={false}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            style={{ width: `${Math.max(placeholder.length, value.length, 2) + 1}ch` }}
+          />
+        </span>
         <span className="bo-code-locked bo-code-suffix">;</span>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Lightbulb, Play, RotateCcw, Trophy, X } from "lucide-react";
+import { SyntaxLine } from "../../components/SyntaxLine";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
 import { KeypadPanel } from "../../components/basicops/KeypadPanel";
@@ -308,9 +309,9 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
                 <div className="bo-math-stage">
                   {pairNotice && (
                     <div className="bo-pair-banner" role="status">
-                      <span><code className="bo-inline-code">{pairNotice.before}</code> → <b>{pairNotice.resultBefore}</b></span>
+                      <span><code className="bo-inline-code"><SyntaxLine code={pairNotice.before} /></code> → <b>{pairNotice.resultBefore}</b></span>
                       <em>≠</em>
-                      <span><code className="bo-inline-code">{pairNotice.after}</code> → <b>{pairNotice.resultAfter}</b></span>
+                      <span><code className="bo-inline-code"><SyntaxLine code={pairNotice.after} /></code> → <b>{pairNotice.resultAfter}</b></span>
                       <small>PARENTHESES CHANGE THE ORDER</small>
                     </div>
                   )}
@@ -345,7 +346,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
                     placeholder="type the C# expression"
                     compact
                     focusOnMount
-                    keypadOnlyOnIPad
+                    keypadOnlyOnTouch
                   />
 
                   <div className={`bo-code-status is-${feedback?.tone ?? "idle"}`} role="status" aria-live="polite">
@@ -364,7 +365,13 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
                           <ArrowRight size={14} />
                           <span className="bo-transform-code">
                             {safeTokens(feedback.transform.expression).map((token, tokenIndex) => (
-                              <i key={`${token.text}-${tokenIndex}`} style={{ animationDelay: `${180 + tokenIndex * 70}ms` }}>{token.text}</i>
+                              <i
+                                key={`${token.text}-${tokenIndex}`}
+                                className={token.kind === "number" ? "is-number" : ""}
+                                style={{ animationDelay: `${180 + tokenIndex * 70}ms` }}
+                              >
+                                {token.text}
+                              </i>
                             ))}
                           </span>
                         </span>

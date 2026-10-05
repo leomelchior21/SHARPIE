@@ -25,6 +25,7 @@ describe("BasicOperations module intro", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   beforeEach(() => {
@@ -58,6 +59,20 @@ describe("BasicOperations module intro", () => {
     expect(screen.getByRole("heading", { name: "Warmup — Addition" })).toBeInTheDocument();
   });
 
+  it("colors the Mathler editor with the WriteLine syntax palette", () => {
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /START MODULE/ }));
+
+    const prefix = document.querySelector(".bo-code-prefix");
+    expect(prefix?.querySelector(".syn-type")?.textContent).toBe("double");
+    expect(prefix?.querySelector(".syn-variable")?.textContent).toBe("result");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), { target: { value: "7 + 3" } });
+    const mirror = document.querySelector(".bo-code-mirror");
+    expect(mirror?.textContent).toBe("7 + 3");
+    expect(mirror?.querySelector(".syn-number")?.textContent).toBe("7");
+  });
+
   it("uses the on-screen keypad without opening an iPad text keyboard", () => {
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)");
     render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
@@ -67,6 +82,47 @@ describe("BasicOperations module intro", () => {
     expect(editor).toHaveAttribute("inputmode", "none");
     fireEvent.click(screen.getByRole("button", { name: "7" }));
     expect(editor).toHaveValue("7");
+  });
+
+  it("keeps the keypad-only field on Android tablets and phones", () => {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /START MODULE/ }));
+    const editor = screen.getByRole("textbox", { name: "C# expression after double result" });
+    expect(editor).toHaveAttribute("readonly");
+    expect(editor).toHaveAttribute("inputmode", "none");
+    expect(editor).toHaveAttribute("virtualkeyboardpolicy", "manual");
+    fireEvent.click(screen.getByRole("button", { name: "8" }));
+    expect(editor).toHaveValue("8");
+  });
+
+  it("keeps the keypad on generic tablets with a coarse pointer", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /START MODULE/ }));
+    const editor = screen.getByRole("textbox", { name: "C# expression after double result" });
+    expect(editor).toHaveAttribute("readonly");
+    expect(editor).toHaveAttribute("inputmode", "none");
+  });
+
+  it("keeps the Target editor keypad-only on touch devices", () => {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)");
+    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    fireEvent.click(screen.getByText("WARM UP"));
+    const editor = screen.getByRole("textbox", { name: "C# expression after double result" });
+    expect(editor).toHaveAttribute("readonly");
+    expect(editor).toHaveAttribute("inputmode", "none");
+    fireEvent.click(screen.getByRole("button", { name: "9" }));
+    expect(editor).toHaveValue("9");
   });
 
   it("shows the written warmup task when that randomized example is reached", () => {
@@ -291,7 +347,8 @@ describe("BasicOperations module intro", () => {
     expect(help).toBeEnabled();
     fireEvent.click(help);
     expect(screen.getByText("CORRECT ANSWER")).toBeInTheDocument();
-    expect(screen.getByText(`double result = ${puzzle.referenceExpression};`)).toBeInTheDocument();
+    const answer = document.querySelector(".bo-answer-help code");
+    expect(answer?.textContent).toBe(`double result = ${puzzle.referenceExpression};`);
   });
 
   it("lets students redo a passed warmup step without skipping ahead", async () => {

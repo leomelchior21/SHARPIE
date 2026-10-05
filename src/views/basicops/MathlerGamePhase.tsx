@@ -15,6 +15,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import { SyntaxLine } from "../../components/SyntaxLine";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
 import { KeypadPanel } from "../../components/basicops/KeypadPanel";
@@ -378,7 +379,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                 <span className="bo-kicker">YOUR CODE</span>
                 <span className="bo-code-chip">C#</span>
               </div>
-              <ExpressionEditor ref={editorRef} value={value} onChange={setValue} onRun={() => { wave.fire(); void runCheck(); }} disabled={checking || phase !== "playing"} placeholder="type the C# expression" compact keypadOnlyOnIPad focusOnMount />
+              <ExpressionEditor ref={editorRef} value={value} onChange={setValue} onRun={() => { wave.fire(); void runCheck(); }} disabled={checking || phase !== "playing"} placeholder="type the C# expression" compact keypadOnlyOnTouch focusOnMount />
               <div className="bo-survival-actions">
                 <span className={`bo-survival-status is-${tone}`} role="status">
                   {message || "Build the expression and run it."}
@@ -418,7 +419,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                 {history.map((row, position) => (
                   <div className={`bo-survival-row ${row.correct ? "is-correct" : "is-wrong"}`} key={position}>
                     <span className="bo-attempt-index">{position + 1}</span>
-                    <code>{row.expression}</code>
+                    <code><SyntaxLine code={row.expression} /></code>
                     <span className="bo-attempt-arrow">→</span>
                     <strong className="bo-attempt-output">{row.output}</strong>
                     <span className="bo-attempt-verdict">
@@ -437,7 +438,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
               {mode === "survival" && <>
                 <p>You survived {formatTime(elapsed)} before losing your last life.</p>
                 <p>{message}</p>
-                <p>Reference expression: <code>{puzzle.referenceExpression}</code></p>
+                <p>Reference expression: <code><SyntaxLine code={`double result = ${puzzle.referenceExpression};`} /></code></p>
               </>}
               <div className="bo-complete-actions">
                 <button className="bo-primary" onClick={() => start(mode!)}><RotateCcw size={16} /> PLAY AGAIN</button>
