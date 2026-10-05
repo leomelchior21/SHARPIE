@@ -69,8 +69,23 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
     void load();
   }, [load]);
 
-  const mathlerByLogin = useMemo(() => new Map(mathlerRows.map((row) => [row.login, row])), [mathlerRows]);
-  const mathlerStepsByLogin = useMemo(() => new Map(mathlerProgress.map((row) => [row.login, row])), [mathlerProgress]);
+  const mathlerByLogin = useMemo(() => {
+    const map = new Map(mathlerRows.map((row) => [row.login, row]));
+    for (const row of rows) {
+      if (row.mathlerGame && !map.has(row.student.login)) map.set(row.student.login, row.mathlerGame);
+    }
+    return map;
+  }, [mathlerRows, rows]);
+
+  const mathlerStepsByLogin = useMemo(() => {
+    const map = new Map(mathlerProgress.map((row) => [row.login, row]));
+    for (const row of rows) {
+      if (row.mathlerSteps && !map.has(row.student.login)) map.set(row.student.login, row.mathlerSteps);
+    }
+    return map;
+  }, [mathlerProgress, rows]);
+
+  const effectiveMathler = useMemo(() => [...mathlerByLogin.values()], [mathlerByLogin]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -88,20 +103,20 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
       const average = students.length
         ? students.reduce((total, row) => total + row.completedBosses.length, 0) / students.length
         : 0;
-      const mathler = mathlerRows.filter((row) => row.class_code === code);
+      const mathler = effectiveMathler.filter((row) => row.class_code === code);
       const timeAverage = mathler.length
         ? mathler.reduce((total, row) => total + row.time_attack_best, 0) / mathler.length
         : 0;
       return { code, total: students.length, finished, average, mathlerPlayers: mathler.length, timeAverage };
     });
-  }, [rows, mathlerRows]);
+  }, [rows, effectiveMathler]);
 
   const mathlerOverview = useMemo(() => {
-    const players = mathlerRows.length;
-    const timeAverage = players ? mathlerRows.reduce((total, row) => total + row.time_attack_best, 0) / players : 0;
-    const bestStreak = mathlerRows.reduce((best, row) => Math.max(best, row.best_streak), 0);
+    const players = effectiveMathler.length;
+    const timeAverage = players ? effectiveMathler.reduce((total, row) => total + row.time_attack_best, 0) / players : 0;
+    const bestStreak = effectiveMathler.reduce((best, row) => Math.max(best, row.best_streak), 0);
     return { players, timeAverage, bestStreak };
-  }, [mathlerRows]);
+  }, [effectiveMathler]);
 
   const selected = rows.find((row) => row.student.login === selectedLogin) ?? null;
   const selectedMathler = selected ? mathlerByLogin.get(selected.student.login) ?? null : null;

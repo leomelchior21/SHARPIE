@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseMathlerSyncState } from "./basicOps/survivalLeaderboard";
 import { createBossProgress } from "./bossProgress";
 import { mergeBossProgress, rowToBossProgress } from "./bossSync";
 
@@ -46,5 +47,31 @@ describe("Final Bosses cloud sync", () => {
     const local = createBossProgress();
     local.completedBosses = [1, 2, 3];
     expect(mergeBossProgress(local, null)).toBe(local);
+  });
+
+  it("parses the mirrored Mathler state stored with the boss codes", () => {
+    const parsed = parseMathlerSyncState({
+      warmup: 12,
+      rushCompleted: true,
+      rushRounds: 5,
+      target: 7,
+      timeAttack: 9,
+      survivalStreak: 4,
+      survivalScore: 800,
+      updatedAt: "2026-10-04T10:00:00Z",
+    });
+    expect(parsed).toMatchObject({
+      warmup: 12,
+      rushCompleted: true,
+      rushRounds: 5,
+      target: 7,
+      timeAttack: 9,
+      survivalStreak: 4,
+      survivalScore: 800,
+      updatedAt: "2026-10-04T10:00:00Z",
+    });
+    expect(parseMathlerSyncState(null)).toBeNull();
+    expect(parseMathlerSyncState({ rushCompleted: true })).toBeNull();
+    expect(parseMathlerSyncState({ warmup: "x", rushRounds: 1, target: 1 })).toBeNull();
   });
 });

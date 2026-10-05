@@ -1,5 +1,6 @@
 /**
- * Applies supabase/sharpie-setup.sql through the Supabase Management API.
+ * Applies every supabase/sharpie-*.sql file (except the roster seed) through
+ * the Supabase Management API.
  *
  * Needs a personal access token (https://supabase.com/dashboard/account/tokens):
  *
@@ -22,22 +23,30 @@ if (!ACCESS_TOKEN) {
   process.exit(1);
 }
 
-const sql = readFileSync(new URL("../supabase/sharpie-setup.sql", import.meta.url), "utf8");
+const SQL_FILES = [
+  "sharpie-setup.sql",
+  "sharpie-live.sql",
+  "sharpie-mathler-survival.sql",
+];
 
-const response = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${ACCESS_TOKEN}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ query: sql }),
-});
+for (const file of SQL_FILES) {
+  const sql = readFileSync(new URL(`../supabase/${file}`, import.meta.url), "utf8");
+  const response = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: sql }),
+  });
 
-const text = await response.text();
-if (!response.ok) {
-  console.error(`SQL failed (${response.status}): ${text}`);
-  process.exit(1);
+  const text = await response.text();
+  if (!response.ok) {
+    console.error(`${file} failed (${response.status}): ${text}`);
+    process.exit(1);
+  }
+
+  console.log(`${file} applied to ${PROJECT_REF}.`);
 }
 
-console.log(`sharpie-setup.sql applied to ${PROJECT_REF}.`);
-console.log(text.slice(0, 400));
+console.log("SHARPIE SQL setup complete.");

@@ -1,4 +1,6 @@
 import type { ClassCode, RosterStudent } from "../data/roster";
+import { parseMathlerSyncState } from "./basicOps/survivalLeaderboard";
+import type { MathlerProgressRow, MathlerScoreRow } from "./basicOps/survivalLeaderboard";
 import { bossProgress, bossXp, createBossProgress, sanitizeBossProgress, unlockBossIds } from "./bossProgress";
 import type { BossProgressState } from "./bossProgress";
 import { supabase } from "./supabase";
@@ -28,6 +30,8 @@ export type ClassProgressRow = {
   updatedAt: string | null;
   codes: Record<string, string>;
   attempts: Record<string, number>;
+  mathlerSteps?: MathlerProgressRow | null;
+  mathlerGame?: MathlerScoreRow | null;
 };
 
 export function rowToBossProgress(row: SharpieProgressRow): BossProgressState {
@@ -72,6 +76,8 @@ export async function fetchBossProgress(login: string): Promise<BossProgressStat
 
 export async function pushBossProgress(login: string, state: BossProgressState): Promise<void> {
   if (!supabase) return;
+  const { data } = await supabase.from("sharpie_progress").select("codes").eq("login", login).maybeSingle();
+  const existingCodes = data?.codes && typeof data.codes === "object" ? (data.codes as Record<string, unknown>) : {};
   const { error } = await supabase.from("sharpie_progress").upsert(
     {
       login,
@@ -79,7 +85,7 @@ export async function pushBossProgress(login: string, state: BossProgressState):
       current_boss: state.currentBoss,
       completed_bosses: state.completedBosses,
       xp: bossXp(state.completedBosses),
-      codes: state.codeByBoss,
+      codes: { ...existingCodes, ...state.codeByBoss },
       attempts: state.attemptsByBoss,
       updated_at: new Date().toISOString(),
     },
@@ -115,6 +121,30 @@ export async function fetchClassProgress(): Promise<ClassProgressRow[]> {
     const record = entry as unknown as SharpieStudentRow;
     const embedded = Array.isArray(record.sharpie_progress) ? record.sharpie_progress[0] : record.sharpie_progress;
     const progress = embedded ? rowToBossProgress(embedded) : createBossProgress();
+    const mathler = parseMathlerSyncState(embedded?.codes?.mathler);
+    const mathlerSteps: MathlerProgressRow | null = mathler
+      ? {
+          login: record.login,
+          display_name: record.display_name,
+          class_code: record.class_code,
+          warmup_solved: mathler.warmup,
+          rush_completed: mathler.rushCompleted,
+          rush_rounds: mathler.rushRounds,
+          target_completed: mathler.target,
+          updated_at: mathler.updatedAt,
+        }
+      : null;
+    const mathlerGame: MathlerScoreRow | null = mathler && (mathler.timeAttack > 0 || mathler.survivalStreak > 0 || mathler.survivalScore > 0)
+      ? {
+          login: record.login,
+          display_name: record.display_name,
+          class_code: record.class_code,
+          best_score: mathler.survivalScore,
+          best_streak: mathler.survivalStreak,
+          time_attack_best: mathler.timeAttack,
+          updated_at: mathler.updatedAt,
+        }
+      : null;
     return {
       student: {
         login: record.login,
@@ -127,6 +157,8 @@ export async function fetchClassProgress(): Promise<ClassProgressRow[]> {
       updatedAt: embedded?.updated_at ?? null,
       codes: progress.codeByBoss,
       attempts: progress.attemptsByBoss,
+      mathlerSteps,
+      mathlerGame,
     };
   });
 }

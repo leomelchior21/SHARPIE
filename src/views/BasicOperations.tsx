@@ -29,7 +29,7 @@ export function BasicOperations({ name, studentKey, onBack }: BasicOperationsPro
     (next: BasicOpsProgress) => {
       setProgress(next);
       saveBasicOpsProgress(next, studentKey);
-      if (studentKey) queueMathlerProgressSync(next);
+      if (studentKey) queueMathlerProgressSync(studentKey, next);
     },
     [studentKey],
   );
