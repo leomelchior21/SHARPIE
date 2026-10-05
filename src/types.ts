@@ -3,6 +3,7 @@ export type Screen =
   | "hub"
   | "writeline"
   | "stop"
+  | "mathler"
   | "memory-hub"
   | "memory-experience"
   | "variable-run"

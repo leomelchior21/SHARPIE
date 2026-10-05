@@ -4,8 +4,8 @@ SHARPIE is a classroom-first C# basics playground: write a small statement, run 
 
 ## What is included
 
-- A session-only name gate—no account or database.
-- A five-module cartridge hub, with only WriteLine Playground active.
+- Classroom sign-in and a five-module hub.
+- WriteLine Playground, Memory Machine, STOP, Mathler, and Final Bosses (when unlocked).
 - Five focused `Console.WriteLine` experiments plus three purple bonus activities, with clear feedback and student-controlled navigation.
 - A CodeMirror editor with C# highlighting, line numbers, diagnostics, and `Ctrl/Cmd + Enter`.
 - A designed output surface, progressive hints, reset confirmation, and session completion.
@@ -18,7 +18,13 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The entire application—including RUN—works from this one static site. There is no Docker service, .NET installation, API, database, or account.
+Open [http://localhost:5173](http://localhost:5173). The site and C# runner work locally; classroom sign-in and shared rankings use Supabase.
+
+## Mathler
+
+Open `/mathler` after signing in. Its three activities unlock in order: **Translate the Formulas**, **Warm Up**, and **Mathler Game**. Students first translate three randomized expressions for each operator (Addition, Subtraction, Multiplication and Division), then play five timed Rush rounds of four challenges each. Simpler rounds mix written tasks with math notation; mixed expressions retain their mathematical layout. A wrong answer or expired timer restarts only the current round, with new expressions. The guided Target warm up presents twelve randomized puzzles before Mathler Game's two modes: **Time Attack**, where students solve as many random targets as possible in 60 seconds, and **Survival**, where the first incorrect submission ends an unlimited run. Time Attack allows retries and automatically advances after a correct answer; Survival tracks the cleared streak and elapsed time.
+
+Personal Time Attack and Survival records are saved in browser storage. To enable both **Top Scorers** boards across all classes, run [`supabase/sharpie-mathler-survival.sql`](supabase/sharpie-mathler-survival.sql) in the Supabase SQL editor after `supabase/sharpie-setup.sql`. Rankings use the most puzzles solved in Time Attack and the longest correct streak in Survival.
 
 ## C# basics runner
 

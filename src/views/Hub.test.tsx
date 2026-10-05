@@ -4,6 +4,7 @@ import { Hub } from "./Hub";
 
 function renderHub(overrides: { isTeacher?: boolean } = {}) {
   const openFinalBosses = vi.fn();
+  const openMathler = vi.fn();
   const signOut = vi.fn();
   render(
     <Hub
@@ -13,11 +14,12 @@ function renderHub(overrides: { isTeacher?: boolean } = {}) {
       onSignOut={signOut}
       onOpenWriteLine={() => undefined}
       onOpenStop={() => undefined}
+      onOpenMathler={openMathler}
       onOpenMemoryMachine={() => undefined}
       onOpenFinalBosses={openFinalBosses}
     />,
   );
-  return { openFinalBosses, signOut };
+  return { openFinalBosses, openMathler, signOut };
 }
 
 describe("Hub module access", () => {
@@ -36,12 +38,18 @@ describe("Hub module access", () => {
     const { openFinalBosses } = renderHub({ isTeacher: true });
     fireEvent.click(screen.getByText("Final Bosses"));
     expect(openFinalBosses).toHaveBeenCalledTimes(1);
-    expect(screen.queryAllByText("COMING SOON")).toHaveLength(1);
+    expect(screen.queryAllByText("COMING SOON")).toHaveLength(0);
   });
 
   it("shows a log out button on the top right", () => {
     const { signOut } = renderHub();
     fireEvent.click(screen.getByRole("button", { name: /LOG OUT/ }));
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the Mathler basic operations module for students", () => {
+    const { openMathler } = renderHub();
+    fireEvent.click(screen.getByText("Mathler"));
+    expect(openMathler).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,6 +4,8 @@ import { Brand } from "../components/Brand";
 import { finalBosses } from "../data/finalBosses";
 import { CLASS_CODES } from "../data/roster";
 import type { ClassCode } from "../data/roster";
+import { fetchClassMathlerScores } from "../lib/basicOps/survivalLeaderboard";
+import type { MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
 import { supabase } from "../lib/supabase";
@@ -33,6 +35,7 @@ function csvCell(value: string) {
 
 export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: TeacherDashboardProps) {
   const [rows, setRows] = useState<ClassProgressRow[]>([]);
+  const [mathlerRows, setMathlerRows] = useState<MathlerScoreRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<ClassFilter>("ALL");
@@ -45,8 +48,12 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
     setStatus("loading");
     setError(null);
     try {
-      const data = await fetchClassProgress();
+      const [data, mathler] = await Promise.all([
+        fetchClassProgress(),
+        fetchClassMathlerScores().catch(() => [] as MathlerScoreRow[]),
+      ]);
       setRows(data);
+      setMathlerRows(mathler);
       setStatus("ready");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load submissions.");
@@ -57,6 +64,8 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
   useEffect(() => {
     void load();
   }, [load]);
+
+  const mathlerByLogin = useMemo(() => new Map(mathlerRows.map((row) => [row.login, row])), [mathlerRows]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -74,27 +83,44 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
       const average = students.length
         ? students.reduce((total, row) => total + row.completedBosses.length, 0) / students.length
         : 0;
-      return { code, total: students.length, finished, average };
+      const mathler = mathlerRows.filter((row) => row.class_code === code);
+      const timeAverage = mathler.length
+        ? mathler.reduce((total, row) => total + row.time_attack_best, 0) / mathler.length
+        : 0;
+      return { code, total: students.length, finished, average, mathlerPlayers: mathler.length, timeAverage };
     });
-  }, [rows]);
+  }, [rows, mathlerRows]);
+
+  const mathlerOverview = useMemo(() => {
+    const players = mathlerRows.length;
+    const timeAverage = players ? mathlerRows.reduce((total, row) => total + row.time_attack_best, 0) / players : 0;
+    const bestStreak = mathlerRows.reduce((best, row) => Math.max(best, row.best_streak), 0);
+    return { players, timeAverage, bestStreak };
+  }, [mathlerRows]);
 
   const selected = rows.find((row) => row.student.login === selectedLogin) ?? null;
+  const selectedMathler = selected ? mathlerByLogin.get(selected.student.login) ?? null : null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "bosses", "xp", "updated_at"];
-    const lines = filtered.map((row) =>
-      [
+    const header = ["name", "login", "class", "group", "bosses", "xp", "time_attack_best", "survival_streak", "survival_score", "mathler_updated_at", "updated_at"];
+    const lines = filtered.map((row) => {
+      const mathler = mathlerByLogin.get(row.student.login);
+      return [
         row.student.name,
         row.student.login,
         row.student.classCode,
         row.student.group ?? "",
         `${row.completedBosses.length}/15`,
         String(row.xp),
+        mathler ? String(mathler.time_attack_best) : "",
+        mathler ? String(mathler.best_streak) : "",
+        mathler ? String(mathler.best_score) : "",
+        mathler?.updated_at ?? "",
         row.updatedAt ?? "",
       ]
         .map(csvCell)
-        .join(","),
-    );
+        .join(",");
+    });
     const blob = new Blob([`\uFEFF${[header.join(","), ...lines].join("\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -116,7 +142,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
           <Brand compact />
           <span className="header-divider" />
           <div>
-            <span>MODULE 05</span>
+            <span>MODULES 04 · 05</span>
             <strong id="teacher-title">TEACHER DASHBOARD</strong>
           </div>
         </div>
@@ -146,13 +172,13 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
             >
               <span>{item.code}</span>
               <strong>{item.finished}<small>/{item.total}</small></strong>
-              <em>{item.total ? item.average.toFixed(1) : "0.0"} bosses avg</em>
+              <em>{item.total ? item.average.toFixed(1) : "0.0"} bosses avg{item.mathlerPlayers ? ` · TA ${item.timeAverage.toFixed(1)}` : ""}</em>
             </button>
           ))}
           <button className={`teacher-summary-card ${classFilter === "ALL" ? "is-active" : ""}`} onClick={() => setClassFilter("ALL")}>
             <span>ALL</span>
             <strong>{rows.filter((row) => row.completedBosses.length === finalBosses.length).length}<small>/{rows.length}</small></strong>
-            <em>students with 15/15</em>
+            <em>15/15 · {mathlerOverview.players} Mathler players · TA {mathlerOverview.timeAverage.toFixed(1)} avg</em>
           </button>
         </div>
 
@@ -204,6 +230,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               <span role="columnheader">CLASS</span>
               <span role="columnheader">GROUP</span>
               <span role="columnheader">BOSSES</span>
+              <span role="columnheader">MATHLER</span>
               <span role="columnheader">XP</span>
               <span role="columnheader">UPDATED</span>
             </div>
@@ -224,6 +251,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
             {status === "ready" && filtered.map((row) => {
               const done = row.completedBosses.length;
               const active = row.student.login === selectedLogin;
+              const mathler = mathlerByLogin.get(row.student.login);
               return (
                 <button
                   key={row.student.login}
@@ -241,6 +269,9 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                     {done === finalBosses.length && <Check size={12} />}
                     {done}/15
                     <i><b style={{ width: `${(done / finalBosses.length) * 100}%` }} /></i>
+                  </span>
+                  <span role="cell" className="teacher-mathler-cell">
+                    {mathler ? <>TA <b>{mathler.time_attack_best}</b> · SV <b>{mathler.best_streak}</b></> : "—"}
                   </span>
                   <span role="cell" className="teacher-xp">{row.xp} XP</span>
                   <span role="cell" className="teacher-when">{formatWhen(row.updatedAt)}</span>
@@ -273,6 +304,21 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                       </button>
                     );
                   })}
+                </div>
+                <div className="teacher-mathler">
+                  <div className="teacher-mathler-head">
+                    <span>MODULE 04 · MATHLER GAME</span>
+                    <small>{selectedMathler ? `last played ${formatWhen(selectedMathler.updated_at)}` : "no scores yet"}</small>
+                  </div>
+                  {selectedMathler ? (
+                    <div className="teacher-mathler-stats">
+                      <div><span>TIME ATTACK</span><strong>{selectedMathler.time_attack_best}<small> cleared</small></strong></div>
+                      <div><span>SURVIVAL STREAK</span><strong>{selectedMathler.best_streak}</strong></div>
+                      <div><span>SURVIVAL SCORE</span><strong>{selectedMathler.best_score.toLocaleString("en-US")}</strong></div>
+                    </div>
+                  ) : (
+                    <p className="teacher-mathler-empty">No Mathler Game scores submitted yet.</p>
+                  )}
                 </div>
                 <div className="teacher-code">
                   <div className="teacher-code-head">

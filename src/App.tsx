@@ -32,6 +32,9 @@ const VariableRun = lazy(() =>
 const VariableSprint = lazy(() =>
   import("./views/VariableSprint").then((module) => ({ default: module.VariableSprint })),
 );
+const BasicOperations = lazy(() =>
+  import("./views/BasicOperations").then((module) => ({ default: module.BasicOperations })),
+);
 const FinalBosses = lazy(() =>
   import("./views/FinalBosses").then((module) => ({ default: module.FinalBosses })),
 );
@@ -55,6 +58,7 @@ function screenFromPath(): Screen {
   if (window.location.pathname === "/memory-machine") return "memory-hub";
   if (window.location.pathname === "/writeline") return "writeline";
   if (window.location.pathname === "/stop") return "stop";
+  if (window.location.pathname === "/mathler") return "mathler";
   return "hub";
 }
 
@@ -62,6 +66,7 @@ const paths: Partial<Record<Screen, string>> = {
   hub: "/",
   writeline: "/writeline",
   stop: "/stop",
+  mathler: "/mathler",
   "memory-hub": "/memory-machine",
   "memory-experience": "/memory-machine/experience",
   "variable-run": "/memory-machine/variable-run",
@@ -229,6 +234,7 @@ export default function App() {
               onSignOut={signOut}
               onOpenWriteLine={() => navigate("writeline")}
               onOpenStop={() => navigate("stop")}
+              onOpenMathler={() => navigate("mathler")}
               onOpenMemoryMachine={() => navigate("memory-hub")}
               onOpenFinalBosses={() => navigate("final-bosses")}
             />
@@ -271,6 +277,16 @@ export default function App() {
           {activeScreen === "variable-sprint" && (
             <Suspense fallback={<ModuleLoader />}>
               <VariableSprint onBack={() => navigate("memory-hub")} />
+            </Suspense>
+          )}
+          {activeScreen === "mathler" && (
+            <Suspense fallback={<ModuleLoader />}>
+              <BasicOperations
+                name={name}
+                studentKey={login || name.toLowerCase()}
+                fullAccess={isTeacher || login.toLowerCase() === "leleomaker" || name.toLowerCase() === "leleomaker"}
+                onBack={() => navigate("hub")}
+              />
             </Suspense>
           )}
           {activeScreen === "final-bosses" && (
