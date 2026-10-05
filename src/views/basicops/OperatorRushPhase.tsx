@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, Clock, Flame, Lightbulb, Play, RotateCcw, X, Zap } from "lucide-react";
+import { ArrowRight, Check, Clock, Flame, LifeBuoy, Lightbulb, Play, RotateCcw, X, Zap } from "lucide-react";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
 import { KeypadPanel } from "../../components/basicops/KeypadPanel";
@@ -12,6 +12,7 @@ import { normalizeExpressionInput, resultEquals, validateTokens } from "../../li
 import { recordRushRound, recordRushRun } from "../../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
+import { useRunWave } from "../../lib/basicOps/useRunWave";
 import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "complete";
@@ -52,7 +53,10 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
   const [wrongCount, setWrongCount] = useState(0);
   const [popup, setPopup] = useState<{ points: number; key: number } | null>(null);
   const [earnedXp, setEarnedXp] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [lastMissed, setLastMissed] = useState<string | null>(null);
   const editorRef = useRef<ExpressionEditorHandle>(null);
+  const wave = useRunWave();
 
   const challenge = challenges[Math.min(index, total - 1)];
   useLiveCode("mathler", value, `MODULE 04 · OPERATOR RUSH · ROUND ${round.round}`);
@@ -69,17 +73,21 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
     setOutcome(null);
     setWrongCount(0);
     setChecking(false);
+    setHelpOpen(false);
+    setLastMissed(null);
     setPhase("playing");
     editorRef.current?.focus();
   }, [score, bestCombo]);
 
-  const fail = useCallback((reason: string) => {
+  const fail = useCallback((reason: string, missed?: string) => {
     setRetryReason(reason);
+    setLastMissed(missed ?? null);
     setOutcome("wrong");
     setCombo(0);
     setPhase("retry");
     basicOpsSound.wrong();
-  }, []);
+    wave.resolve("bad");
+  }, [wave]);
 
   const retry = () => {
     setScore(roundStartScore);
@@ -93,6 +101,8 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
     setOutcome(null);
     setWrongCount(0);
     setPopup(null);
+    setHelpOpen(false);
+    setLastMissed(null);
     setPhase("playing");
   };
 
@@ -116,6 +126,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
     setOutcome(null);
     setWrongCount(0);
     setPopup(null);
+    setHelpOpen(false);
     editorRef.current?.focus();
   }, [index, total, progress, round.round, round.seconds, onProgress]);
 
@@ -139,8 +150,8 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
   useEffect(() => {
     if (phase !== "playing" || expired || timeLeft > 0 || checking || outcome === "correct") return;
     setExpired(true);
-    fail("Time ran out.");
-  }, [timeLeft, phase, expired, checking, outcome, fail]);
+    fail("Time ran out.", challenges[Math.min(index, total - 1)]?.referenceExpression);
+  }, [timeLeft, phase, expired, checking, outcome, fail, challenges, index, total]);
 
   const check = useCallback(async () => {
     if (checking || phase !== "playing" || outcome === "correct") return;
@@ -155,7 +166,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
     try {
       const result = await evaluateExpression(expression);
       if (!result.ok) {
-        fail(result.error.message);
+        fail(result.error.message, current.referenceExpression);
         return;
       }
       const violations = validateTokens(result.tokens, {
@@ -164,7 +175,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
         allowedOperators: current.allowedOperators,
       });
       if (violations.length || !resultEquals(result.value, current.expectedResult)) {
-        fail(violations[0]?.message ?? `Output ${result.output}; expected ${current.expectedResult}.`);
+        fail(violations[0]?.message ?? `Output ${result.output}; expected ${current.expectedResult}.`, current.referenceExpression);
         return;
       }
 
@@ -180,21 +191,23 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
       setOutcome("correct");
       if (nextCombo >= 2) basicOpsSound.combo(nextCombo);
       else basicOpsSound.correct();
+      wave.resolve("good");
     } finally {
       setChecking(false);
     }
-  }, [checking, phase, outcome, expired, challenges, index, value, round.seconds, timeLeft, combo, fail]);
+  }, [checking, phase, outcome, expired, challenges, index, value, round.seconds, timeLeft, combo, fail, wave]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
+        wave.fire();
         void check();
       }
     };
     window.addEventListener("keydown", keyboardRun);
     return () => window.removeEventListener("keydown", keyboardRun);
-  }, [check]);
+  }, [check, wave]);
 
   const finishRun = useCallback(() => {
     const outcomeRecord = recordRushRun(progress, score, Math.max(bestCombo, combo));
@@ -276,7 +289,37 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
                 <span className="bo-rush-meter"><Zap size={14} /> SCORE <b>{score.toLocaleString("en-US")}</b></span>
                 <span className={`bo-rush-meter ${combo >= 2 ? "is-hot" : ""}`}><Flame size={14} /> COMBO <b>x{Math.max(combo, 1)}</b></span>
               </div>
-              <LevelProgress label="ROUND PROGRESS" total={total} completed={index + (outcome === "correct" ? 1 : 0)} />
+              <div className="bo-rush-controls">
+                <button
+                  type="button"
+                  className={`bo-help-button ${helpOpen ? "is-open" : ""}`}
+                  onClick={() => setHelpOpen((open) => !open)}
+                  aria-expanded={helpOpen}
+                >
+                  <LifeBuoy size={14} /> NEED SOME HELP?
+                </button>
+                <div className="bo-rush-rounds" role="group" aria-label={`Rush rounds: ${progress.rush.roundsCleared} of ${RUSH_ROUNDS.length}`}>
+                  {RUSH_ROUNDS.map((item) => {
+                    const passed = item.round <= progress.rush.roundsCleared;
+                    const isCurrent = item.round === round.round;
+                    return passed && !isCurrent ? (
+                      <button
+                        type="button"
+                        key={item.round}
+                        className="is-done"
+                        onClick={() => openRound(item.round - 1)}
+                        aria-label={`Redo round ${item.round}: ${item.label}`}
+                        title={`Redo round ${item.round} — ${item.label}`}
+                      >
+                        {item.round}
+                      </button>
+                    ) : (
+                      <i key={item.round} className={`${passed ? "is-done" : ""} ${isCurrent ? "is-current" : ""}`}>{item.round}</i>
+                    );
+                  })}
+                </div>
+                <LevelProgress label="ROUND PROGRESS" total={total} completed={index + (outcome === "correct" ? 1 : 0)} />
+              </div>
             </div>
           </div>
 
@@ -327,13 +370,20 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
                     ref={editorRef}
                     value={value}
                     onChange={(next) => { setValue(next); if (outcome === "wrong") setOutcome(null); }}
-                    onRun={() => void check()}
+                    onRun={() => { wave.fire(); void check(); }}
                     disabled={checking || outcome === "correct"}
                     placeholder="type the C# expression"
                     compact
                     focusOnMount
                     keypadOnlyOnIPad
                   />
+
+                  {helpOpen && (
+                    <div className="bo-answer-help" role="status">
+                      <span><LifeBuoy size={13} aria-hidden="true" /> CORRECT ANSWER</span>
+                      <code>double result = {current.referenceExpression};</code>
+                    </div>
+                  )}
 
                   <div className={`bo-code-status is-${statusTone}`} role="status" aria-live="polite">
                     <span className="bo-status-icon">
@@ -367,7 +417,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
 
                   <div className="bo-run-row">
                     <span className="bo-run-note">CTRL / ⌘ + ENTER</span>
-                    <button className="run-button bo-run" onClick={() => void check()} disabled={checking || !value.trim() || outcome === "correct"}>
+                    <button className="run-button bo-run" onClick={(event) => { wave.fire(event); void check(); }} disabled={checking || !value.trim() || outcome === "correct"}>
                       <span>{checking ? "CHECKING" : "RUN"}</span>
                       <Play size={16} fill="currentColor" />
                     </button>
@@ -377,7 +427,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
             </div>
 
         <KeypadPanel
-          onRun={() => void check()}
+          onRun={(event) => { wave.fire(event); void check(); }}
               disabled={checking || outcome === "correct"}
               onInsert={(symbol) => editorRef.current?.insert(symbol)}
               onBackspace={() => editorRef.current?.backspace()}
@@ -395,6 +445,7 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
             <span className="bo-kicker">RUSH PAUSED · PHASE {round.round} / {RUSH_ROUNDS.length}</span>
             <h1>Try the run again.</h1>
             <p>{retryReason} Restart {round.label} with four new expressions.</p>
+            {lastMissed && <code className="bo-win-code">double result = {lastMissed};</code>}
             <div className="bo-complete-actions">
               <button className="bo-primary" onClick={retry}><RotateCcw size={17} /> RESTART ROUND</button>
               <button className="bo-secondary" onClick={onHome}>MODULE HOME</button>

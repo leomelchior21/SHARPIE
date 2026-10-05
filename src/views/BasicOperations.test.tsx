@@ -16,6 +16,9 @@ vi.mock("../lib/basicOps/survivalLeaderboard", () => ({
   submitSurvivalScore: vi.fn(() => Promise.resolve()),
   fetchTimeAttackLeaderboard: vi.fn(() => Promise.resolve([])),
   submitTimeAttackScore: vi.fn(() => Promise.resolve()),
+  fetchClassMathlerProgress: vi.fn(() => Promise.resolve([])),
+  pushMathlerProgress: vi.fn(() => Promise.resolve()),
+  queueMathlerProgressSync: vi.fn(),
 }));
 
 describe("BasicOperations module intro", () => {
@@ -179,7 +182,7 @@ describe("BasicOperations module intro", () => {
     fireEvent.click(screen.getByRole("button", { name: "RUN" }));
     fireEvent.click(await screen.findByRole("button", { name: "RESTART ROUND" }));
     expect(screen.getByRole("heading", { name: /Round 04 — DIVISION & REMAINDER/ })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "ROUND PROGRESS: 0 of 4" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "ROUND PROGRESS: 0 of 4" })).toBeInTheDocument();
   });
 
   it("opens procedural Survival after the twelve guided Target steps", async () => {
@@ -236,12 +239,12 @@ describe("BasicOperations module intro", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "REPLAY TRANSLATIONS" }));
     expect(screen.getByRole("heading", { name: "Warmup — Addition" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: `LEVEL PROGRESS: 0 of ${WARMUP_TOTAL}` })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: `LEVEL PROGRESS: 0 of ${WARMUP_TOTAL}` })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /MODULE/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "REPLAY TARGET WARM UP" }));
     expect(screen.getByRole("heading", { name: "TARGET — Find the expression" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Target progress: 0 of 12" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Target progress: 0 of 12" })).toBeInTheDocument();
   });
 
   it("shows a successful Target attempt in the workbench", async () => {
@@ -261,6 +264,71 @@ describe("BasicOperations module intro", () => {
     expect(await screen.findByText("MATCHED TARGET")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /NEXT PUZZLE/ })).toBeInTheDocument();
     expect(screen.queryByText("You cracked the target.")).not.toBeInTheDocument();
+  });
+
+  it("unlocks the Target answer help only after a mistake", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.42);
+    const seed = moduleSeed();
+    const puzzle = generateTargetTutorialPuzzles(seed)[0];
+    const progress = createBasicOpsProgress();
+    progress.target.tutorialSeed = seed;
+    saveBasicOpsProgress(progress, "ada");
+    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    fireEvent.click(screen.getByText("WARM UP"));
+
+    expect(screen.getByRole("button", { name: /NEED SOME HELP/ })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), { target: { value: String(puzzle.numbers[0]) } });
+    fireEvent.click(screen.getByRole("button", { name: /^RUN/ }));
+    await screen.findByText(/RULE ERROR|OUTPUT/);
+
+    const help = screen.getByRole("button", { name: /NEED SOME HELP/ });
+    expect(help).toBeEnabled();
+    fireEvent.click(help);
+    expect(screen.getByText("CORRECT ANSWER")).toBeInTheDocument();
+    expect(screen.getByText(`double result = ${puzzle.referenceExpression};`)).toBeInTheDocument();
+  });
+
+  it("lets students redo a passed warmup step without skipping ahead", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.42);
+    const challenge = generateWarmupChallenges(moduleSeed())[0];
+    const progress = createBasicOpsProgress();
+    progress.translate.warmupSolved = 3;
+    saveBasicOpsProgress(progress, "ada");
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /START MODULE/ }));
+    expect(screen.getByRole("heading", { name: "Warmup — Subtraction" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo level progress step 1" }));
+    expect(screen.getByRole("heading", { name: "Warmup — Addition" })).toBeInTheDocument();
+    expect(screen.getByText(/EXAMPLE 1 \/ 12/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), { target: { value: challenge.referenceExpression } });
+    fireEvent.click(screen.getByRole("button", { name: /RUN \/ CHECK/ }));
+    expect(await screen.findByText("CORRECT!")).toBeInTheDocument();
+    expect(loadBasicOpsProgress("ada").translate.warmupSolved).toBe(3);
+  });
+
+  it("lets students redo a passed Target step", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.42);
+    const seed = moduleSeed();
+    const progress = createBasicOpsProgress();
+    progress.target.tutorialSeed = seed;
+    progress.target.completed = ["target-01", "target-02"];
+    saveBasicOpsProgress(progress, "ada");
+    render(<BasicOperations name="Ada" studentKey="ada" fullAccess onBack={() => undefined} />);
+    fireEvent.click(screen.getByText("WARM UP"));
+
+    expect(screen.getByText("STEP 3 / 12")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Redo step 1" }));
+    expect(screen.getByText("STEP 1 / 12")).toBeInTheDocument();
+  });
+
+  it("fires a run wave from the RUN button", () => {
+    render(<BasicOperations name="Ada" studentKey="ada" onBack={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /START MODULE/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "C# expression after double result" }), { target: { value: "1 + 1" } });
+    fireEvent.click(screen.getByRole("button", { name: /RUN \/ CHECK/ }));
+    expect(document.querySelector(".bo-run-wave")).not.toBeNull();
   });
 });
 
@@ -386,5 +454,19 @@ describe("Mathler Game modes", () => {
     await act(async () => { resolveCheck(result); });
     expect(submitSurvivalScore).not.toHaveBeenCalled();
     expect(loadBasicOpsProgress("ada").target.survivalBestStreak).toBe(0);
+  });
+
+  it("shows the target left and the stacked requirements right in the game HUD", () => {
+    openGame("SURVIVAL");
+    const focus = document.querySelector(".bo-game-focus");
+    expect(focus).not.toBeNull();
+    const target = focus!.querySelector(".bo-target-result");
+    expect(target).not.toBeNull();
+    const groups = focus!.querySelectorAll(".bo-chip-group");
+    expect(groups).toHaveLength(2);
+    expect(groups[0].textContent).toContain("USE THESE NUMBERS");
+    expect(groups[1].textContent).toContain("AVAILABLE OPERATORS");
+    expect(groups[0].querySelector(".bo-number-chip")).not.toBeNull();
+    expect(groups[1].querySelector(".bo-op-chip")).not.toBeNull();
   });
 });

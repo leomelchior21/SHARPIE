@@ -94,3 +94,68 @@ $$;
 
 revoke all on function public.sharpie_record_mathler_time_attack(integer) from public;
 grant execute on function public.sharpie_record_mathler_time_attack(integer) to authenticated;
+
+-- Module 04 progress sync so the teacher dashboard can track the three steps.
+create table if not exists public.sharpie_mathler_progress (
+  login text primary key references public.sharpie_students (login) on delete cascade,
+  display_name text not null,
+  class_code text not null,
+  warmup_solved integer not null default 0 check (warmup_solved >= 0),
+  rush_completed boolean not null default false,
+  rush_rounds integer not null default 0 check (rush_rounds >= 0),
+  target_completed integer not null default 0 check (target_completed >= 0),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.sharpie_mathler_progress enable row level security;
+
+drop policy if exists sharpie_mathler_progress_read on public.sharpie_mathler_progress;
+create policy sharpie_mathler_progress_read on public.sharpie_mathler_progress
+  for select to authenticated using (true);
+
+grant select on public.sharpie_mathler_progress to authenticated;
+
+create or replace function public.sharpie_record_mathler_progress(
+  p_warmup integer,
+  p_rush_completed boolean,
+  p_rush_rounds integer,
+  p_target integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  student_row public.sharpie_students%rowtype;
+begin
+  if auth.uid() is null
+    or p_warmup < 0 or p_warmup > 1000
+    or p_rush_rounds < 0 or p_rush_rounds > 100
+    or p_target < 0 or p_target > 1000 then
+    raise exception 'Invalid mathler progress';
+  end if;
+
+  select * into student_row from public.sharpie_students
+  where login = public.sharpie_login();
+  if not found then
+    raise exception 'Student account not found';
+  end if;
+
+  insert into public.sharpie_mathler_progress
+    (login, display_name, class_code, warmup_solved, rush_completed, rush_rounds, target_completed)
+  values
+    (student_row.login, student_row.display_name, student_row.class_code, p_warmup, p_rush_completed, p_rush_rounds, p_target)
+  on conflict (login) do update set
+    display_name = excluded.display_name,
+    class_code = excluded.class_code,
+    warmup_solved = greatest(public.sharpie_mathler_progress.warmup_solved, excluded.warmup_solved),
+    rush_completed = public.sharpie_mathler_progress.rush_completed or excluded.rush_completed,
+    rush_rounds = greatest(public.sharpie_mathler_progress.rush_rounds, excluded.rush_rounds),
+    target_completed = greatest(public.sharpie_mathler_progress.target_completed, excluded.target_completed),
+    updated_at = now();
+end;
+$$;
+
+revoke all on function public.sharpie_record_mathler_progress(integer, boolean, integer, integer) from public;
+grant execute on function public.sharpie_record_mathler_progress(integer, boolean, integer, integer) to authenticated;

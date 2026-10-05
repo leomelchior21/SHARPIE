@@ -20,6 +20,7 @@ import type { ExpressionRules } from "../../lib/basicOps/expression";
 import { recordWarmupSolve } from "../../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
+import { useRunWave } from "../../lib/basicOps/useRunWave";
 import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "complete";
@@ -76,6 +77,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
   const [levelXp, setLevelXp] = useState(0);
   const [engine, setEngine] = useState<"loading" | "ready" | "local">("loading");
   const editorRef = useRef<ExpressionEditorHandle>(null);
+  const wave = useRunWave();
 
   const challenge = challenges[Math.min(index, total - 1)];
   const meta = TRANSLATE_LEVELS[challenge.level - 1];
@@ -127,6 +129,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
     setFeedback({ tone: "wrong", title: "NOT QUITE", message, detail, ...extra });
     setShakeKey((key) => key + 1);
     basicOpsSound.wrong();
+    wave.resolve("bad");
   };
 
   const check = useCallback(async () => {
@@ -160,7 +163,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
         return;
       }
 
-      const outcome = recordWarmupSolve(progress, usedHint);
+      const outcome = recordWarmupSolve(progress, usedHint, index);
       onProgress(outcome.progress);
       setLevelXp((xp) => xp + outcome.xp);
       setFeedback({
@@ -189,21 +192,23 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
         }
       }
       basicOpsSound.correct();
+      wave.resolve("good");
     } finally {
       setChecking(false);
     }
-  }, [checking, phase, feedback, challenges, index, value, wrongCount, progress, usedHint, onProgress]);
+  }, [checking, phase, feedback, challenges, index, value, wrongCount, progress, usedHint, onProgress, wave]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
+        wave.fire();
         void check();
       }
     };
     window.addEventListener("keydown", keyboardRun);
     return () => window.removeEventListener("keydown", keyboardRun);
-  }, [check]);
+  }, [check, wave]);
 
   const changeValue = (next: string) => {
     setValue(next);
@@ -215,6 +220,14 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
     editorRef.current?.clear();
     setFeedback(null);
     editorRef.current?.focus();
+  };
+
+  const goToExample = (step: number) => {
+    setPairNotice(null);
+    resetChallengeState(step - 1);
+    setPhase("playing");
+    basicOpsSound.click();
+    window.requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   const showHint = () => {
@@ -281,7 +294,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
             </div>
             <div className="bo-head-side">
               <span className="bo-engine-chip"><i className={engine === "ready" ? "is-live" : ""} /> {engine === "ready" ? "C# READY" : engine === "local" ? "LOCAL CHECK" : "LOADING C#"}</span>
-              <LevelProgress total={total} completed={solvedDisplay} />
+              <LevelProgress total={total} completed={solvedDisplay} onSelect={goToExample} />
             </div>
           </div>
 
@@ -399,7 +412,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
 
                   <div className="bo-run-row">
                     <span className="bo-run-note">CTRL / ⌘ + ENTER</span>
-                    <button className="run-button bo-run" onClick={() => void check()} disabled={checking || !value.trim()}>
+                    <button className="run-button bo-run" onClick={(event) => { wave.fire(event); void check(); }} disabled={checking || !value.trim()}>
                       <span>{checking ? "CHECKING" : "RUN / CHECK"}</span>
                       <Play size={17} fill="currentColor" />
                     </button>
@@ -409,7 +422,7 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
             </div>
 
             <KeypadPanel
-              onRun={() => void check()}
+              onRun={(event) => { wave.fire(event); void check(); }}
               disabled={checking || feedback?.tone === "correct"}
               onInsert={(symbol) => editorRef.current?.insert(symbol)}
               onBackspace={() => editorRef.current?.backspace()}

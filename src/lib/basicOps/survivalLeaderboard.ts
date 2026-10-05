@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import type { BasicOpsProgress } from "./progress";
 
 export type SurvivalLeader = {
   display_name: string;
@@ -70,4 +71,48 @@ export async function submitSurvivalScore(score: number, streak: number): Promis
     p_streak: streak,
   });
   if (error) throw new Error(error.message);
+}
+
+export type MathlerProgressRow = {
+  login: string;
+  display_name: string;
+  class_code: string;
+  warmup_solved: number;
+  rush_completed: boolean;
+  rush_rounds: number;
+  target_completed: number;
+  updated_at: string | null;
+};
+
+export async function fetchClassMathlerProgress(): Promise<MathlerProgressRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("sharpie_mathler_progress")
+    .select("login,display_name,class_code,warmup_solved,rush_completed,rush_rounds,target_completed,updated_at");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MathlerProgressRow[];
+}
+
+export async function pushMathlerProgress(progress: BasicOpsProgress): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.rpc("sharpie_record_mathler_progress", {
+    p_warmup: progress.translate.warmupSolved,
+    p_rush_completed: progress.rush.completed,
+    p_rush_rounds: progress.rush.roundsCleared,
+    p_target: progress.target.completed.length,
+  });
+  if (error) throw new Error(error.message);
+}
+
+let pendingProgressTimer: number | null = null;
+
+export function queueMathlerProgressSync(progress: BasicOpsProgress) {
+  if (!supabase || typeof window === "undefined") return;
+  if (pendingProgressTimer !== null) window.clearTimeout(pendingProgressTimer);
+  pendingProgressTimer = window.setTimeout(() => {
+    pendingProgressTimer = null;
+    void pushMathlerProgress(progress).catch(() => {
+      // Offline or transient failure: the local draft stays authoritative.
+    });
+  }, 900);
 }

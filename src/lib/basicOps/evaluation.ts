@@ -23,7 +23,10 @@ export async function evaluateExpression(input: string): Promise<ExpressionAnaly
   if (!analysis.ok) return { ...analysis, engine: false };
 
   try {
-    const program = `double result = ${input.trim()};\nConsole.WriteLine(result);`;
+    const doubleExpression = analysis.tokens
+      .map((token) => (token.kind === "number" && !token.decimal ? `${token.text}.0` : token.text))
+      .join(" ");
+    const program = `double result = ${doubleExpression};\nConsole.WriteLine(result);`;
     const run = await executeCSharp(program);
     if (run.success) {
       const value = Number(run.output.trim());

@@ -1,11 +1,12 @@
 import { ArrowLeft, Check, Download, Eye, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
+import { TARGET_PUZZLES, WARMUP_TOTAL } from "../data/basicOperations";
 import { finalBosses } from "../data/finalBosses";
 import { CLASS_CODES } from "../data/roster";
 import type { ClassCode } from "../data/roster";
-import { fetchClassMathlerScores } from "../lib/basicOps/survivalLeaderboard";
-import type { MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
+import { fetchClassMathlerProgress, fetchClassMathlerScores } from "../lib/basicOps/survivalLeaderboard";
+import type { MathlerProgressRow, MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
 import { supabase } from "../lib/supabase";
@@ -36,6 +37,7 @@ function csvCell(value: string) {
 export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: TeacherDashboardProps) {
   const [rows, setRows] = useState<ClassProgressRow[]>([]);
   const [mathlerRows, setMathlerRows] = useState<MathlerScoreRow[]>([]);
+  const [mathlerProgress, setMathlerProgress] = useState<MathlerProgressRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<ClassFilter>("ALL");
@@ -48,12 +50,14 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
     setStatus("loading");
     setError(null);
     try {
-      const [data, mathler] = await Promise.all([
+      const [data, mathler, mathlerSteps] = await Promise.all([
         fetchClassProgress(),
         fetchClassMathlerScores().catch(() => [] as MathlerScoreRow[]),
+        fetchClassMathlerProgress().catch(() => [] as MathlerProgressRow[]),
       ]);
       setRows(data);
       setMathlerRows(mathler);
+      setMathlerProgress(mathlerSteps);
       setStatus("ready");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load submissions.");
@@ -66,6 +70,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
   }, [load]);
 
   const mathlerByLogin = useMemo(() => new Map(mathlerRows.map((row) => [row.login, row])), [mathlerRows]);
+  const mathlerStepsByLogin = useMemo(() => new Map(mathlerProgress.map((row) => [row.login, row])), [mathlerProgress]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -100,22 +105,27 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
 
   const selected = rows.find((row) => row.student.login === selectedLogin) ?? null;
   const selectedMathler = selected ? mathlerByLogin.get(selected.student.login) ?? null : null;
+  const selectedSteps = selected ? mathlerStepsByLogin.get(selected.student.login) ?? null : null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "bosses", "xp", "time_attack_best", "survival_streak", "survival_score", "mathler_updated_at", "updated_at"];
+    const header = ["name", "login", "class", "group", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "updated_at"];
     const lines = filtered.map((row) => {
       const mathler = mathlerByLogin.get(row.student.login);
+      const steps = mathlerStepsByLogin.get(row.student.login);
       return [
         row.student.name,
         row.student.login,
         row.student.classCode,
         row.student.group ?? "",
-        `${row.completedBosses.length}/15`,
-        String(row.xp),
+        steps ? String(steps.warmup_solved) : "",
+        steps ? String(steps.rush_completed) : "",
+        steps ? String(steps.rush_rounds) : "",
+        steps ? String(steps.target_completed) : "",
         mathler ? String(mathler.time_attack_best) : "",
         mathler ? String(mathler.best_streak) : "",
         mathler ? String(mathler.best_score) : "",
-        mathler?.updated_at ?? "",
+        `${row.completedBosses.length}/15`,
+        String(row.xp),
         row.updatedAt ?? "",
       ]
         .map(csvCell)
@@ -229,10 +239,9 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               <span role="columnheader">STUDENT</span>
               <span role="columnheader">CLASS</span>
               <span role="columnheader">GROUP</span>
-              <span role="columnheader">BOSSES</span>
               <span role="columnheader">MATHLER</span>
+              <span role="columnheader">BOSSES</span>
               <span role="columnheader">XP</span>
-              <span role="columnheader">UPDATED</span>
             </div>
 
             {status === "loading" && (
@@ -252,6 +261,10 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               const done = row.completedBosses.length;
               const active = row.student.login === selectedLogin;
               const mathler = mathlerByLogin.get(row.student.login);
+              const steps = mathlerStepsByLogin.get(row.student.login);
+              const translateDone = Boolean(steps && steps.warmup_solved >= WARMUP_TOTAL && steps.rush_completed);
+              const targetDone = Boolean(steps && steps.target_completed >= TARGET_PUZZLES.length);
+              const gamePlayed = Boolean(mathler && (mathler.time_attack_best > 0 || mathler.best_streak > 0));
               return (
                 <button
                   key={row.student.login}
@@ -265,16 +278,17 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                   </span>
                   <span role="cell">{row.student.classCode}</span>
                   <span role="cell">{row.student.group ?? "—"}</span>
+                  <span role="cell" className="teacher-mathler-cell">
+                    <b className={translateDone ? "is-done" : ""} title={steps ? `Translate: ${steps.warmup_solved}/${WARMUP_TOTAL} examples · rush ${steps.rush_completed ? "complete" : `${steps.rush_rounds}/5`}` : "Translate: not started"}>T</b>
+                    <b className={targetDone ? "is-done" : ""} title={steps ? `Warm up: ${steps.target_completed}/${TARGET_PUZZLES.length} steps` : "Warm up: not started"}>W</b>
+                    <b className={gamePlayed ? "is-done" : ""} title={mathler ? `Mathler game: TA ${mathler.time_attack_best} · SV ${mathler.best_streak}` : "Mathler game: not played"}>G</b>
+                  </span>
                   <span role="cell" className={`teacher-progress ${done === finalBosses.length ? "is-done" : ""}`}>
                     {done === finalBosses.length && <Check size={12} />}
                     {done}/15
                     <i><b style={{ width: `${(done / finalBosses.length) * 100}%` }} /></i>
                   </span>
-                  <span role="cell" className="teacher-mathler-cell">
-                    {mathler ? <>TA <b>{mathler.time_attack_best}</b> · SV <b>{mathler.best_streak}</b></> : "—"}
-                  </span>
                   <span role="cell" className="teacher-xp">{row.xp} XP</span>
-                  <span role="cell" className="teacher-when">{formatWhen(row.updatedAt)}</span>
                 </button>
               );
             })}
@@ -289,6 +303,32 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                   <strong>{selected.student.name}</strong>
                   <span>{selected.student.classCode} · {selected.student.group ?? "no group"} · {selected.xp} XP</span>
                 </header>
+                <div className="teacher-mathler">
+                  <div className="teacher-mathler-head">
+                    <span>MODULE 04 · MATHLER · 3 STEPS</span>
+                    <small>{selectedSteps?.updated_at ? `updated ${formatWhen(selectedSteps.updated_at)}` : selectedMathler ? `last played ${formatWhen(selectedMathler.updated_at)}` : "not started"}</small>
+                  </div>
+                  <div className="teacher-mathler-steps">
+                    <div className={selectedSteps && selectedSteps.warmup_solved >= WARMUP_TOTAL && selectedSteps.rush_completed ? "is-done" : ""}>
+                      <span>01 · TRANSLATE</span>
+                      <strong>
+                        {selectedSteps ? `${Math.min(selectedSteps.warmup_solved, WARMUP_TOTAL)} / ${WARMUP_TOTAL}` : "—"}
+                        {selectedSteps ? (selectedSteps.rush_completed ? " · RUSH ✓" : ` · RUSH ${selectedSteps.rush_rounds}/5`) : ""}
+                      </strong>
+                      <i><b style={{ width: `${selectedSteps ? Math.min(100, (selectedSteps.warmup_solved / WARMUP_TOTAL) * 100) : 0}%` }} /></i>
+                    </div>
+                    <div className={selectedSteps && selectedSteps.target_completed >= TARGET_PUZZLES.length ? "is-done" : ""}>
+                      <span>02 · WARM UP</span>
+                      <strong>{selectedSteps ? `${Math.min(selectedSteps.target_completed, TARGET_PUZZLES.length)} / ${TARGET_PUZZLES.length} steps` : "—"}</strong>
+                      <i><b style={{ width: `${selectedSteps ? Math.min(100, (selectedSteps.target_completed / TARGET_PUZZLES.length) * 100) : 0}%` }} /></i>
+                    </div>
+                    <div className={selectedMathler && (selectedMathler.time_attack_best > 0 || selectedMathler.best_streak > 0) ? "is-done" : ""}>
+                      <span>03 · MATHLER GAME</span>
+                      <strong>TA {selectedMathler?.time_attack_best ?? 0} · SV {selectedMathler?.best_streak ?? 0} · {(selectedMathler?.best_score ?? 0).toLocaleString("en-US")} pts</strong>
+                      <i><b style={{ width: `${selectedMathler && (selectedMathler.time_attack_best > 0 || selectedMathler.best_streak > 0) ? 100 : 0}%` }} /></i>
+                    </div>
+                  </div>
+                </div>
                 <div className="teacher-boss-grid">
                   {finalBosses.map((boss) => {
                     const passed = selected.completedBosses.includes(boss.id);
@@ -304,21 +344,6 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                       </button>
                     );
                   })}
-                </div>
-                <div className="teacher-mathler">
-                  <div className="teacher-mathler-head">
-                    <span>MODULE 04 · MATHLER GAME</span>
-                    <small>{selectedMathler ? `last played ${formatWhen(selectedMathler.updated_at)}` : "no scores yet"}</small>
-                  </div>
-                  {selectedMathler ? (
-                    <div className="teacher-mathler-stats">
-                      <div><span>TIME ATTACK</span><strong>{selectedMathler.time_attack_best}<small> cleared</small></strong></div>
-                      <div><span>SURVIVAL STREAK</span><strong>{selectedMathler.best_streak}</strong></div>
-                      <div><span>SURVIVAL SCORE</span><strong>{selectedMathler.best_score.toLocaleString("en-US")}</strong></div>
-                    </div>
-                  ) : (
-                    <p className="teacher-mathler-empty">No Mathler Game scores submitted yet.</p>
-                  )}
                 </div>
                 <div className="teacher-code">
                   <div className="teacher-code-head">

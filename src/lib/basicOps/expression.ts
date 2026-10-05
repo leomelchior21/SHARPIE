@@ -164,13 +164,13 @@ function applyBinaryExpression(operator: string, left: NumericValue, right: Nume
       value = left.value * right.value;
       break;
     case "/":
-      value = left.kind === "int" && right.kind === "int" ? Math.trunc(left.value / right.value) : left.value / right.value;
+      value = left.value / right.value;
       break;
     default:
       value = left.value % right.value;
       break;
   }
-  const kind: NumericValue["kind"] = left.kind === "double" || right.kind === "double" ? "double" : "int";
+  const kind: NumericValue["kind"] = left.kind === "double" || right.kind === "double" || operator === "/" ? "double" : "int";
   return { kind, value: Object.is(value, -0) ? 0 : value };
 }
 

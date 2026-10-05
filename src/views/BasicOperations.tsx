@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { loadBasicOpsProgress, rushComplete, saveBasicOpsProgress, setSoundEnabled, targetComplete, translateComplete } from "../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../lib/basicOps/progress";
 import { basicOpsSound } from "../lib/basicOps/sound";
+import { queueMathlerProgressSync } from "../lib/basicOps/survivalLeaderboard";
 import { ModuleComplete } from "./basicops/ModuleComplete";
 import { ModuleIntro } from "./basicops/ModuleIntro";
 import { OperatorRushPhase } from "./basicops/OperatorRushPhase";
@@ -29,6 +30,7 @@ export function BasicOperations({ name, studentKey, fullAccess = false, onBack }
     (next: BasicOpsProgress) => {
       setProgress(next);
       saveBasicOpsProgress(next, studentKey);
+      if (studentKey) queueMathlerProgressSync(next);
     },
     [studentKey],
   );

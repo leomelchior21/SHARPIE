@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Calculator, Check, Hash, LayoutGrid, Lightbulb, LogOut, Play, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Calculator, Check, Hash, LayoutGrid, LifeBuoy, Lightbulb, LogOut, Play, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Brand } from "../../components/Brand";
 import { ExpressionEditor } from "../../components/basicops/ExpressionEditor";
 import type { ExpressionEditorHandle } from "../../components/basicops/ExpressionEditor";
@@ -17,6 +17,7 @@ import {
 } from "../../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
+import { useRunWave } from "../../lib/basicOps/useRunWave";
 import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "game" | "complete";
@@ -83,7 +84,9 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
   const [win, setWin] = useState<WinState | null>(null);
   const [hintsRevealed, setHintsRevealed] = useState(() => replay ? 0 : Math.min(progress.target.hintsUsed[puzzle.id] ?? 0, puzzle.hints.length));
   const [hintFlash, setHintFlash] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
   const editorRef = useRef<ExpressionEditorHandle>(null);
+  const wave = useRunWave();
 
   useLiveCode("mathler", value, `MODULE 04 · TARGET · PUZZLE ${puzzle.index}`);
 
@@ -97,12 +100,16 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
     setValue("");
     setCheck(null);
     setWin(null);
+    setHelpOpen(false);
     editorRef.current?.focus();
   }, [puzzle.id, progress.target.attempts, progress.target.hintsUsed, puzzle.hints.length, replay]);
 
+  const [solvedIds, setSolvedIds] = useState<Set<string>>(() => replay ? new Set<string>() : new Set(progress.target.completed));
   const remaining = Math.max(MAX_TARGET_ATTEMPTS - attemptsUsed, 0);
   const exhausted = exhaustedState(attemptsUsed, win);
-  const completedCount = replay ? puzzleIndex - 1 + (win ? 1 : 0) : progress.target.completed.length;
+  const completedCount = solvedIds.size;
+  const madeMistake = history.some((record) => record.status !== "win");
+  const canHelp = !win && !exhausted && madeMistake;
 
   const liveTokens = useMemo(() => safeTokens(value), [value]);
   const numberChips = useMemo(() => {
@@ -145,6 +152,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
         setHistory((list) => [...list, { n: attemptNumber, expression, tokens: result.tokens, status: "invalid", message: result.error.message }]);
         setCheck({ tone: "invalid", title: "SYNTAX ERROR", message: result.error.message, detail: result.error.detail });
         basicOpsSound.wrong();
+        wave.resolve("bad");
         return;
       }
 
@@ -162,11 +170,13 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
       if (reachedTarget && violations.length === 0) {
         const solved = recordTargetSolve(withAttempt, puzzle.id);
         if (!replay) onProgress(solved.progress);
+        setSolvedIds((current) => new Set(current).add(puzzle.id));
         setHistory((list) => [...list, { n: attemptNumber, expression, tokens: result.tokens, output: result.output, status: "win" }]);
         const alternative = tokensDiffer(result.tokens, puzzle.referenceExpression);
         setWin({ attempt: attemptNumber, alternative, expression, output: result.output, xp: solved.xp });
         setCheck({ tone: "miss", title: "OUTPUT", message: `${result.output}`, detail: "Target reached.", output: result.output, expected: String(puzzle.target) });
         basicOpsSound.win();
+        wave.resolve("good");
         return;
       }
 
@@ -175,6 +185,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
         setHistory((list) => [...list, { n: attemptNumber, expression, tokens: result.tokens, output: result.output, status: "rule", message: violations[0].message }]);
         setCheck({ tone: "rule", title: "RULE ERROR", message: violations[0].message, detail: violations[0].detail, output: result.output, expected: String(puzzle.target) });
         basicOpsSound.wrong();
+        wave.resolve("bad");
         return;
       }
 
@@ -189,21 +200,23 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
         expected: String(puzzle.target),
       });
       basicOpsSound.wrong();
+      wave.resolve("bad");
     } finally {
       setChecking(false);
     }
-  }, [checking, win, exhausted, value, attemptsUsed, progress, puzzle, onProgress, replay]);
+  }, [checking, win, exhausted, value, attemptsUsed, progress, puzzle, onProgress, replay, wave]);
 
   useEffect(() => {
     const keyboardRun = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
+        wave.fire();
         void runCheck();
       }
     };
     window.addEventListener("keydown", keyboardRun);
     return () => window.removeEventListener("keydown", keyboardRun);
-  }, [runCheck]);
+  }, [runCheck, wave]);
 
   const showHint = () => {
     if (hintsRevealed >= puzzle.hints.length || win) return;
@@ -241,7 +254,14 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
     setValue("");
     setCheck(null);
     setWin(null);
+    setHelpOpen(false);
     editorRef.current?.focus();
+  };
+
+  const goToPuzzle = (step: number) => {
+    if (step === puzzleIndex) return;
+    setPuzzleIndex(step);
+    basicOpsSound.click();
   };
 
   const tryAnother = () => {
@@ -276,9 +296,38 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
           <p>Build a valid C# expression that reaches the target result.</p>
         </div>
         <div className="bo-head-side">
-          <div className="bo-target-step-progress" role="img" aria-label={`Target progress: ${completedCount} of ${puzzles.length}`}>
-            <span>{puzzle.index === puzzles.length ? "FINAL" : "STEP"} {puzzle.index} / {puzzles.length}</span>
-            <div aria-hidden="true">{puzzles.map((item) => <i key={item.id} className={item.index <= completedCount ? "is-done" : item.index === puzzleIndex ? "is-current" : ""} />)}</div>
+          <div className="bo-target-step-progress" role="group" aria-label={`Target progress: ${completedCount} of ${puzzles.length}`}>
+            <button
+              type="button"
+              className={`bo-help-button ${helpOpen ? "is-open" : ""} ${canHelp && !helpOpen ? "is-ready" : ""}`}
+              onClick={() => setHelpOpen((open) => !open)}
+              disabled={!canHelp}
+              aria-expanded={helpOpen}
+              title={canHelp ? "Show the correct answer for this step" : "Try an answer first — help unlocks after a mistake"}
+            >
+              <LifeBuoy size={14} aria-hidden="true" /> NEED SOME HELP?
+            </button>
+            <div className="bo-target-step-info">
+              <span>{puzzle.index === puzzles.length ? "FINAL" : "STEP"} {puzzle.index} / {puzzles.length}</span>
+              <div className="bo-target-step-dots">
+                {puzzles.map((item) => {
+                  const passed = solvedIds.has(item.id);
+                  const isCurrent = item.index === puzzleIndex;
+                  return passed && !isCurrent ? (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className="is-done"
+                      onClick={() => goToPuzzle(item.index)}
+                      aria-label={`Redo step ${item.index}`}
+                      title={`Redo step ${item.index}`}
+                    />
+                  ) : (
+                    <i key={item.id} className={`${passed ? "is-done" : ""} ${isCurrent ? "is-current" : ""}`} />
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -313,17 +362,23 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
                 ref={editorRef}
                 value={value}
                 onChange={(next) => { setValue(next); if (check) setCheck(null); }}
-                onRun={() => void runCheck()}
+                onRun={() => { wave.fire(); void runCheck(); }}
                 disabled={checking || Boolean(win) || exhausted}
                 placeholder="type the C# expression"
                 compact
               />
+              {helpOpen && !win && (
+                <div className="bo-answer-help" role="status">
+                  <span><LifeBuoy size={13} aria-hidden="true" /> CORRECT ANSWER</span>
+                  <code>double result = {puzzle.referenceExpression};</code>
+                </div>
+              )}
               <div className="bo-target-code-bottom">
                 <div className={`bo-target-feedback ${check?.tone ?? ""}`} role="status" aria-live="polite">
                   {check && <><strong>{check.title}: {check.message}</strong>{check.detail && <span>{check.detail}</span>}</>}
                   {hintsRevealed > 0 && <span className={hintFlash ? "is-fresh" : ""}><Lightbulb size={13} /> {puzzle.hints[hintsRevealed - 1]}</span>}
                 </div>
-                <button type="button" className="bo-target-run-button" onClick={() => void runCheck()} disabled={checking || Boolean(win) || exhausted}>
+                <button type="button" className="bo-target-run-button" onClick={(event) => { wave.fire(event); void runCheck(); }} disabled={checking || Boolean(win) || exhausted}>
                   <Play size={21} fill="currentColor" /><span>{checking ? "CHECKING" : "RUN"}</span><kbd>Ctrl ↵</kbd>
                 </button>
               </div>
@@ -377,7 +432,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
         </div>
 
         <KeypadPanel
-          onRun={() => void runCheck()}
+          onRun={(event) => { wave.fire(event); void runCheck(); }}
           disabled={checking || Boolean(win) || exhausted}
           onInsert={(symbol) => { if (win || exhausted) return; editorRef.current?.insert(symbol); if (check) setCheck(null); }}
           onBackspace={() => { if (win || exhausted) return; editorRef.current?.backspace(); if (check) setCheck(null); }}

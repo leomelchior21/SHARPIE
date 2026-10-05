@@ -29,9 +29,9 @@ describe("C# expression semantics", () => {
     expect(valueOf("17 % 5")).toBe(2);
   });
 
-  it("keeps real C# integer division", () => {
-    expect(valueOf("7 / 2")).toBe(3);
-    expect(valueOf("1 / 2")).toBe(0);
+  it("uses double division because result is a double", () => {
+    expect(valueOf("7 / 2")).toBe(3.5);
+    expect(valueOf("1 / 2")).toBe(0.5);
     expect(valueOf("7.0 / 2")).toBe(3.5);
     expect(valueOf("10 - 2 - 3")).toBe(5);
     expect(valueOf("100 / 10 / 5")).toBe(2);

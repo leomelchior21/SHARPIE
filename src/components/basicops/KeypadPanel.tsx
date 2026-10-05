@@ -1,12 +1,14 @@
 import { Keyboard } from "lucide-react";
 import { CodeKeypad } from "./CodeKeypad";
 
+type RunOrigin = { clientX: number; clientY: number };
+
 type KeypadPanelProps = {
   onInsert: (symbol: string) => void;
   onBackspace: () => void;
   onClear: () => void;
   onResult?: () => void;
-  onRun?: () => void;
+  onRun?: (origin?: RunOrigin) => void;
   disabled?: boolean;
 };
 

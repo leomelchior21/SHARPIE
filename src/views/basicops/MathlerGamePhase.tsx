@@ -27,6 +27,7 @@ import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { fetchSurvivalLeaderboard, fetchTimeAttackLeaderboard, submitSurvivalScore, submitTimeAttackScore } from "../../lib/basicOps/survivalLeaderboard";
 import type { SurvivalLeader, TimeAttackLeader } from "../../lib/basicOps/survivalLeaderboard";
 import { basicOpsSound } from "../../lib/basicOps/sound";
+import { useRunWave } from "../../lib/basicOps/useRunWave";
 import { useLiveCode } from "../../lib/useLiveCode";
 
 type Mode = "time" | "survival";
@@ -84,6 +85,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
   const checkingRef = useRef(false);
   const runIdRef = useRef(0);
   const phaseRef = useRef<Phase>("menu");
+  const wave = useRunWave();
   const puzzle = useMemo(() => generateSurvivalPuzzle(index, seed), [index, seed]);
   useLiveCode("mathler", value, `MODULE 04 · MATHLER GAME · ${mode?.toUpperCase() ?? "MENU"} · CHALLENGE ${index}`);
 
@@ -223,10 +225,12 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
           void submitSurvivalScore(nextScore, nextSolved).catch(() => setLeaderboardError("Score saved here, but the class ranking could not be updated."));
         }
         basicOpsSound.win();
+        wave.resolve("good");
       } else {
         setTone("bad");
         setMessage(result.ok ? violations[0]?.message ?? `Output ${result.output}; target ${puzzle.target}.` : result.error.message);
         basicOpsSound.wrong();
+        wave.resolve("bad");
         if (mode === "survival") {
           const nextLives = lives - 1;
           setLives(nextLives);
@@ -374,7 +378,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                 <span className="bo-kicker">YOUR CODE</span>
                 <span className="bo-code-chip">C#</span>
               </div>
-              <ExpressionEditor ref={editorRef} value={value} onChange={setValue} onRun={() => void runCheck()} disabled={checking || phase !== "playing"} placeholder="type the C# expression" compact keypadOnlyOnIPad focusOnMount />
+              <ExpressionEditor ref={editorRef} value={value} onChange={setValue} onRun={() => { wave.fire(); void runCheck(); }} disabled={checking || phase !== "playing"} placeholder="type the C# expression" compact keypadOnlyOnIPad focusOnMount />
               <div className="bo-survival-actions">
                 <span className={`bo-survival-status is-${tone}`} role="status">
                   {message || "Build the expression and run it."}
@@ -382,7 +386,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
                 </span>
                 <div className="bo-run-cluster">
                   <span className="bo-run-note">Ctrl + Enter</span>
-                  <button className="bo-primary bo-run-button" onClick={() => void runCheck()} disabled={checking || phase !== "playing" || !value.trim()}>
+                  <button className="bo-primary bo-run-button" onClick={(event) => { wave.fire(event); void runCheck(); }} disabled={checking || phase !== "playing" || !value.trim()}>
                     <Play size={15} fill="currentColor" aria-hidden="true" /> {checking ? "CHECKING" : "RUN"}
                   </button>
                 </div>
@@ -435,7 +439,7 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
               </div>
             </div></div>
           )}</div>
-            <KeypadPanel disabled={checking || phase !== "playing"} onRun={() => void runCheck()} onInsert={(symbol) => editorRef.current?.insert(symbol)} onBackspace={() => editorRef.current?.backspace()} onClear={() => editorRef.current?.clear()} onResult={() => editorRef.current?.pulseResult()} />
+            <KeypadPanel disabled={checking || phase !== "playing"} onRun={(event) => { wave.fire(event); void runCheck(); }} onInsert={(symbol) => editorRef.current?.insert(symbol)} onBackspace={() => editorRef.current?.backspace()} onClear={() => editorRef.current?.clear()} onResult={() => editorRef.current?.pulseResult()} />
           </div>
         </>
       )}

@@ -777,12 +777,23 @@ function shuffle<T>(rng: Rng, items: T[]): T[] {
   return copy;
 }
 
+function uniqueExpressions(challenges: TranslationChallenge[], count: number): TranslationChallenge[] {
+  const seen = new Set<string>();
+  const unique: TranslationChallenge[] = [];
+  for (const challenge of challenges) {
+    if (seen.has(challenge.referenceExpression)) continue;
+    seen.add(challenge.referenceExpression);
+    unique.push(challenge);
+    if (unique.length >= count) break;
+  }
+  return unique;
+}
+
 export function generateRushChallenges(round: number, seed: number): TranslationChallenge[] {
   const config = RUSH_ROUNDS.find((item) => item.round === round) ?? RUSH_ROUNDS[0];
   const rng = createRng(hashSeed(seed, round * 104729));
   if (config.levels.length === 1) {
-    return generateTranslateChallenges(config.levels[0], hashSeed(seed, round))
-      .slice(0, config.count)
+    return uniqueExpressions(generateTranslateChallenges(config.levels[0], hashSeed(seed, round)), config.count)
       .map((challenge, index) => index % 2 === 1
         ? { ...challenge, writtenPrompt: simpleWrittenPrompt(challenge) }
         : challenge);
@@ -793,7 +804,7 @@ export function generateRushChallenges(round: number, seed: number): Translation
   }
   const mixed: TranslationChallenge[] = [];
   let lastLevel = -1;
-  const remaining = shuffle(rng, pool);
+  const remaining = uniqueExpressions(shuffle(rng, pool), pool.length);
   while (mixed.length < config.count && remaining.length > 0) {
     const nextIndex = remaining.findIndex((item) => item.level !== lastLevel);
     const [item] = remaining.splice(nextIndex === -1 ? 0 : nextIndex, 1);

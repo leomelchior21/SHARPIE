@@ -1,11 +1,13 @@
 import { Delete, Play, RotateCcw } from "lucide-react";
 
+type RunOrigin = { clientX: number; clientY: number };
+
 type CodeKeypadProps = {
   onInsert: (symbol: string) => void;
   onBackspace: () => void;
   onClear: () => void;
   onResult?: () => void;
-  onRun?: () => void;
+  onRun?: (origin?: RunOrigin) => void;
   disabled?: boolean;
 };
 
@@ -61,7 +63,7 @@ export function CodeKeypad({ onInsert, onBackspace, onClear, onResult, onRun, di
         <CalcKey label="+" className="is-plus" disabled={disabled} onClick={() => onInsert("+")} />
         <CalcKey label="−" ariaLabel="minus" className="is-minus" disabled={disabled} onClick={() => onInsert("-")} />
         <CalcKey label="%" ariaLabel="remainder" className="is-percent" disabled={disabled} onClick={() => onInsert("%")} />
-        <button type="button" className="bo-calc-key is-run" disabled={disabled} aria-label="Run expression" onClick={() => onRun ? onRun() : onResult?.()}><Play size={24} fill="currentColor" /></button>
+        <button type="button" className="bo-calc-key is-run" disabled={disabled} aria-label="Run expression" onClick={(event) => onRun ? onRun({ clientX: event.clientX, clientY: event.clientY }) : onResult?.()}><Play size={24} fill="currentColor" /></button>
       </div>
 
       <button type="button" className="bo-calc-clear" onClick={onClear} disabled={disabled}>

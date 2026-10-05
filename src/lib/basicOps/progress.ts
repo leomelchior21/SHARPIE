@@ -208,15 +208,15 @@ export function recordTranslateSolve(
   };
 }
 
-export function recordWarmupSolve(progress: BasicOpsProgress, usedHint: boolean): { progress: BasicOpsProgress; xp: number } {
-  const firstPass = progress.translate.warmupSolved < WARMUP_TOTAL;
-  const xp = firstPass ? XP_TRANSLATE_SOLVE - (usedHint ? XP_TRANSLATE_HINT : 0) : 0;
+export function recordWarmupSolve(progress: BasicOpsProgress, usedHint: boolean, index: number): { progress: BasicOpsProgress; xp: number } {
+  const firstPass = index >= progress.translate.warmupSolved;
+  const xp = firstPass ? Math.max(XP_TRANSLATE_SOLVE - (usedHint ? XP_TRANSLATE_HINT : 0), 0) : 0;
   return {
     progress: {
       ...progress,
       translate: {
         ...progress.translate,
-        warmupSolved: Math.min(WARMUP_TOTAL, progress.translate.warmupSolved + 1),
+        warmupSolved: Math.max(progress.translate.warmupSolved, Math.min(WARMUP_TOTAL, index + 1)),
         xp: progress.translate.xp + xp,
       },
     },
