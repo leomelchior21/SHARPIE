@@ -25,22 +25,22 @@ function renderHub(overrides: { isTeacher?: boolean } = {}) {
 describe("Hub module access", () => {
   afterEach(cleanup);
 
-  it("keeps Final Bosses locked for students", () => {
+  it("opens Final Bosses for students", () => {
     const { openFinalBosses } = renderHub();
     const card = screen.getByText("Final Bosses").closest("button");
-    expect(card).toHaveAttribute("aria-disabled", "true");
-    expect(within(card!).getByText("COMING SOON")).toBeInTheDocument();
+    expect(card).toHaveAttribute("aria-disabled", "false");
+    expect(within(card!).queryByText("COMING SOON")).not.toBeInTheDocument();
     fireEvent.click(card!);
-    expect(openFinalBosses).not.toHaveBeenCalled();
+    expect(openFinalBosses).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Final Bosses locked for the teacher while the module is paused", () => {
+  it("opens Final Bosses for the teacher", () => {
     const { openFinalBosses } = renderHub({ isTeacher: true });
     const card = screen.getByText("Final Bosses").closest("button");
-    expect(card).toHaveAttribute("aria-disabled", "true");
-    expect(within(card!).getByText("COMING SOON")).toBeInTheDocument();
+    expect(card).toHaveAttribute("aria-disabled", "false");
+    expect(within(card!).queryByText("COMING SOON")).not.toBeInTheDocument();
     fireEvent.click(card!);
-    expect(openFinalBosses).not.toHaveBeenCalled();
+    expect(openFinalBosses).toHaveBeenCalledTimes(1);
   });
 
   it("shows a log out button on the top right", () => {

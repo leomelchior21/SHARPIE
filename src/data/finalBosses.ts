@@ -50,13 +50,11 @@ export const BOSS_REWARD = 100;
 export const BOSS_COMPLETION_BONUS = 500;
 export const FINAL_BOSS_ID = 15;
 
-// Students can only open the module when this is true. The teacher always can.
-// Flip to true to release FINAL BOSSES to the classes.
-export const FINAL_BOSSES_STUDENT_ACCESS = false;
+// Allows students to open the module when it is enabled.
+export const FINAL_BOSSES_STUDENT_ACCESS = true;
 
-// Module 05 is paused for everyone right now, teacher included.
-// Flip to true to bring FINAL BOSSES back to the hub.
-export const FINAL_BOSSES_ENABLED = false;
+// Controls module availability for everyone, including the teacher.
+export const FINAL_BOSSES_ENABLED = true;
 
 const twoNumbersStarter = `double a = ?; // random number
 double b = ?; // random number
