@@ -310,7 +310,6 @@ export function FinalBosses({
 
       {showCompleteView ? (
         <div className="boss-workspace boss-complete-workspace" data-sector="5">
-          <BossTrail bosses={finalBosses} currentId={bossId} unlocked={progress.unlockedBosses} completed={completed} failedId={null} onSelect={selectBoss} />
           <section className="boss-complete-view" aria-label="Final Bosses complete">
             <span className="boss-complete-mark"><Check size={30} /></span>
             <p>FINAL BOSSES COMPLETE</p>
@@ -328,11 +327,10 @@ export function FinalBosses({
               <button className="boss-secondary-button" onClick={onBack}>RETURN TO MODULE</button>
             </div>
           </section>
+          <BossTrail bosses={finalBosses} currentId={bossId} unlocked={progress.unlockedBosses} completed={completed} failedId={null} onSelect={selectBoss} />
         </div>
       ) : (
         <div className={`boss-workspace ${unlockSweep ? "is-unlocking" : ""} ${isFinalVictory ? "is-final-victory" : ""}`} data-sector={boss.sector} data-layout={bossLayout}>
-          <BossTrail bosses={finalBosses} currentId={bossId} unlocked={progress.unlockedBosses} completed={completed} failedId={failedId} onSelect={selectBoss} />
-
           <BossBriefPanel
             boss={boss}
             total={finalBosses.length}
@@ -385,6 +383,8 @@ export function FinalBosses({
               <span>BOSS {String(boss.id).padStart(2, "0")} • {boss.category}</span>
             </footer>
           </section>
+
+          <BossTrail bosses={finalBosses} currentId={bossId} unlocked={progress.unlockedBosses} completed={completed} failedId={failedId} onSelect={selectBoss} />
 
           <BossTestLabPanel
             boss={boss}

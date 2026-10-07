@@ -39,6 +39,22 @@ export function BossTestLabPanel({
   const isRunning = phase === "running";
   const isPassed = phase === "passed";
   const isFailed = phase === "failed";
+  const verdict = (
+    <div className={`boss-verdict ${isPassed ? "is-passed" : "is-failed"}`}>
+      <span className="boss-verdict-mark" aria-hidden="true">{isPassed ? <Check size={20} /> : <X size={19} />}</span>
+      <div>
+        <strong>{isPassed ? "BOSS DEFEATED" : `${passCount} / ${cards.length} TESTS PASSED`}</strong>
+        <p>
+          {isPassed
+            ? `${cards.length} / ${cards.length} TESTS PASSED · Your formula worked with every tested input.`
+            : passCount > 0
+              ? "Your formula worked for some cases, but not for every input."
+              : "Your formula did not match the hidden inputs yet."}
+        </p>
+      </div>
+      {isPassed && <span className="boss-verdict-xp">+{boss.reward} XP</span>}
+    </div>
+  );
 
   return (
     <section className={`work-panel boss-tests-panel phase-${phase}`} aria-live="polite" aria-label="Test lab">
@@ -50,6 +66,8 @@ export function BossTestLabPanel({
           </span>
         </div>
       </header>
+
+      {isPassed && verdict}
 
       <div className="boss-tests-content">
         <div className="boss-test-statusline">
@@ -111,22 +129,7 @@ export function BossTestLabPanel({
           </div>
         )}
 
-        {(isPassed || isFailed) && (
-          <div className={`boss-verdict ${isPassed ? "is-passed" : "is-failed"}`}>
-            <span className="boss-verdict-mark" aria-hidden="true">{isPassed ? <Check size={20} /> : <X size={19} />}</span>
-            <div>
-              <strong>{isPassed ? "BOSS DEFEATED" : `${passCount} / ${cards.length} TESTS PASSED`}</strong>
-              <p>
-                {isPassed
-                  ? `${cards.length} / ${cards.length} TESTS PASSED · Your formula worked with every tested input.`
-                  : passCount > 0
-                    ? "Your formula worked for some cases, but not for every input."
-                    : "Your formula did not match the hidden inputs yet."}
-              </p>
-            </div>
-            {isPassed && <span className="boss-verdict-xp">+{boss.reward} XP</span>}
-          </div>
-        )}
+        {isFailed && verdict}
       </div>
 
       <footer className="boss-actions">
