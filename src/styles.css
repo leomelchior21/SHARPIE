@@ -4074,7 +4074,8 @@ button.module-card { cursor: pointer; }
 .boss-brief-panel { grid-area: brief; grid-template-rows: 46px minmax(0, 1fr); }
 .boss-editor-panel { grid-area: code; grid-template-rows: 46px minmax(0, 1fr) 28px; }
 .boss-tests-panel { grid-area: tests; grid-template-rows: 46px minmax(0, 1fr) auto; }
-.boss-tests-panel.phase-passed { grid-template-rows: 46px auto minmax(0, 1fr) auto; }
+.boss-tests-panel.phase-passed,
+.boss-tests-panel.phase-failed { grid-template-rows: 46px auto minmax(0, 1fr) auto; }
 .boss-tests-panel > .boss-verdict { margin: 10px 12px 0; }
 .boss-editor-panel .editor-footer span:last-child { color: #4f5f86; }
 .boss-editor-panel .editor-wrap { display: grid; min-width: 0; grid-template-rows: minmax(0, 1fr); }
@@ -4460,7 +4461,8 @@ button.module-card { cursor: pointer; }
   .boss-brief-content,
   .boss-tests-content { min-height: min-content; overflow: visible; }
   .boss-tests-panel { min-height: min-content; grid-template-rows: 46px auto auto; }
-  .boss-tests-panel.phase-passed { grid-template-rows: 46px auto auto auto; }
+  .boss-tests-panel.phase-passed,
+  .boss-tests-panel.phase-failed { grid-template-rows: 46px auto auto auto; }
 }
 
 @media (max-height: 780px) {

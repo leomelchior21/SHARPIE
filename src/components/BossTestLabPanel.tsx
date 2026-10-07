@@ -67,7 +67,7 @@ export function BossTestLabPanel({
         </div>
       </header>
 
-      {isPassed && verdict}
+      {(isPassed || isFailed) && verdict}
 
       <div className="boss-tests-content">
         <div className="boss-test-statusline">
@@ -128,8 +128,6 @@ export function BossTestLabPanel({
             {detailsOpen && <code>{compileError.details}</code>}
           </div>
         )}
-
-        {isFailed && verdict}
       </div>
 
       <footer className="boss-actions">
