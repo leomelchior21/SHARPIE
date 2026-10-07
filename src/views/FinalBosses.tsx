@@ -1,7 +1,7 @@
 import { setDiagnostics } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
-import { ArrowLeft, Check, Lightbulb, Trophy } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Gift, Lightbulb, Trophy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BossBriefPanel } from "../components/BossBriefPanel";
 import type { BossDiagramState } from "../components/BossBriefPanel";
@@ -309,25 +309,28 @@ export function FinalBosses({
       </header>
 
       {showCompleteView ? (
-        <div className="boss-workspace boss-complete-workspace" data-sector="5">
+        <div className="boss-completion-screen">
           <section className="boss-complete-view" aria-label="Final Bosses complete">
-            <span className="boss-complete-mark"><Check size={30} /></span>
+            <span className="boss-complete-mark" aria-hidden="true"><Trophy size={28} /></span>
             <p>FINAL BOSSES COMPLETE</p>
-            <h1>15 / 15 BOSSES DEFEATED</h1>
+            <h1><span className="boss-complete-total">15 / 15</span>{" "}<span>BOSSES DEFEATED</span></h1>
             <div className="boss-complete-badges">
               <span>ALL HIDDEN TESTS COMPLETED</span>
               <span>VARIABLES + FORMULAS MASTERED</span>
             </div>
             <strong className="boss-complete-xp">+500 XP</strong>
             <p className="boss-complete-copy">
-              You used variables, operators, percentages, multi-step formulas and geometry to create solutions that worked with different inputs.
+              You conquered variables, formulas and geometry. Now for your reward.
             </p>
+            <a className="boss-prize-button" href="https://neal.fun/" target="_blank" rel="noopener noreferrer">
+              <Gift size={19} aria-hidden="true" /> GET YOUR PRIZE <ArrowUpRight size={17} aria-hidden="true" />
+            </a>
+            <p className="boss-prize-teaser">A little surprise. You've earned it.</p>
             <div className="boss-complete-actions">
-              <button className="memory-primary" onClick={() => setShowCompletion(false)}>REVIEW BOSSES</button>
+              <button className="boss-secondary-button" onClick={() => setShowCompletion(false)}>REVIEW BOSSES</button>
               <button className="boss-secondary-button" onClick={onBack}>RETURN TO MODULE</button>
             </div>
           </section>
-          <BossTrail bosses={finalBosses} currentId={bossId} unlocked={progress.unlockedBosses} completed={completed} failedId={null} onSelect={selectBoss} />
         </div>
       ) : (
         <div className={`boss-workspace ${unlockSweep ? "is-unlocking" : ""} ${isFinalVictory ? "is-final-victory" : ""}`} data-sector={boss.sector} data-layout={bossLayout}>
