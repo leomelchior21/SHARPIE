@@ -40,6 +40,23 @@ describe("Final Bosses progression", () => {
     expect(nextBossId([3], 3)).toBe(1);
   });
 
+  it("keeps every boss available after the teacher completes a later boss", () => {
+    const state = completeBoss({ ...createBossProgress(true), currentBoss: 15 }, 15, true);
+    expect(state.completedBosses).toEqual([15]);
+    expect(state.unlockedBosses).toEqual(Array.from({ length: 15 }, (_, index) => index + 1));
+    expect(bossXp(state.completedBosses)).toBe(100);
+    expect(nextBossId(state.completedBosses, 14, true)).toBe(14);
+    expect(nextBossId(state.completedBosses, 15, true)).toBe(1);
+  });
+
+  it("applies access rules when restoring a saved teacher selection", () => {
+    const state = { ...createBossProgress(true), currentBoss: 15, codeByBoss: { "15": "// draft" } };
+    bossProgress.save(state);
+    expect(bossProgress.load(undefined, true)).toEqual(state);
+    expect(bossProgress.load().currentBoss).toBe(1);
+    expect(bossProgress.load().unlockedBosses).toEqual([1, 2, 3]);
+  });
+
   it("selects the first incomplete available boss after a success", () => {
     expect(nextBossId([1], 1)).toBe(2);
     expect(nextBossId([1, 2], 2)).toBe(3);

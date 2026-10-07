@@ -294,6 +294,7 @@ export default function App() {
             <Suspense fallback={<ModuleLoader />}>
               <FinalBosses
                 onBack={() => navigate("hub")}
+                fullAccess={fullAccess}
                 studentLogin={authState === "student" ? login : undefined}
                 onProgressChange={authState === "student" ? syncProgress : undefined}
               />

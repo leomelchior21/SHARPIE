@@ -19,10 +19,10 @@ function storageKey(login?: string) {
   return login ? `${STORAGE_KEY}:${login}` : STORAGE_KEY;
 }
 
-export function createBossProgress(): BossProgressState {
+export function createBossProgress(fullAccess = false): BossProgressState {
   return {
     currentBoss: BOSS_SECTORS[0].bossIds[0],
-    unlockedBosses: [...BOSS_SECTORS[0].bossIds],
+    unlockedBosses: unlockBossIds([], fullAccess),
     completedBosses: [],
     codeByBoss: {},
     attemptsByBoss: {},
@@ -58,7 +58,8 @@ function countRecord(value: unknown): Record<string, number> {
   return result;
 }
 
-export function unlockBossIds(completed: number[]): number[] {
+export function unlockBossIds(completed: number[], fullAccess = false): number[] {
+  if (fullAccess) return [...bossIds];
   const done = new Set(completed);
   const unlocked: number[] = [];
   for (const [index, sector] of BOSS_SECTORS.entries()) {
@@ -80,8 +81,8 @@ export function isBossUnlocked(id: number, completed: number[]): boolean {
   return unlockBossIds(completed).includes(id);
 }
 
-export function nextBossId(completed: number[], currentId: number): number | null {
-  const unlocked = unlockBossIds(completed);
+export function nextBossId(completed: number[], currentId: number, fullAccess = false): number | null {
+  const unlocked = unlockBossIds(completed, fullAccess);
   const incomplete = unlocked.filter((id) => !completed.includes(id));
   if (incomplete.length === 0) return null;
   if (incomplete.includes(currentId)) return currentId;
@@ -95,16 +96,16 @@ export function bossXp(completed: number[]): number {
   return earned + (allComplete ? BOSS_COMPLETION_BONUS : 0);
 }
 
-export function sanitizeBossProgress(value: unknown): BossProgressState {
-  const base = createBossProgress();
+export function sanitizeBossProgress(value: unknown, fullAccess = false): BossProgressState {
+  const base = createBossProgress(fullAccess);
   if (!value || typeof value !== "object") return base;
 
   const completedBosses = sortedInts((value as BossProgressState).completedBosses, 1, bossIds.length);
-  const unlocked = unlockBossIds(completedBosses);
+  const unlocked = unlockBossIds(completedBosses, fullAccess);
   const storedCurrent = Number((value as BossProgressState).currentBoss);
   const currentBoss = unlocked.includes(storedCurrent)
     ? storedCurrent
-    : nextBossId(completedBosses, storedCurrent) ?? unlocked[0] ?? 1;
+    : nextBossId(completedBosses, storedCurrent, fullAccess) ?? unlocked[0] ?? 1;
 
   return {
     currentBoss,
@@ -115,12 +116,12 @@ export function sanitizeBossProgress(value: unknown): BossProgressState {
   };
 }
 
-export function completeBoss(state: BossProgressState, id: number): BossProgressState {
+export function completeBoss(state: BossProgressState, id: number, fullAccess = false): BossProgressState {
   const completedBosses = state.completedBosses.includes(id)
     ? state.completedBosses
     : [...state.completedBosses, id].sort((a, b) => a - b);
-  const unlockedBosses = unlockBossIds(completedBosses);
-  const next = nextBossId(completedBosses, state.currentBoss);
+  const unlockedBosses = unlockBossIds(completedBosses, fullAccess);
+  const next = nextBossId(completedBosses, state.currentBoss, fullAccess);
   return {
     ...state,
     completedBosses,
@@ -134,12 +135,12 @@ function available() {
 }
 
 export const bossProgress = {
-  load: (login?: string): BossProgressState => {
-    if (!available()) return createBossProgress();
+  load: (login?: string, fullAccess = false): BossProgressState => {
+    if (!available()) return createBossProgress(fullAccess);
     try {
-      return sanitizeBossProgress(JSON.parse(window.localStorage.getItem(storageKey(login)) ?? "null"));
+      return sanitizeBossProgress(JSON.parse(window.localStorage.getItem(storageKey(login)) ?? "null"), fullAccess);
     } catch {
-      return createBossProgress();
+      return createBossProgress(fullAccess);
     }
   },
   save: (state: BossProgressState, login?: string) => {

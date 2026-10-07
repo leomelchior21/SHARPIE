@@ -51,14 +51,16 @@ function delay(ms: number) {
 
 export function FinalBosses({
   onBack,
+  fullAccess = false,
   studentLogin,
   onProgressChange,
 }: {
   onBack: () => void;
+  fullAccess?: boolean;
   studentLogin?: string;
   onProgressChange?: (state: BossProgressState) => void;
 }) {
-  const [progress, setProgress] = useState<BossProgressState>(() => bossProgress.load(studentLogin));
+  const [progress, setProgress] = useState<BossProgressState>(() => bossProgress.load(studentLogin, fullAccess));
   const progressRef = useRef(progress);
   const [bossId, setBossId] = useState(() => progressRef.current.currentBoss);
   const boss = bossById(bossId) ?? finalBosses[0];
@@ -80,7 +82,7 @@ export function FinalBosses({
   const isRunning = attempt.phase === "running";
   const completed = progress.completedBosses;
   const xp = bossXp(completed);
-  const nextId = nextBossId(completed, bossId);
+  const nextId = nextBossId(completed, bossId, fullAccess);
 
   useLiveCode("final-bosses", code, `Boss ${String(boss.id).padStart(2, "0")} · ${boss.title}`);
 
@@ -231,7 +233,7 @@ export function FinalBosses({
       }
       if (passCount === tests.length) {
         const before = progressRef.current;
-        const next = completeBoss(before, target.id);
+        const next = completeBoss(before, target.id, fullAccess);
         commitProgress(next);
         if (next.unlockedBosses.length > before.unlockedBosses.length) {
           setUnlockSweep(true);
@@ -259,10 +261,10 @@ export function FinalBosses({
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [bossId, commitProgress, flashFailedNode, runtimeReady]);
+  }, [bossId, commitProgress, flashFailedNode, fullAccess, runtimeReady]);
 
   const goNext = () => {
-    const next = nextBossId(progressRef.current.completedBosses, bossId);
+    const next = nextBossId(progressRef.current.completedBosses, bossId, fullAccess);
     if (next === null) {
       setShowCompletion(true);
       return;

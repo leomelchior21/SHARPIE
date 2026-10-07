@@ -65,6 +65,32 @@ describe("Final Bosses view", () => {
     expect(editor().value).toContain("double result = 0; // Change this");
   });
 
+  it("lets the teacher open every boss and restores the last selection and draft", async () => {
+    const { unmount } = render(<FinalBosses fullAccess onBack={() => undefined} />);
+    await waitFor(() => expect(runner.prepare).toHaveBeenCalled());
+
+    for (const boss of finalBosses) {
+      const button = screen.getByRole("button", { name: new RegExp(`^Boss ${String(boss.id).padStart(2, "0")},`) });
+      expect(button).toBeEnabled();
+      fireEvent.click(button);
+      expect(screen.getByRole("heading", { name: boss.title })).toBeInTheDocument();
+      expect(editor().value).toBe(boss.starterCode);
+    }
+    expect(screen.getByText("00 / 15")).toBeInTheDocument();
+    expect(screen.getByText("0 XP")).toBeInTheDocument();
+
+    const draft = `${editor().value}\n// Teacher draft`;
+    fireEvent.change(editor(), { target: { value: draft } });
+    await waitFor(() => expect(screen.getByText("DRAFT SAVED")).toBeInTheDocument());
+    unmount();
+
+    render(<FinalBosses fullAccess onBack={() => undefined} />);
+    expect(screen.getByRole("heading", { name: "The Hypotenuse" })).toBeInTheDocument();
+    expect(editor().value).toBe(draft);
+    expect(screen.getByRole("button", { name: /Boss 04.*available/ })).toBeEnabled();
+    expect(screen.getByText("00 / 15")).toBeInTheDocument();
+  });
+
   it("runs three hidden tests and defeats the boss when every result passes", async () => {
     runner.execute.mockImplementation((_code: string, _signal: AbortSignal, inputs: string[]) => Promise.resolve(additionAnswers("", inputs)));
     render(<FinalBosses onBack={() => undefined} />);
