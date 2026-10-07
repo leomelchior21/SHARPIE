@@ -56,28 +56,30 @@ export function BossBriefPanel({
         </div>
       </header>
 
-      <div className="boss-brief-content">
-        <p className="boss-eyebrow">BOSS {String(boss.id).padStart(2, "0")} // {boss.category}</p>
-        <h1 id="boss-brief-title">{boss.title}</h1>
-        <div className="boss-description">
-          {boss.description.split("\n").map((line) => (
-            <p key={line}><RichLine text={line} /></p>
-          ))}
-        </div>
-
-        {boss.steps && (
-          <ol className="boss-steps">
-            {boss.steps.map((step) => <li key={step}>{step}</li>)}
-          </ol>
-        )}
-
-        {boss.helper && (
-          <div className="boss-helper">
-            <code>{boss.helper.name}</code>
-            <p>{boss.helper.text}</p>
-            <small>{boss.helper.example}</small>
+      <div className="boss-brief-content" data-visualizer={boss.visualizer}>
+        <div className="boss-brief-copy">
+          <p className="boss-eyebrow">BOSS {String(boss.id).padStart(2, "0")} // {boss.category}</p>
+          <h1 id="boss-brief-title">{boss.title}</h1>
+          <div className="boss-description">
+            {boss.description.split("\n").map((line) => (
+              <p key={line}><RichLine text={line} /></p>
+            ))}
           </div>
-        )}
+
+          {boss.steps && (
+            <ol className="boss-steps">
+              {boss.steps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+          )}
+
+          {boss.helper && (
+            <div className="boss-helper">
+              <code>{boss.helper.name}</code>
+              <p>{boss.helper.text}</p>
+              <small>{boss.helper.example}</small>
+            </div>
+          )}
+        </div>
 
         {boss.visualizer === "pythagorean" && (
           <PythagoreanDiagram a={diagram.a} b={diagram.b} c={diagram.c} revealed={diagram.revealed} />
