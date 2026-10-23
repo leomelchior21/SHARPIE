@@ -1,10 +1,14 @@
+import { createContext, useContext } from "react";
+
+// Provided by App once someone is signed in: the logo always leads to the homepage.
+export const BrandHomeContext = createContext<(() => void) | null>(null);
+
 type BrandProps = {
   compact?: boolean;
-  asButton?: boolean;
-  onClick?: () => void;
 };
 
-export function Brand({ compact = false, asButton = false, onClick }: BrandProps) {
+export function Brand({ compact = false }: BrandProps) {
+  const goHome = useContext(BrandHomeContext);
   const content = (
     <>
       <span className="brand-name">SHARPIE</span>
@@ -12,9 +16,9 @@ export function Brand({ compact = false, asButton = false, onClick }: BrandProps
     </>
   );
 
-  if (asButton) {
+  if (goHome) {
     return (
-      <button className={`brand brand-button ${compact ? "brand-compact" : ""}`} onClick={onClick}>
+      <button type="button" className={`brand brand-button ${compact ? "brand-compact" : ""}`} onClick={goHome} aria-label="Sharpie home">
         {content}
       </button>
     );

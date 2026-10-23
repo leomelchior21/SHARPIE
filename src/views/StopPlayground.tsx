@@ -202,7 +202,7 @@ export function StopPlayground({ name, onBack }: StopPlaygroundProps) {
     <section className="playground stop-playground screen-enter" aria-labelledby="stop-title">
       <header className="playground-header">
         <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
+          <Brand compact />
           <span className="header-divider" />
           <div>
             <span>MODULE 03</span>

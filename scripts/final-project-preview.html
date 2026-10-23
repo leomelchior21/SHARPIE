@@ -4,6 +4,7 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {FinalProject} from '/src/views/finalproject/FinalProject.tsx';
 import {Hub} from '/src/views/Hub.tsx';
+import {BrandHomeContext} from '/src/components/Brand.tsx';
 import {freshProgress,storageKey} from '/src/views/finalproject/progress.ts';
 import {challenges,missions,questions} from '/src/views/finalproject/content.ts';
 import * as backroomEngine from '/src/views/finalproject/backroom/backroomEngine.ts';
@@ -12,6 +13,6 @@ import '/node_modules/@fontsource/space-grotesk/400.css';
 import '/node_modules/@fontsource/space-grotesk/700.css';
 import '/node_modules/@fontsource/jetbrains-mono/400.css';
 window.finalQA={freshProgress,storageKey,challenges,missions,questions,backroomEngine};
-function Preview(){const [show,setShow]=React.useState(!new URLSearchParams(location.search).has('hub'));const noop=()=>{};return React.createElement('main',{className:'app-shell'},show?React.createElement(FinalProject,{name:'Ada · QA',studentKey:'final-qa',isTeacher:!new URLSearchParams(location.search).has('student'),onBack:()=>setShow(false)}):React.createElement(Hub,{name:'Ada · QA',isTeacher:true,onOpenTeacher:noop,onSignOut:noop,onOpenWriteLine:noop,onOpenStop:noop,onOpenMathler:noop,onOpenMemoryMachine:noop,onOpenFinalBosses:noop,onOpenFinalProject:()=>setShow(true)}));}
+function Preview(){const [show,setShow]=React.useState(!new URLSearchParams(location.search).has('hub'));const noop=()=>{};return React.createElement(BrandHomeContext.Provider,{value:()=>setShow(false)},React.createElement('main',{className:'app-shell'},show?React.createElement(FinalProject,{name:'Ada · QA',studentKey:'final-qa',isTeacher:!new URLSearchParams(location.search).has('student'),onBack:()=>setShow(false)}):React.createElement(Hub,{name:'Ada · QA',isTeacher:true,onOpenTeacher:noop,onSignOut:noop,onOpenWriteLine:noop,onOpenStop:noop,onOpenMathler:noop,onOpenMemoryMachine:noop,onOpenFinalBosses:noop,onOpenFinalProject:()=>setShow(true)})));}
 createRoot(document.getElementById('root')).render(React.createElement(React.StrictMode,null,React.createElement(Preview)));
 </script></body></html>

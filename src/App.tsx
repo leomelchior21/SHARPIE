@@ -8,6 +8,7 @@ import { session } from "./lib/session";
 import { supabase } from "./lib/supabase";
 import { TEACHER_LOGIN, isSupabaseConfigured } from "./lib/supabaseConfig";
 import type { Screen } from "./types";
+import { BrandHomeContext } from "./components/Brand";
 import { Hub } from "./views/Hub";
 import { LoginGate } from "./views/LoginGate";
 import { NameGate } from "./views/NameGate";
@@ -95,6 +96,7 @@ export default function App() {
     }
     setScreen(next);
   };
+  const goHome = () => navigate("hub");
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -215,7 +217,7 @@ export default function App() {
         isSupabaseConfigured ? <LoginGate onAuthenticated={enter} /> : <NameGate onEnter={enterLocal} />
       )}
       {authenticated && (
-        <>
+        <BrandHomeContext.Provider value={goHome}>
           {activeScreen === "teacher" && (
             <Suspense fallback={<ModuleLoader />}>
               <TeacherDashboard
@@ -309,7 +311,7 @@ export default function App() {
               <FinalProject key={login || name} name={name} studentKey={login || name.toLowerCase()} isTeacher={isTeacher} onBack={() => navigate("hub")} />
             </Suspense>
           )}
-        </>
+        </BrandHomeContext.Provider>
       )}
     </main>
   );

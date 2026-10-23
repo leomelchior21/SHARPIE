@@ -283,7 +283,7 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
   return (
     <section className={`bo-view bo-target bo-target-guided screen-enter ${check || hintsRevealed ? "has-feedback" : ""}`} aria-labelledby="bo-target-title">
       <header className="bo-target-header">
-        <div className="bo-target-brand"><Brand compact asButton onClick={onBack} /></div>
+        <div className="bo-target-brand"><Brand compact /></div>
         <nav className="bo-target-nav" aria-label="Target navigation">
           <button type="button" className="bo-target-nav-button" onClick={onHome}><LayoutGrid size={20} /> PANEL</button>
           <span className="bo-target-student"><small>ACTIVE STUDENT</small><strong>{name}</strong></span>

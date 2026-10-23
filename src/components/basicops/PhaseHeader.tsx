@@ -15,7 +15,7 @@ export function PhaseHeader({ name, crumb, title, soundOn, onToggleSound, onHome
   return (
     <header className="playground-header bo-header">
       <div className="playground-identity">
-        <Brand compact asButton onClick={onBack} />
+        <Brand compact />
         <span className="header-divider" />
         <div>
           <span>{crumb}</span>

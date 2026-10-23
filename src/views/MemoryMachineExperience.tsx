@@ -214,7 +214,7 @@ export function MemoryMachineExperience({
   return (
     <section className={`memory-machine screen-enter memory-stage-${stage}`} aria-labelledby="memory-title">
       <header className="memory-machine-header">
-        <Brand compact asButton onClick={onBack} />
+        <Brand compact />
         <div className="memory-machine-status"><i /> MODULE 02 · MEMORY ONLINE</div>
         <button className="icon-text-button back-button" onClick={onBack}>
           <ArrowLeft size={17} /> <span>MODULE</span>

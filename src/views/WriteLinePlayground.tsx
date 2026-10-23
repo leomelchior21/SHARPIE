@@ -285,7 +285,7 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
     <section className="playground screen-enter" aria-labelledby="playground-title">
       <header className="playground-header">
         <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
+          <Brand compact />
           <span className="header-divider" />
           <div>
             <span>MODULE 01</span>

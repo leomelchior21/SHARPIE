@@ -32,7 +32,7 @@ export function MemoryMachineHub({
     <section className="memory-hub screen-enter" aria-labelledby="memory-hub-title">
       <header className="playground-header">
         <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
+          <Brand compact />
           <span className="header-divider" />
           <div>
             <span>MODULE 02</span>

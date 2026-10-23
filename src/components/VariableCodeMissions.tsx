@@ -355,7 +355,7 @@ function MissionHeader({ title, earnedXp, elapsedSeconds, onBack }: { title: str
   return (
     <header className="variable-run-header">
       <div className="playground-identity">
-        <Brand compact asButton onClick={onBack} />
+        <Brand compact />
         <span className="header-divider" />
         <div><span>MODULE 02</span><strong id="sandbox-title">{title}</strong></div>
       </div>

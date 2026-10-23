@@ -118,7 +118,7 @@ export function VariableRun({ onBack, onFinish, fullAccess = false }: { onBack: 
     <section className="variable-run screen-enter" aria-labelledby="variable-run-title">
       <header className="variable-run-header">
         <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
+          <Brand compact />
           <span className="header-divider" />
           <div><span>MODULE 02</span><strong id="variable-run-title">VARIABLE RUN</strong></div>
         </div>

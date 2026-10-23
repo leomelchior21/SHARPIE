@@ -165,6 +165,23 @@ input:focus-visible,
   padding: 0;
   cursor: pointer;
   background: transparent;
+  text-align: left;
+}
+
+/* Module stylesheets style every button; the logo stays a plain logo. */
+.app-shell .brand.brand-button,
+.app-shell .brand.brand-button:hover:not(:disabled),
+.app-shell .brand.brand-button:active:not(:disabled) {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 /* Name gate */

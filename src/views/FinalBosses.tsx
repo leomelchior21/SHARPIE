@@ -294,7 +294,7 @@ export function FinalBosses({
     <section className="final-bosses screen-enter" aria-labelledby="final-bosses-title">
       <header className="variable-run-header">
         <div className="playground-identity">
-          <Brand compact asButton onClick={onBack} />
+          <Brand compact />
           <span className="header-divider" />
           <div>
             <span>MODULE 05</span>
