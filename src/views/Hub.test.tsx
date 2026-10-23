@@ -5,6 +5,7 @@ import { Hub } from "./Hub";
 function renderHub(overrides: { isTeacher?: boolean } = {}) {
   const openFinalBosses = vi.fn();
   const openMathler = vi.fn();
+  const openFinalProject = vi.fn();
   const signOut = vi.fn();
   render(
     <Hub
@@ -17,13 +18,23 @@ function renderHub(overrides: { isTeacher?: boolean } = {}) {
       onOpenMathler={openMathler}
       onOpenMemoryMachine={() => undefined}
       onOpenFinalBosses={openFinalBosses}
+      onOpenFinalProject={openFinalProject}
     />,
   );
-  return { openFinalBosses, openMathler, signOut };
+  return { openFinalBosses, openMathler, openFinalProject, signOut };
 }
 
 describe("Hub module access", () => {
   afterEach(cleanup);
+
+  it("opens Final project as a separate sixth module", () => {
+    const { openFinalProject, openFinalBosses } = renderHub();
+    fireEvent.click(screen.getByText("Final project"));
+    expect(openFinalProject).toHaveBeenCalledTimes(1);
+    expect(openFinalBosses).not.toHaveBeenCalled();
+    expect(screen.getByText("Boolean Logic, Decisions & Digital Investigations")).toBeInTheDocument();
+    expect(document.querySelectorAll(".module-card")).toHaveLength(6);
+  });
 
   it("opens Final Bosses for students", () => {
     const { openFinalBosses } = renderHub();

@@ -9,6 +9,7 @@ export type Screen =
   | "variable-run"
   | "variable-sprint"
   | "final-bosses"
+  | "final-project"
   | "teacher"
   | "teacher-live";
 

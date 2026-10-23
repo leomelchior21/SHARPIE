@@ -590,6 +590,76 @@ function appendOutput(current, addition) {
   return { output: remaining > 0 ? current + addition.slice(0, remaining) : current, truncated: addition.length > remaining };
 }
 
+// Parse blocks without evaluating JavaScript. Expressions use the same typed
+// C# evaluator as the other Sharpie lessons; strings/comments are opaque.
+function parseConditionalProgram(source) {
+  const clean = stripComments(source);
+  let cursor = 0;
+  const skip = () => { while (/\s/.test(clean[cursor] ?? "") && cursor < clean.length) cursor++; };
+  const position = () => ({ line: clean.slice(0, cursor).split("\n").length, column: cursor - clean.lastIndexOf("\n", cursor - 1) });
+  const scan = (terminator) => {
+    const start = cursor;
+    let quote = "", escaped = false, depth = 0;
+    while (cursor < clean.length) {
+      const char = clean[cursor];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = "";
+      } else {
+        if (char === terminator && depth === 0) return clean.slice(start, cursor++).trim();
+        if (char === '"' || char === "'") quote = char;
+        else if (char === "(") depth++;
+        else if (char === ")") depth--;
+        else if (char === "{" || char === "}") throw new SharpieError("CS1002", "; expected", position().line);
+      }
+      cursor++;
+    }
+    throw new SharpieError(terminator === ")" ? "CS1026" : "CS1002", `${terminator} expected`, position().line);
+  };
+  const block = (nested = false, depth = 0) => {
+    if (depth > 16) throw new SharpieError("SHARP002", "Too many nested blocks.");
+    const nodes = [];
+    while (cursor < clean.length) {
+      skip();
+      if (cursor === clean.length) break;
+      if (clean[cursor] === "}") {
+        if (!nested) throw new SharpieError("CS1525", "Unexpected }", position().line);
+        cursor++; return nodes;
+      }
+      const pos = position();
+      if (/^if\b/.test(clean.slice(cursor))) {
+        cursor += 2; skip();
+        if (clean[cursor++] !== "(") throw new SharpieError("CS1003", "( expected", pos.line);
+        const condition = scan(")"); skip();
+        if (clean[cursor++] !== "{") throw new SharpieError("CS1003", "{ expected", pos.line);
+        const yes = block(true, depth + 1); skip();
+        let no = [];
+        if (/^else\b/.test(clean.slice(cursor))) {
+          cursor += 4; skip();
+          if (clean[cursor++] !== "{") throw new SharpieError("CS1003", "{ expected", position().line);
+          no = block(true, depth + 1);
+        }
+        nodes.push({ condition, yes, no, ...pos });
+      } else nodes.push({ text: scan(";"), ...pos });
+    }
+    if (nested) throw new SharpieError("CS1003", "} expected", position().line);
+    return nodes;
+  };
+  return block();
+}
+
+function* executionStatements(nodes, variables) {
+  for (const node of nodes) {
+    if (node.condition === undefined) { yield node; continue; }
+    const condition = evaluateExpression(node.condition, variables, node.line, node.column);
+    if (condition.kind !== "bool") throw new SharpieError("CS0029", "The if condition must be a bool", node.line, node.column);
+    const existing = new Set(variables.keys());
+    yield* executionStatements(condition.value ? node.yes : node.no, variables);
+    for (const name of variables.keys()) if (!existing.has(name)) variables.delete(name);
+  }
+}
+
 function runBasics(code, inputs) {
   resetInputs(inputs);
   const started = performance.now();
@@ -599,7 +669,8 @@ function runBasics(code, inputs) {
   let output = "";
   let truncated = false;
 
-  for (const statement of splitStatements(code)) {
+  const nodes = /\bif\s*\(/.test(stripComments(code)) ? parseConditionalProgram(code) : splitStatements(code);
+  for (const statement of executionStatements(nodes, variables)) {
     const declaration = /^(string|int|double|bool|char|var)\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/.exec(statement.text);
     if (declaration) {
       const [, declaredType, name, expression] = declaration;

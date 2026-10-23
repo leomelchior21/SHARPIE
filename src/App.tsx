@@ -38,6 +38,7 @@ const BasicOperations = lazy(() =>
 const FinalBosses = lazy(() =>
   import("./views/FinalBosses").then((module) => ({ default: module.FinalBosses })),
 );
+const FinalProject = lazy(() => import("./views/finalproject/FinalProject").then((module) => ({ default: module.FinalProject })));
 const TeacherDashboard = lazy(() =>
   import("./views/TeacherDashboard").then((module) => ({ default: module.TeacherDashboard })),
 );
@@ -49,6 +50,7 @@ type AuthState = "checking" | "signed-out" | "student" | "teacher";
 
 function screenFromPath(): Screen {
   if (typeof window === "undefined") return "hub";
+  if (window.location.pathname === "/final-project") return "final-project";
   if (window.location.pathname === "/final-bosses") return "final-bosses";
   if (window.location.pathname === "/professor/live") return "teacher-live";
   if (window.location.pathname === "/professor") return "teacher";
@@ -72,6 +74,7 @@ const paths: Partial<Record<Screen, string>> = {
   "variable-run": "/memory-machine/variable-run",
   "variable-sprint": "/memory-machine/variable-sprint",
   "final-bosses": "/final-bosses",
+  "final-project": "/final-project",
   teacher: "/professor",
   "teacher-live": "/professor/live",
 };
@@ -238,6 +241,7 @@ export default function App() {
               onOpenMathler={() => navigate("mathler")}
               onOpenMemoryMachine={() => navigate("memory-hub")}
               onOpenFinalBosses={() => navigate("final-bosses")}
+              onOpenFinalProject={() => navigate("final-project")}
             />
           )}
           {activeScreen === "writeline" && (
@@ -298,6 +302,11 @@ export default function App() {
                 studentLogin={authState === "student" ? login : undefined}
                 onProgressChange={authState === "student" ? syncProgress : undefined}
               />
+            </Suspense>
+          )}
+          {activeScreen === "final-project" && (
+            <Suspense fallback={<ModuleLoader />}>
+              <FinalProject key={login || name} name={name} studentKey={login || name.toLowerCase()} isTeacher={isTeacher} onBack={() => navigate("hub")} />
             </Suspense>
           )}
         </>

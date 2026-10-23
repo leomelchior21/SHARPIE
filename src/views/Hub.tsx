@@ -14,6 +14,7 @@ type HubProps = {
   onOpenMathler: () => void;
   onOpenMemoryMachine: () => void;
   onOpenFinalBosses: () => void;
+  onOpenFinalProject?: () => void;
 };
 
 type Module = {
@@ -25,7 +26,7 @@ type Module = {
   onClick?: () => void;
 };
 
-export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine, onOpenStop, onOpenMathler, onOpenMemoryMachine, onOpenFinalBosses }: HubProps) {
+export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine, onOpenStop, onOpenMathler, onOpenMemoryMachine, onOpenFinalBosses, onOpenFinalProject }: HubProps) {
   const [notice, setNotice] = useState(false);
 
   const locked = () => {
@@ -40,6 +41,7 @@ export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine
     { id: "03", name: "STOP", subtitle: "Basic String Formatting", glyph: "Aa", state: "available", onClick: onOpenStop },
     { id: "04", name: "Mathler", subtitle: "Basic Operations", glyph: "◇", state: "available", onClick: onOpenMathler },
     { id: "05", name: "Final Bosses", subtitle: "Build the formula.", glyph: "?", state: finalBossesOpen ? "available" : "locked", onClick: onOpenFinalBosses },
+    { id: "08", name: "Final project", subtitle: "Boolean Logic, Decisions & Digital Investigations", glyph: "01", state: "available", onClick: onOpenFinalProject },
   ];
 
   const renderCard = (module: Module) => {
@@ -48,7 +50,7 @@ export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine
     const boss = module.id === "05";
     return (
       <button
-        className={`module-card ${available ? "energized-module" : "locked-module"} ${featured ? "featured-module" : ""} ${boss ? "boss-module" : ""}`}
+        className={`module-card ${available ? "energized-module" : "locked-module"} ${featured ? "featured-module" : ""} ${boss ? "boss-module" : ""} ${module.id === "08" ? "final-project-module" : ""}`}
         key={module.id}
         onClick={available ? module.onClick : locked}
         aria-disabled={!available}
@@ -94,7 +96,7 @@ export function Hub({ name, isTeacher, onOpenTeacher, onSignOut, onOpenWriteLine
         <h1 id="hub-title">Choose an experiment.</h1>
       </div>
 
-      <div className="module-grid">
+      <div className="module-grid module-grid-six">
         {modules.map(renderCard)}
       </div>
 
