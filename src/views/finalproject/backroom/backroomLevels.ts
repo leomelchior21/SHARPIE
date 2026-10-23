@@ -1,6 +1,7 @@
 import { baseRunSpeed, type BackroomGate, type BoolName, type Clause, type ComparisonOperator } from './backroomEngine'
 
-export type CoachMoment = 'energy' | 'steer' | 'fork' | 'bool' | 'and'
+export type CoachMoment = 'energy' | 'steer' | 'jump' | 'fork' | 'bool' | 'and'
+export const coachMoments: CoachMoment[] = ['energy', 'steer', 'jump', 'fork', 'bool', 'and']
 
 export interface BackroomLevel {
   id: number
@@ -50,7 +51,7 @@ export const backroomLevels: BackroomLevel[] = [
     lead: '>= and <= include the edge. > and < do not. Watch the exact number where the gate flips.',
     examples: [{ code: '40 >= 40', result: true }, { code: '40 > 40', result: false }],
     speed: baseRunSpeed * 0.9,
-    coach: [],
+    coach: ['jump'],
     gates: [
       set(2, 1, [cmp('>=', 40)], 26),
       set(2, 2, [cmp('<=', 60)], 78),
@@ -129,6 +130,12 @@ export const backroomLevels: BackroomLevel[] = [
 ]
 
 export const levelCount = backroomLevels.length
+
+// Jump barriers start on tape 02, and after a few gates in The Deep.
+export function barrierChance(levelIndex: number | null, gateNumber: number): number {
+  if (levelIndex === null) return gateNumber >= 3 ? 0.6 : 0
+  return levelIndex >= 1 ? 0.55 : 0
+}
 
 export function starsFor(mistakes: number): number {
   return mistakes <= 0 ? 3 : mistakes === 1 ? 2 : 1

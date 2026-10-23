@@ -6,7 +6,7 @@ import { backroomLevels } from './backroomLevels'
 import { createBackroomProgress, type BackroomProgress } from './types'
 
 const renderer = vi.hoisted(() => ({ view: null as BackroomView | null }))
-vi.mock('./backroomRenderer', () => ({ drawBackroom: (_context: unknown, _width: number, _height: number, view: BackroomView) => { renderer.view = view } }))
+vi.mock('./backroomRenderer', () => ({ createBackroomRenderer: () => ({ render: (view: BackroomView) => { renderer.view = view }, resize: () => undefined, dispose: () => undefined }) }))
 
 describe('Backrooms Run', () => {
   let frame: FrameRequestCallback
@@ -169,15 +169,67 @@ describe('Backrooms Run', () => {
     expect(screen.getByRole('button', { name: /DOUBLE LOCK/ })).toBeEnabled()
   })
 
-  it('pauses with Space and resumes without losing the run', () => {
+  it('pauses with Escape and resumes without losing the run', () => {
     mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
     playTape('LIGHTS ON')
     tick()
-    fireEvent.keyDown(document.body, { key: ' ' })
+    fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(screen.getByRole('dialog', { name: 'Paused' })).toBeInTheDocument()
     const depth = tick().depth
     expect(tick().depth).toBe(depth)
     fireEvent.click(screen.getByRole('button', { name: /KEEP RUNNING/ }))
     expect(tick().depth).toBeGreaterThan(depth)
+  })
+
+  it('speeds up after every gate inside a tape', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    const first = tick().pace
+    expect(screen.getByLabelText(/^Pace /)).toHaveTextContent('PACE 1.0×')
+    until(() => {
+      const next = screen.queryByRole('button', { name: /CONTINUE/ })
+      if (next) fireEvent.click(next)
+      return renderer.view!.gateNumber === 2 && renderer.view!.phase === 'gate'
+    })
+    expect(renderer.view!.pace).toBeGreaterThan(first)
+    expect(screen.getByLabelText(/^Pace /)).toHaveTextContent('PACE 1.1×')
+  })
+
+  it('restarts a lost tutorial tape straight away without repeating its guides', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    const { saves } = mount(student())
+    fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getByRole('button', { name: /START TUTORIAL/ }))
+    until(() => !!screen.queryByRole('dialog', { name: 'MAKE IT TRUE' }))
+    setEnergy(51)
+    act(() => { vi.advanceTimersByTime(1200) })
+    until(() => !!screen.queryByRole('dialog', { name: 'FOLLOW THE CORRIDOR' }))
+    fireEvent.click(screen.getByRole('button', { name: 'GOT IT' }))
+    for (let mistake = 0; mistake < 3; mistake += 1) {
+      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+      fireEvent.click(screen.getByRole('button', { name: /CONTINUE|SEE RESULTS/ }))
+    }
+    expect(saves[saves.length - 1].coachSeen).toEqual(['energy', 'steer'])
+    fireEvent.click(screen.getByRole('button', { name: /RETRY TAPE/ }))
+    expect(screen.queryByRole('dialog', { name: 'Briefing' })).not.toBeInTheDocument()
+    until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+    expect(screen.queryByRole('dialog', { name: 'MAKE IT TRUE' })).not.toBeInTheDocument()
+  })
+
+  it('jumps a barrier with Space instead of tripping over it', () => {
+    mount(student({ levelStars: [1, 1, 0, 0, 0, 0] }))
+    playTape('THE EDGE')
+    const barrierAhead = () => renderer.view!.obstacles.some((item) => item.kind === 'barrier' && item.z - renderer.view!.depth > 0.3 && item.z - renderer.view!.depth < 1.2)
+    until(() => {
+      const next = screen.queryByRole('button', { name: /CONTINUE/ })
+      if (next) fireEvent.click(next)
+      return barrierAhead()
+    }, 8000)
+    fireEvent.keyDown(document.body, { key: ' ' })
+    expect(tick().jump).toBeGreaterThan(0)
+    for (let count = 0; count < 20; count += 1) tick()
+    expect(screen.queryByText(/TRIPPED/)).not.toBeInTheDocument()
+    expect(renderer.view!.obstacles.some((item) => item.kind === 'barrier')).toBe(true)
+    expect(renderer.view!.jump).toBe(0)
   })
 })

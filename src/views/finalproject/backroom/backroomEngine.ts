@@ -156,9 +156,27 @@ export function comboMultiplierLabel(combo: number): string {
 
 export const baseRunSpeed = 0.95 * 1.2 * 1.3
 
+export const paceStep = 0.11 * 1.2
+
 // Endless pace: grows with every gate and never caps.
 export function speedForGate(gateNumber: number): number {
-  return baseRunSpeed + Math.max(0, gateNumber - 1) * 0.11 * 1.2
+  return baseRunSpeed + Math.max(0, gateNumber - 1) * paceStep
+}
+
+// Tapes start at their own pace and also speed up after every gate.
+export function speedForLevelGate(levelSpeed: number, gateNumber: number): number {
+  return levelSpeed + Math.max(0, gateNumber - 1) * paceStep
+}
+
+export const jumpSeconds = 0.78
+export const jumpHeight = 0.36
+// Above this height the player clears chairs, bins and barriers.
+export const clearHeight = 0.12
+
+export function jumpOffset(elapsed: number): number {
+  if (elapsed < 0 || elapsed >= jumpSeconds) return 0
+  const t = elapsed / jumpSeconds
+  return 4 * jumpHeight * t * (1 - t)
 }
 
 export interface CourseTile {
@@ -196,7 +214,8 @@ export interface CorridorObstacle {
   z: number
   x: number
   side: -1 | 1
-  kind: 'chair' | 'trash'
+  // A barrier spans the whole corridor and can only be jumped.
+  kind: 'chair' | 'trash' | 'barrier'
 }
 
 const bendLength = 8
@@ -205,7 +224,7 @@ const gateClearance = 26
 export const gateApproach = 16
 const turnShift = 1.15
 
-export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[]): CorridorPlan {
+export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[], barrier = false): CorridorPlan {
   let center = gateCenter
   const bends = tiles.filter((tile) => tile.kind === 'curve').map((tile, index) => {
     const dir = tile.dir as -1 | 1
@@ -223,11 +242,17 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
     side,
     kind: Math.abs(Math.round(gateZ + center * 5)) % 2 === 0 ? 'chair' : 'trash',
   }] : []
+  // Barriers sit on the straight between the first two bends.
+  if (barrier && bends.length >= 2) obstacles.unshift({ z: bends[0].endZ + 2, x: bends[0].to, side: 1, kind: 'barrier' })
   return { bends, obstacles, nextGateZ, nextGateCenter: center, activationZ: nextGateZ - gateApproach }
 }
 
-export function hitsObstacle(previousDepth: number, depth: number, playerX: number, obstacle: CorridorObstacle): boolean {
-  return previousDepth <= obstacle.z + 0.35 && depth >= obstacle.z - 0.35 && Math.abs(playerX - obstacle.x) < 0.34
+export function hitsObstacle(previousDepth: number, depth: number, playerX: number, obstacle: CorridorObstacle, airborne = false): boolean {
+  if (airborne) return false
+  const crossing = obstacle.kind === 'barrier'
+    ? previousDepth <= obstacle.z + 0.06 && depth >= obstacle.z - 0.06
+    : previousDepth <= obstacle.z + 0.35 && depth >= obstacle.z - 0.35
+  return crossing && (obstacle.kind === 'barrier' || Math.abs(playerX - obstacle.x) < 0.34)
 }
 
 export function corridorCenterAt(baseCenter: number, bends: CorridorBend[], worldZ: number): number {

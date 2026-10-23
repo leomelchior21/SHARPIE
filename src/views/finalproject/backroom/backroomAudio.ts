@@ -199,6 +199,15 @@ export class BackroomAudio {
     this.tone(160, 0.12, 'square', 0.03, 0.05)
   }
 
+  jump(): void {
+    this.burst(0.28, 700, 0.9, 0.05, 'bandpass')
+    this.tone(220, 0.2, 'triangle', 0.025, 0, 440)
+  }
+
+  land(): void {
+    this.burst(0.16, 160, 0.9, 0.14, 'lowpass')
+  }
+
   blackout(): void {
     this.tone(240, 0.5, 'sawtooth', 0.03, 0, 40)
   }

@@ -23,6 +23,7 @@ export function MatrixRun({ progress, update, name, studentKey, isTeacher, onBac
     backroomRunOperators: progress.backroom.operators,
     levelStars: progress.backroom.levels,
     skills: progress.backroom.skills,
+    coachSeen: progress.backroom.coach,
   };
   const save = (next: BackroomProgress) => update(p => {
     const bestXp = Math.max(p.backroom.bestXp, next.backroomRunXp);
@@ -36,6 +37,7 @@ export function MatrixRun({ progress, update, name, studentKey, isTeacher, onBac
         operators: [...new Set([...p.backroom.operators, ...next.backroomRunOperators])],
         levels,
         skills: next.skills,
+        coach: [...new Set([...p.backroom.coach, ...next.coachSeen])],
       },
     }, 'backroom:best-run', bestXp);
     levels.forEach((stars, i) => { if (stars > 0) saved = award(saved, `backroom:level:${i}`, levelXp); });

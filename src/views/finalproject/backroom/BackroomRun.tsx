@@ -1,13 +1,13 @@
-import { ArrowLeft, BatteryFull, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Lightbulb, Pause, Play, RotateCcw, SkipForward, ToggleLeft, ToggleRight, Volume2, VolumeX, Zap } from 'lucide-react'
+import { ArrowLeft, BatteryFull, ChevronDown, ChevronLeft, ChevronRight, ChevronsUp, ChevronUp, Lightbulb, Pause, Play, RotateCcw, SkipForward, ToggleLeft, ToggleRight, Volume2, VolumeX, Zap } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
-  baseRunSpeed, championGates, comparisonOperators, conditionCode, corridorCenterAt, correctForkSide, energyRange, evaluateGate, explainGate,
-  forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, mulberry32,
-  planCorridor, planCourse, speedForGate, type BackroomGate, type ComparisonOperator, type GateExplanation, type GateValues,
+  baseRunSpeed, championGates, clearHeight, comparisonOperators, conditionCode, corridorCenterAt, correctForkSide, energyRange, evaluateGate, explainGate,
+  forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, jumpOffset, jumpSeconds, mulberry32,
+  planCorridor, planCourse, speedForGate, speedForLevelGate, type BackroomGate, type ComparisonOperator, type CorridorObstacle, type GateExplanation, type GateValues,
 } from './backroomEngine'
-import { backroomLevels, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
+import { backroomLevels, barrierChance, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
 import { BackroomAudio, loadAudioPreference, saveAudioPreference } from './backroomAudio'
-import { drawBackroom, type BackroomEntity, type GateSignal } from './backroomRenderer'
+import { createBackroomRenderer, type BackroomEntity, type GateSignal } from './backroomRenderer'
 import { advanceBackroomLighting, createBackroomLighting } from './backroomLighting'
 import { rememberBackroomScore, type BackroomScore } from './backroomScores'
 import { BackroomMenu, Stars } from './BackroomMenu'
@@ -26,6 +26,8 @@ interface Props {
 type Mode = { type: 'level'; index: number } | { type: 'endless' }
 type Status = 'menu' | 'briefing' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
 type MistakeReason = 'closed' | 'wrong-door' | 'pillar'
+// Steering hint: dodge left or right, or 2 for a barrier to jump.
+type Hazard = 0 | -1 | 1 | 2
 
 interface Mistake {
   gate: BackroomGate
@@ -107,6 +109,10 @@ function createGameState() {
     glitch: 0,
     shake: 0,
     stepDistance: 0,
+    // Seconds into the current jump, or -1 on the ground.
+    jumpT: -1,
+    jump: 0,
+    steer: 0,
     status: 'menu' as Status,
     reduced: false,
     menu: true,
@@ -131,7 +137,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   const [toast, setToast] = useState<{ text: string; tone: 'good' | 'bad' | 'info' } | null>(null)
   const [reveal, setReveal] = useState<{ code: string; result: boolean; note: string } | null>(null)
   const [turnHint, setTurnHint] = useState<0 | -1 | 1>(0)
-  const [hazardHint, setHazardHint] = useState<0 | -1 | 1>(0)
+  const [hazardHint, setHazardHint] = useState<Hazard>(0)
+  const [pace, setPace] = useState(1)
   const [nightshot, setNightshot] = useState(false)
   const [audioOn, setAudioOn] = useState(loadAudioPreference)
   const [scores, setScores] = useState<BackroomScore[]>([])
@@ -164,7 +171,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   const steerRef = useRef({ left: false, right: false })
   const steerStartRef = useRef({ left: 0, right: 0 })
   const turnHintRef = useRef<0 | -1 | 1>(0)
-  const hazardHintRef = useRef<0 | -1 | 1>(0)
+  const hazardHintRef = useRef<Hazard>(0)
   const timers = useRef<number[]>([])
   const toastTimer = useRef<number | null>(null)
   const revealTimer = useRef<number | null>(null)
@@ -252,7 +259,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
   const speedFor = (number: number) => {
     const current = run.current.mode
-    return current.type === 'level' ? backroomLevels[current.index].speed : speedForGate(number)
+    return current.type === 'level' ? speedForLevelGate(backroomLevels[current.index].speed, number) : speedForGate(number)
   }
 
   const lightsActiveFor = () => {
@@ -278,7 +285,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     g.gate = nextGate
     g.gateZ = g.nextGateZ
     g.gateCenter = g.nextGateCenter
-    Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse()))
+    const levelIndex = r.mode.type === 'level' ? r.mode.index : null
+    Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse(), r.random() < barrierChance(levelIndex, r.gateNumber)))
     g.values = { ...nextGate.start }
     g.truth = evaluateGate(nextGate, g.values)
     g.trueSide = g.nextTrueSide
@@ -288,6 +296,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     g.flashSide = 0
     g.falseIntensity = 0
     g.speed = speedFor(r.gateNumber)
+    // Pace is shown against the run's opening speed, so every run starts at 1.0x.
+    setPace(g.speed / speedFor(1))
     g.nextGate = null
     setLocked(false)
     setHintOpen(false)
@@ -321,7 +331,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     g.menu = false
   }
 
-  const startMode = (next: Mode) => {
+  // quick: straight back into the run, as after losing a tape.
+  const startMode = (next: Mode, quick = false) => {
     clearTimers()
     resetWorld()
     const seed = next.type === 'endless' ? (Date.now() ^ SEED_BASE) >>> 0 : SEED_BASE + (next.type === 'level' ? next.index : 0)
@@ -338,7 +349,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       mistakes: [],
       clock: 0,
       random: mulberry32(seed),
-      coachDone: new Set(),
+      coachDone: new Set(progressRef.current.coachSeen ?? []),
       coachAllowed: next.type === 'level' && !levelCleared && !(next.index === 0 && tutorialDone),
       bestAtStart: progressRef.current.backroomRunBest,
     }
@@ -361,7 +372,11 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     setNightshot(false)
     setShowChampion(false)
     steerRef.current = { left: false, right: false }
-    setGameStatus('briefing')
+    if (quick) {
+      enableAudioFromGesture()
+      setGameStatus('running')
+      screenRef.current?.focus()
+    } else setGameStatus('briefing')
   }
 
   const enableAudioFromGesture = () => {
@@ -458,7 +473,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     })
     if (revealTimer.current) window.clearTimeout(revealTimer.current)
     revealTimer.current = window.setTimeout(() => setReveal(null), 1700)
-    showToast(`+${earned} XP${r.combo >= 3 ? ` · COMBO ${r.combo}` : ''}`)
+    showToast(`+${earned} XP · PACE UP${r.combo >= 3 ? ` · COMBO ${r.combo}` : ''}`)
     audio.current?.doorOpen()
     audio.current?.correct()
     if (r.combo === 3 || r.combo === 6) audio.current?.combo()
@@ -539,6 +554,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
   const openCoach = (moment: CoachMoment, direction?: -1 | 1) => {
     run.current.coachDone.add(moment)
+    if (!(progressRef.current.coachSeen ?? []).includes(moment)) commit((p) => ({ ...p, coachSeen: [...(p.coachSeen ?? []), moment] }))
     steerRef.current = { left: false, right: false }
     setCoach({ moment, satisfied: false, direction })
     setGameStatus('coach')
@@ -574,16 +590,16 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     } else showToast('WALL SCRAPE · SLOWED', 'bad')
   }
 
-  const stumble = () => {
+  const stumble = (obstacle: CorridorObstacle) => {
     const g = game.current
     const r = run.current
-    g.obstacles = []
+    g.obstacles = g.obstacles.filter((item) => item !== obstacle)
     g.slow = 0.9
     g.shake = 0.8
     audio.current?.stumble()
     r.combo = 0
     setCombo(0)
-    showToast('YOU STUMBLED · COMBO LOST', 'bad')
+    showToast(obstacle.kind === 'barrier' ? 'YOU TRIPPED · JUMP IT NEXT TIME' : 'YOU STUMBLED · COMBO LOST', 'bad')
   }
 
   const events = useRef({ beginGate, afterGate, resolveGate, openCoach, scrape, stumble, setClock, setNightshot })
@@ -592,8 +608,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const context = canvas.getContext('2d')
-    if (!context) return
+    const view = createBackroomRenderer(canvas)
     const g = game.current
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
     const motionPreference = () => { g.reduced = !!media?.matches }
@@ -602,12 +617,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     let frame = 0
     let last = performance.now()
 
-    const resize = () => {
-      const rect = canvas.getBoundingClientRect()
-      canvas.width = Math.max(240, Math.round(rect.width / 3))
-      canvas.height = Math.max(140, Math.round(rect.height / 3))
-    }
-    resize()
+    const resize = () => view.resize()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
     observer?.observe(canvas)
 
@@ -674,6 +684,10 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
                   : allowed('energy') ? 'energy' : null
           if (moment) { events.current.openCoach(moment); return }
         }
+        if (g.phase === 'turn' && allowed('jump') && g.obstacles.some((item) => item.kind === 'barrier' && item.z - g.depth > 0 && item.z - g.depth <= 4.5)) {
+          events.current.openCoach('jump')
+          return
+        }
         if (g.phase === 'turn' && allowed('steer')) {
           const bend = g.bends[0]
           if (bend && g.depth >= bend.startZ - 3.2) { events.current.openCoach('steer', bend.dir); return }
@@ -698,6 +712,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       }
 
       const steer = (steerRef.current.left ? -1 : 0) + (steerRef.current.right ? 1 : 0)
+      g.steer += (steer - g.steer) * Math.min(1, dt * 6)
       g.playerX += steer * (STEER_SPEED + Math.max(0, g.speed - baseRunSpeed) * 0.35) * dt
       if (g.phase === 'gate' && target) {
         if (target.kind === 'set' && steer === 0 && distance > 4) g.playerX += (g.gateCenter - g.playerX) * Math.min(1, dt * 2.8)
@@ -710,14 +725,28 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       const previousDepth = g.depth
       g.slow = Math.max(0, g.slow - dt)
       g.depth += dt * g.speed * (g.slow > 0 ? 0.55 : 1) * 1.6
+      if (g.jumpT >= 0) {
+        g.jumpT += dt
+        g.jump = jumpOffset(g.jumpT)
+        if (g.jumpT >= jumpSeconds) {
+          g.jumpT = -1
+          g.jump = 0
+          g.shake = Math.max(g.shake, 0.18)
+          audio.current?.land()
+        }
+      }
+      const airborne = g.jump > clearHeight
       g.stepDistance += g.depth - previousDepth
-      if (g.stepDistance >= 0.85) { g.stepDistance = 0; audio.current?.footstep() }
+      if (g.stepDistance >= 0.85) { g.stepDistance = 0; if (g.jumpT < 0) audio.current?.footstep() }
 
       const bend = g.phase === 'turn' ? g.bends.find((item) => g.depth >= item.startZ - 3 && g.depth < item.endZ) : undefined
       const hint = bend?.dir ?? 0
       if (hint !== turnHintRef.current) { turnHintRef.current = hint; setTurnHint(hint) }
-      const obstacle = g.phase === 'turn' ? g.obstacles[0] : undefined
-      const hazard = obstacle && g.depth >= (g.bends[g.bends.length - 1]?.endZ ?? 0) - 1 && obstacle.z - g.depth <= 8 && obstacle.z - g.depth > -0.4 ? -obstacle.side as -1 | 1 : 0
+      const lastBendEnd = g.bends[g.bends.length - 1]?.endZ ?? 0
+      const next = g.phase === 'turn'
+        ? g.obstacles.filter((item) => item.z - g.depth > -0.4 && item.z - g.depth <= 8 && (item.kind === 'barrier' || g.depth >= lastBendEnd - 1)).sort((a, b) => a.z - b.z)[0]
+        : undefined
+      const hazard: Hazard = !next ? 0 : next.kind === 'barrier' ? 2 : -next.side as -1 | 1
       if (hazard !== hazardHintRef.current) { hazardHintRef.current = hazard; setHazardHint(hazard) }
 
       const center = corridorCenterAt(g.gateCenter, g.bends, g.depth)
@@ -732,7 +761,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         g.playerX = center + Math.sign(offset) * WALL_LIMIT
         if (!g.wallContact) { g.wallContact = true; events.current.scrape() }
       } else if (Math.abs(offset) < WALL_LIMIT - 0.06) g.wallContact = false
-      if (obstacle && hitsObstacle(previousDepth, g.depth, g.playerX, obstacle)) events.current.stumble()
+      const hit = g.obstacles.find((item) => hitsObstacle(previousDepth, g.depth, g.playerX, item, airborne))
+      if (hit) events.current.stumble(hit)
 
       if (g.phase === 'gate' && target) {
         if (g.resolved === 'none' && distance <= LOCK_DISTANCE) {
@@ -766,7 +796,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       const signal: GateSignal = !g.gate ? 'unknown'
         : g.gate.kind === 'set' && g.gate.liveTruth ? (g.truth ? 'true' : 'false')
           : g.resolved === 'none' ? 'unknown' : g.truth ? 'true' : 'false'
-      drawBackroom(context, canvas.width, canvas.height, {
+      view.render({
         depth: g.depth,
         gateZ: g.gateZ,
         gateCenter: g.gateCenter,
@@ -795,6 +825,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         seed: SEED_BASE,
         reduced: g.reduced,
         shake: g.shake,
+        steer: g.steer,
+        jump: g.jump,
+        pace: g.speed / baseRunSpeed,
         hideGate: g.menu,
       })
       screenRef.current?.style.setProperty('--false', g.falseIntensity.toFixed(3))
@@ -803,6 +836,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     return () => {
       cancelAnimationFrame(frame)
       observer?.disconnect()
+      view.dispose()
       media?.removeEventListener?.('change', motionPreference)
     }
   }, [])
@@ -934,6 +968,16 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     if (heldFor < 170 && game.current.status === 'running') game.current.playerX += direction * 0.23
   }
 
+  const jump = () => {
+    const g = game.current
+    const current = coachRef.current
+    if (g.status === 'coach' && current?.moment === 'jump') closeCoach()
+    else if (g.status !== 'running') return
+    if (g.jumpT >= 0) return
+    g.jumpT = 0
+    audio.current?.jump()
+  }
+
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target instanceof HTMLElement ? event.target : null
     if (target?.matches('input, textarea, select') || target?.isContentEditable) return
@@ -957,13 +1001,19 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       toggleFlag()
       return
     }
+    if (key === ' ' && (current === 'running' || current === 'coach')) {
+      event.preventDefault()
+      jump()
+      return
+    }
     // A focused button handles Enter and Space itself.
     if ((key === 'Enter' || key === ' ') && target?.tagName === 'BUTTON') return
     if (key === 'Enter' || key === ' ') {
       if (current === 'briefing') { event.preventDefault(); launch(); return }
       if (current === 'mistake') { event.preventDefault(); continueAfterMistake(); return }
+      if (current === 'paused') { event.preventDefault(); resume(); return }
     }
-    if (key === ' ' || key === 'Escape') {
+    if (key === 'Escape' || key === 'p' || key === 'P') {
       if (current === 'running' || current === 'coach' || current === 'paused') {
         event.preventDefault()
         togglePause()
@@ -1008,7 +1058,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
   const playLevel = (index: number) => startMode({ type: 'level', index })
   const playEndless = () => startMode({ type: 'endless' })
-  const retry = () => startMode(run.current.mode)
+  const retry = () => startMode(run.current.mode, true)
 
   const live = status !== 'menu'
   const inGate = phase === 'gate'
@@ -1033,6 +1083,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         ? { title: 'TRUE. THE GATE OPENS.', body: `${values.energy} ${conditionCode(gate).replace('energy ', '')} is TRUE. Keep going.` }
         : { title: 'MAKE IT TRUE', body: `This gate runs if (${conditionCode(gate)}). energy is ${values.energy}, so the condition is FALSE. Use ▲ / ▼ (or ↑ / ↓) to change energy until it reads TRUE.` }
       case 'steer': return { title: 'FOLLOW THE CORRIDOR', body: `The corridor bends ${sideWord(coach.direction ?? 1)}. Hold ${coach.direction === -1 ? '◀ (or ←)' : '▶ (or →)'} to steer. Scraping a wall slows you down and breaks your combo.` }
+      case 'jump': return { title: 'JUMP!', body: 'A barrier blocks the whole corridor. Press SPACE or tap JUMP to leap over it. Chairs and bins can be jumped too.' }
       case 'fork': return { title: 'TWO DOORS', body: 'This time the code sets the values. Read the condition: is it TRUE or FALSE? Steer into that door. Your choice locks just before the gate.' }
       case 'bool': return coach.satisfied
         ? { title: 'TRUE. THE GATE OPENS.', body: `${flagName} is now ${String(values.flag)}, so the condition is TRUE.` }
@@ -1104,6 +1155,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         <div className="br-osd-right">
           {champion && mode.type === 'endless' && <BackroomChampionBadge />}
           {combo >= 2 && <span className="br-combo" key={combo}>COMBO {combo}</span>}
+          <span className="br-pace" aria-label={`Pace ${pace.toFixed(1)} times`}>PACE {pace.toFixed(1)}×</span>
           <span className="br-xp"><Zap size={15} fill="currentColor" /> {xp}</span>
           {batteries(lives)}
           <button className="br-icon" onClick={toggleAudio} aria-label={audioOn ? 'Turn sound off' : 'Turn sound on'}>{audioOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
@@ -1132,19 +1184,22 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         <div className="br-console-center">
           {codeGate && <CodePanel gate={codeGate} values={codeValues} editable={canEdit} truth={codeTruth} trueSide={phase === 'turn' ? game.current.nextTrueSide : trueSide} label={phase === 'turn' ? `NEXT · GATE ${String(gateNumber + 1).padStart(2, '0')}` : `GATE ${String(gateNumber).padStart(2, '0')}`} />}
           <div className="br-console-foot">
-            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · READ THE NEXT GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
+            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint === 2 ? 'JUMP THE BARRIER' : hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · READ THE NEXT GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
             <button className="br-hint-button" disabled={!inGate || (status !== 'running' && status !== 'coach')} onClick={() => setHintOpen((open) => !open)} aria-expanded={hintOpen}><Lightbulb size={15} /> HINT</button>
           </div>
           {hintOpen && inGate && <p className="br-hint" role="status"><Lightbulb size={15} /> {hint}</p>}
         </div>
 
-        <div className={`br-pad br-pad--steer ${turnHint === -1 ? 'is-left' : turnHint === 1 ? 'is-right' : ''} ${hazardHint === -1 ? 'avoid-left' : hazardHint === 1 ? 'avoid-right' : ''}`} aria-label="Corridor steering">
+        <div className={`br-pad br-pad--steer ${turnHint === -1 ? 'is-left' : turnHint === 1 ? 'is-right' : ''} ${hazardHint === -1 ? 'avoid-left' : hazardHint === 1 ? 'avoid-right' : hazardHint === 2 ? 'is-jump' : ''}`} aria-label="Corridor steering">
+          <button className="br-key br-key--jump" aria-label="Jump" onPointerDown={(event) => { if (event.button === 0) jump() }} onContextMenu={(event) => event.preventDefault()}><ChevronsUp size={22} /> JUMP <kbd>SPACE</kbd></button>
+          <div className="br-steer-row">
           <button className="br-key br-key--steer" aria-label="Move left" onPointerDown={() => steerDown(-1)} onPointerUp={() => steerUp(-1)} onPointerLeave={() => steerUp(-1)} onPointerCancel={() => steerUp(-1)} onContextMenu={(event) => event.preventDefault()}>
             <ChevronLeft size={34} />{forkNow ? <small className={trueSide < 0 ? 'is-true' : 'is-false'}>{trueSide < 0 ? 'TRUE' : 'FALSE'}</small> : <kbd>←</kbd>}
           </button>
           <button className="br-key br-key--steer" aria-label="Move right" onPointerDown={() => steerDown(1)} onPointerUp={() => steerUp(1)} onPointerLeave={() => steerUp(1)} onPointerCancel={() => steerUp(1)} onContextMenu={(event) => event.preventDefault()}>
             <ChevronRight size={34} />{forkNow ? <small className={trueSide > 0 ? 'is-true' : 'is-false'}>{trueSide > 0 ? 'TRUE' : 'FALSE'}</small> : <kbd>→</kbd>}
           </button>
+          </div>
         </div>
       </section>
 
@@ -1152,7 +1207,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         <small>{coach?.satisfied ? 'NICE' : 'FIELD GUIDE'}</small>
         <strong>{coachCopy.title}</strong>
         <p>{coachCopy.body}</p>
-        {(coach?.moment === 'steer' || coach?.moment === 'fork') && <button className="br-secondary" onClick={closeCoach}>GOT IT</button>}
+        {(coach?.moment === 'steer' || coach?.moment === 'fork' || coach?.moment === 'jump') && <button className="br-secondary" onClick={closeCoach}>GOT IT</button>}
       </div>}
     </>}
 
@@ -1175,7 +1230,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
           <button className="br-primary" onClick={launch}><Play size={18} fill="currentColor" /> {level && level.id === 1 && stars[0] === 0 ? 'START TUTORIAL' : 'PRESS PLAY'}</button>
           <button className="br-secondary" onClick={toMenu}>TAPES</button>
         </div>
-        <p className="br-keys-note">← → steer · ↑ ↓ energy · T toggle bool · SPACE pause</p>
+        <p className="br-keys-note">← → steer · ↑ ↓ energy · T toggle bool · SPACE jump · ESC pause</p>
       </div>
     </div>}
 

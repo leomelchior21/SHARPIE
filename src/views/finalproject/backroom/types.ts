@@ -1,5 +1,5 @@
 import type { ComparisonOperator, SkillKey } from './backroomEngine'
-import { normalizeStars } from './backroomLevels'
+import { normalizeStars, type CoachMoment } from './backroomLevels'
 
 export type SkillRecord = Partial<Record<SkillKey, { right: number; wrong: number }>>
 
@@ -17,8 +17,10 @@ export interface BackroomProgress {
   // Stars per tape, 0 when the tape has not been cleared yet.
   levelStars: number[]
   skills: SkillRecord
+  // Guided pauses already shown; they never repeat, even after losing a tape.
+  coachSeen: CoachMoment[]
 }
 
 export function createBackroomProgress(name: string, username = name.toLowerCase(), isTeacher = false): BackroomProgress {
-  return { name, username, isTeacher, backroomRunBest: 0, backroomRunXp: 0, backroomRunGates: 0, backroomRunOperators: [], levelStars: normalizeStars([]), skills: {} }
+  return { name, username, isTeacher, backroomRunBest: 0, backroomRunXp: 0, backroomRunGates: 0, backroomRunOperators: [], levelStars: normalizeStars([]), skills: {}, coachSeen: [] }
 }

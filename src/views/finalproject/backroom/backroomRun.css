@@ -24,17 +24,18 @@
   touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
 .br-screen * { box-sizing: border-box; }
-.br-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.br-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.br-canvas.is-pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
 
 /* Film: grain, scanlines, vignette and low-battery pulse. */
 .br-film { position: absolute; z-index: 2; inset: 0; overflow: hidden; pointer-events: none; }
 .br-film i { position: absolute; inset: 0; }
 .br-film .br-grain {
-  inset: -60px; opacity: .1; mix-blend-mode: overlay;
+  inset: -60px; opacity: .05; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .7 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   background-size: 180px; animation: br-grain .5s steps(5) infinite;
 }
-.br-film .br-scan { background: repeating-linear-gradient(180deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); opacity: .45; }
+.br-film .br-scan { background: repeating-linear-gradient(180deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); opacity: .22; }
 .br-film .br-vignette { background: radial-gradient(ellipse 75% 70% at 50% 46%, transparent 52%, rgba(14,8,0,.62) 100%); box-shadow: inset 0 0 calc(var(--false, 0) * 140px) rgba(255,48,62,.55); transition: box-shadow .18s linear; }
 .br-screen.is-low-battery .br-film .br-vignette { animation: br-low 1.6s ease-in-out infinite; }
 .br-screen.is-nightshot .br-film .br-grain { opacity: .2; }
@@ -66,6 +67,7 @@
 .br-pips i.is-now { border-color: var(--br-amber); background: rgba(255,212,90,.35); animation: br-pulse 1.2s ease-in-out infinite; }
 .br-gatecount { padding: 4px 12px; border: 1px solid var(--br-line); border-radius: 999px; background: rgba(8,8,6,.45); font-size: clamp(16px, 2.4vh, 23px); letter-spacing: .08em; }
 .br-osd-right { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; font-size: clamp(16px, 2.4vh, 23px); }
+.br-pace { color: #ffb36b; font-size: .82em; }
 .br-xp { display: inline-flex; align-items: center; gap: 5px; color: var(--br-amber); }
 .br-combo { padding: 2px 9px; border: 2px solid var(--br-amber); color: #1c1404; background: var(--br-amber); text-shadow: none; animation: br-pop .32s cubic-bezier(.2,1.6,.4,1) both; }
 .br-battery { position: relative; display: inline-flex; gap: 3px; padding: 3px 4px; margin-right: 6px; border: 2px solid var(--br-ink); border-radius: 3px; }
@@ -101,9 +103,14 @@
 .fp-shell .br-screen.br-screen button.br-key kbd, .fp-shell .br-screen.br-screen button.br-switch kbd { font: inherit; font-size: clamp(11px, 1.5vh, 13px); color: var(--br-dim); }
 .fp-shell .br-screen.br-screen button.br-key--steer { width: clamp(86px, 11.5vh, 128px); height: clamp(86px, 11.5vh, 128px); border-radius: 24px; }
 .fp-shell .br-screen.br-screen button.br-key--steer small { font-size: clamp(13px, 1.9vh, 17px); letter-spacing: .1em; }
-.br-pad--steer.is-left .br-key--steer:first-child, .br-pad--steer.is-right .br-key--steer:last-child { animation: br-call 0.9s ease-in-out infinite; }
-.fp-shell .br-screen.br-screen .br-pad--steer.is-left button.br-key--steer:first-child, .fp-shell .br-screen.br-screen .br-pad--steer.is-right button.br-key--steer:last-child { border-color: var(--br-amber); color: var(--br-amber); }
-.fp-shell .br-screen.br-screen .br-pad--steer.avoid-left button.br-key--steer:first-child, .fp-shell .br-screen.br-screen .br-pad--steer.avoid-right button.br-key--steer:last-child { border-color: #ff9a4a; color: #ffb36b; }
+.br-pad--steer { flex-direction: column; align-items: stretch; }
+.br-steer-row { display: flex; gap: clamp(8px, 1.2vw, 14px); }
+.fp-shell .br-screen.br-screen button.br-key--jump { display: flex; justify-content: center; gap: 8px; width: auto; height: clamp(44px, 6vh, 56px); border-radius: 16px; font-size: clamp(15px, 2.1vh, 19px); letter-spacing: .14em; }
+.fp-shell .br-screen.br-screen button.br-key--jump kbd { font-size: 11px; }
+.fp-shell .br-screen.br-screen .br-pad--steer.is-jump button.br-key--jump { border-color: var(--br-amber); color: var(--br-amber); animation: br-call .7s ease-in-out infinite; }
+.br-pad--steer.is-left .br-steer-row .br-key--steer:first-child, .br-pad--steer.is-right .br-steer-row .br-key--steer:last-child { animation: br-call 0.9s ease-in-out infinite; }
+.fp-shell .br-screen.br-screen .br-pad--steer.is-left .br-steer-row button.br-key--steer:first-child, .fp-shell .br-screen.br-screen .br-pad--steer.is-right .br-steer-row button.br-key--steer:last-child { border-color: var(--br-amber); color: var(--br-amber); }
+.fp-shell .br-screen.br-screen .br-pad--steer.avoid-left .br-steer-row button.br-key--steer:first-child, .fp-shell .br-screen.br-screen .br-pad--steer.avoid-right .br-steer-row button.br-key--steer:last-child { border-color: #ff9a4a; color: #ffb36b; }
 .br-console.is-fork .br-key--steer small.is-true, .br-key--steer small.is-true { color: var(--br-true); }
 .br-key--steer small.is-false { color: var(--br-false); }
 .fp-shell .br-screen.br-screen .br-console.is-fork button.br-key--steer { border-color: rgba(255,212,90,.55); animation: br-call 1.4s ease-in-out infinite; }
@@ -337,6 +344,8 @@
   .br-code-head { padding-inline: 12px; }
   .fp-shell .br-screen.br-screen button.br-key { width: 64px; height: 54px; border-radius: 14px; }
   .fp-shell .br-screen.br-screen button.br-key--steer { width: 76px; height: 76px; }
+  .fp-shell .br-screen.br-screen button.br-key--jump { width: auto; height: 44px; }
+  .fp-shell .br-screen.br-screen button.br-key--jump kbd { display: none; }
   .fp-shell .br-screen.br-screen button.br-switch { min-width: 112px; padding: 8px 10px; }
   .fp-shell .br-screen.br-screen button.br-tape { grid-template-columns: 40px minmax(0, 1fr) auto; }
   .br-tape-focus { display: none; }
@@ -358,7 +367,7 @@
 @media (prefers-reduced-motion: reduce) {
   .br-film .br-grain, .br-rec i, .br-kicker i, .br-pips i.is-now, .br-truth.is-unknown, .br-battery.is-low, .br-unlock,
   .br-title::before, .br-title::after, .br-screen.is-low-battery .br-film .br-vignette,
-  .br-pad--steer.is-left .br-key--steer:first-child, .br-pad--steer.is-right .br-key--steer:last-child,
+  .br-pad--steer.is-left .br-steer-row .br-key--steer:first-child, .br-pad--steer.is-right .br-steer-row .br-key--steer:last-child, .fp-shell .br-screen.br-screen .br-pad--steer.is-jump button.br-key--jump,
   .fp-shell .br-screen.br-screen .br-console.is-fork button.br-key--steer { animation: none; }
   .br-toast, .br-reveal, .br-coach, .br-overlay, .br-menu, .br-combo, .br-card--result > .br-stars svg { animation: none; }
 }

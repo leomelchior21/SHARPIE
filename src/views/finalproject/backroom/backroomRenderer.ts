@@ -37,7 +37,63 @@ export interface BackroomView {
   seed: number
   reduced: boolean
   shake: number
+  // -1..1 steering input, for camera lean.
+  steer: number
+  // Height of the current jump above the floor.
+  jump: number
+  // Current speed relative to the opening pace.
+  pace: number
   hideGate?: boolean
+}
+
+export interface BackroomRendererHandle {
+  render(view: BackroomView): void
+  resize(): void
+  dispose(): void
+}
+
+function supportsWebGL(): boolean {
+  try {
+    const probe = document.createElement('canvas')
+    return !!(probe.getContext('webgl2') || probe.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+// The flat canvas renderer: used where WebGL is unavailable.
+function createCanvasRenderer(canvas: HTMLCanvasElement): BackroomRendererHandle | null {
+  const context = canvas.getContext('2d')
+  if (!context) return null
+  canvas.classList.add('is-pixel')
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = Math.max(240, Math.round(rect.width / 3))
+    canvas.height = Math.max(140, Math.round(rect.height / 3))
+  }
+  resize()
+  return { render: (view) => drawBackroom(context, canvas.width, canvas.height, view), resize, dispose: () => undefined }
+}
+
+// The 3D scene loads as its own chunk; until it is ready nothing is drawn.
+export function createBackroomRenderer(canvas: HTMLCanvasElement): BackroomRendererHandle {
+  let active: BackroomRendererHandle | null = null
+  let disposed = false
+  const fallback = () => { if (!disposed && !active) active = createCanvasRenderer(canvas) }
+  if (supportsWebGL()) {
+    import('./backroomScene')
+      .then((module) => {
+        if (disposed) return
+        active = module.createBackroomScene(canvas)
+        if (!active) fallback()
+      })
+      .catch(fallback)
+  } else fallback()
+  return {
+    render: (view) => active?.render(view),
+    resize: () => active?.resize(),
+    dispose: () => { disposed = true; active?.dispose(); active = null },
+  }
 }
 
 const palette = {
@@ -496,13 +552,36 @@ function drawDust(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomVie
   ctx.globalAlpha = 1
 }
 
+function drawBarrier(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, z: number) {
+  const distance = z - view.depth
+  if (distance <= 0.2 || distance > 20) return
+  const center = centerAt(view, z)
+  const left = screenX(p, distance, center - p.half * 0.92)
+  const right = screenX(p, distance, center + p.half * 0.92)
+  for (const [v, thickness] of [[0.34, 0.07], [0.2, 0.05]] as const) {
+    const top = wallY(p, distance, v)
+    const bottom = wallY(p, distance, v - thickness)
+    ctx.fillStyle = palette.hazard
+    ctx.fillRect(left, top, right - left, bottom - top)
+    ctx.fillStyle = palette.steelDark
+    const step = Math.max(4, (right - left) / 12)
+    for (let x = left; x < right; x += step * 2) ctx.fillRect(x, top, step, bottom - top)
+  }
+  ctx.fillStyle = palette.steelDark
+  for (const side of [-0.85, 0.85]) {
+    const x = screenX(p, distance, center + side * p.half)
+    ctx.fillRect(x - 1, wallY(p, distance, 0.36), Math.max(2, (right - left) * 0.02), wallY(p, distance, 0) - wallY(p, distance, 0.36))
+  }
+}
+
 function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  for (const obstacle of view.obstacles) if (obstacle.kind === 'barrier') drawBarrier(ctx, p, view, obstacle.z)
   if (view.phase !== 'turn') return
   const lastBend = view.bends[view.bends.length - 1]
   if (!lastBend || view.depth < lastBend.endZ - 4) return
   for (const obstacle of view.obstacles) {
     const distance = obstacle.z - view.depth
-    if (distance <= 0.2 || distance > 18) continue
+    if (obstacle.kind === 'barrier' || distance <= 0.2 || distance > 18) continue
     const unit = p.focal * 0.83 / perspectiveDistance(distance)
     const x = screenX(p, distance, obstacle.x)
     const floor = p.horizon + unit * p.eye
@@ -917,6 +996,7 @@ function applyTrackingGlitch(ctx: CanvasRenderingContext2D, width: number, heigh
 
 export function drawBackroom(ctx: CanvasRenderingContext2D, width: number, height: number, view: BackroomView) {
   const p = makeProjector(width, height, view.playerX)
+  p.eye += view.jump * 0.9
   if (!view.reduced) {
     const step = view.depth * 3.1
     p.horizon += (Math.sin(step) * 0.6 + Math.sin(step * 2.1 + 0.7) * 0.4) * height * 0.012

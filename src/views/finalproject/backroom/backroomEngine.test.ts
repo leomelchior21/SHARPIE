@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baseRunSpeed, championGates, comparisonOperators, conditionCode, correctForkSide, corridorCenterAt, energyRange, evaluateCondition, evaluateGate,
   explainGate, falseStart, forkSide, gateSkills, gateXp, generateEndlessGate, hitsObstacle, mulberry32, operatorWords, planCorridor, planCourse,
-  speedForGate, type BackroomGate, type Clause,
+  speedForGate, speedForLevelGate, jumpOffset, jumpSeconds, jumpHeight, type BackroomGate, type Clause,
 } from './backroomEngine'
 
 function lcg(seed: number): () => number {
@@ -194,5 +194,27 @@ describe('xp and pace', () => {
   it('keeps the endless pace climbing past the champion milestone', () => {
     expect(speedForGate(1)).toBe(baseRunSpeed)
     for (const number of [2, 100, championGates, 10000]) expect(speedForGate(number)).toBeGreaterThan(speedForGate(number - 1))
+  })
+})
+
+describe('jumping', () => {
+  it('arcs up and back down within the jump time', () => {
+    expect(jumpOffset(-1)).toBe(0)
+    expect(jumpOffset(jumpSeconds / 2)).toBeCloseTo(jumpHeight)
+    expect(jumpOffset(jumpSeconds)).toBe(0)
+  })
+
+  it('clears every obstacle in the air, and a barrier blocks the whole width on the ground', () => {
+    const plan = planCorridor(9, 0, planCourse(() => 0.99), true)
+    const barrier = plan.obstacles.find((item) => item.kind === 'barrier')!
+    expect(barrier.z).toBe(plan.bends[0].endZ + 2)
+    expect(hitsObstacle(barrier.z - 0.1, barrier.z, 0.7, barrier)).toBe(true)
+    expect(hitsObstacle(barrier.z - 0.1, barrier.z, 0.7, barrier, true)).toBe(false)
+    expect(planCorridor(9, 0, planCourse(() => 0.99)).obstacles.some((item) => item.kind === 'barrier')).toBe(false)
+  })
+
+  it('speeds tapes up after every gate from their own opening pace', () => {
+    expect(speedForLevelGate(1, 1)).toBe(1)
+    expect(speedForLevelGate(1, 4)).toBeCloseTo(1 + 3 * 0.11 * 1.2)
   })
 })
