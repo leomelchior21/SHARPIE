@@ -1,5 +1,12 @@
-import { corridorCenterAt, type CorridorBend, type CorridorObstacle } from './backroomEngine'
-import { lightingStartGate } from './backroomLighting'
+import { corridorCenterAt, type CorridorBend, type CorridorObstacle, type GateKind } from './backroomEngine'
+
+export type GateSignal = 'true' | 'false' | 'unknown'
+
+export interface BackroomEntity {
+  z: number
+  x: number
+  alpha: number
+}
 
 export interface BackroomView {
   depth: number
@@ -11,15 +18,26 @@ export interface BackroomView {
   nextGateCenter: number
   phase: 'gate' | 'turn'
   playerX: number
+  gateKind: GateKind
+  nextGateKind: GateKind
+  signal: GateSignal
+  trueSide: -1 | 1
+  nextTrueSide: -1 | 1
   openAmount: number
-  conditionTrue: boolean
+  doorOpen: [number, number]
+  flashSide: -1 | 0 | 1
   falseIntensity: number
   time: number
   roomLight: number
+  lightsActive: boolean
+  nightVision: number
+  entity: BackroomEntity | null
+  glitch: number
   gateNumber: number
   seed: number
   reduced: boolean
   shake: number
+  hideGate?: boolean
 }
 
 const palette = {
@@ -45,7 +63,12 @@ const palette = {
   greenDark: '#1c6f3f',
   red: '#ff5560',
   redDark: '#8f1c27',
+  amber: '#ffb43b',
+  amberDark: '#7a4a10',
+  cyan: '#73d5ff',
+  cyanDark: '#346785',
   sign: '#12161f',
+  void: '#080b0d',
 }
 
 interface Projector {
@@ -79,13 +102,17 @@ function wallY(p: Projector, distance: number, v: number) {
   return p.horizon - (p.focal * 0.83 * (v - p.eye)) / perspectiveDistance(distance)
 }
 
+function screenX(p: Projector, distance: number, worldX: number) {
+  return p.cx + ((worldX - p.playerX) * p.focal) / perspectiveDistance(distance)
+}
+
 function hashTile(index: number, seed: number): number {
   const value = Math.imul(index + 1, 2654435761) ^ Math.imul(seed + 7, 40503)
   return (value >>> 0) % 1000
 }
 
 function fixtureStrength(view: BackroomView, index: number): number {
-  if (view.reduced || view.gateNumber < lightingStartGate) return 1
+  if (view.reduced || !view.lightsActive) return 1
   const character = hashTile(index, view.seed)
   if (character % 4 !== 0) return view.roomLight
   const cycle = 7 + character % 6
@@ -175,6 +202,82 @@ function drawWallpaper(ctx: CanvasRenderingContext2D, p: Projector, view: Backro
   }
 }
 
+// Water damage creeping down from the ceiling line.
+function drawWallStain(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, side: 'left' | 'right', zNear: number, character: number) {
+  const z0 = zNear + 0.1 + (character % 30) / 100
+  const z1 = z0 + 0.35 + (character % 17) / 100
+  if (z0 - view.depth < 0.35) return
+  const reach = 0.62 + (character % 23) / 100
+  const xAt = (worldZ: number) => wallX(p, view, side, worldZ)
+  ctx.globalAlpha = 0.16
+  quad(ctx,
+    { x: xAt(z0), y: wallY(p, z0 - view.depth, 1) },
+    { x: xAt(z1), y: wallY(p, z1 - view.depth, 1) },
+    { x: xAt(z1), y: wallY(p, z1 - view.depth, reach + 0.1) },
+    { x: xAt(z0), y: wallY(p, z0 - view.depth, reach) },
+    '#5c4413',
+  )
+  ctx.globalAlpha = 0.1
+  quad(ctx,
+    { x: xAt(z0 + 0.06), y: wallY(p, z0 + 0.06 - view.depth, reach) },
+    { x: xAt(z0 + 0.12), y: wallY(p, z0 + 0.12 - view.depth, reach) },
+    { x: xAt(z0 + 0.12), y: wallY(p, z0 + 0.12 - view.depth, reach - 0.24) },
+    { x: xAt(z0 + 0.06), y: wallY(p, z0 + 0.06 - view.depth, reach - 0.18) },
+    '#4a360d',
+  )
+  ctx.globalAlpha = 1
+}
+
+// An open doorway into another empty room: the Backrooms go on in every direction.
+function drawSideDoorway(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, side: 'left' | 'right', zNear: number) {
+  const z0 = zNear + 0.18
+  const z1 = zNear + 0.82
+  if (z0 - view.depth < 0.4) return
+  const x0 = wallX(p, view, side, z0)
+  const x1 = wallX(p, view, side, z1)
+  const top = 0.8
+  const a = { x: x0, y: wallY(p, z0 - view.depth, 0) }
+  const b = { x: x1, y: wallY(p, z1 - view.depth, 0) }
+  const c = { x: x1, y: wallY(p, z1 - view.depth, top) }
+  const d = { x: x0, y: wallY(p, z0 - view.depth, top) }
+  quad(ctx, a, b, c, d, '#2a2210')
+  // The far room is lit a little, as if its own fluorescent is still on.
+  ctx.globalAlpha = 0.55
+  const inset = 0.22
+  const lerp = (from: Point, to: Point, t: number) => ({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t })
+  quad(ctx, lerp(a, b, inset), lerp(b, a, inset), lerp(c, d, inset), lerp(d, c, inset), '#5d4b20')
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = '#7d5f22'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(a.x, a.y)
+  ctx.lineTo(d.x, d.y)
+  ctx.lineTo(c.x, c.y)
+  ctx.lineTo(b.x, b.y)
+  ctx.stroke()
+}
+
+function drawFloorStain(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, zNear: number, character: number) {
+  const z0 = zNear + 0.15
+  const z1 = zNear + 0.7 + (character % 20) / 100
+  const near = z0 - view.depth
+  if (near < 0.35) return
+  const far = z1 - view.depth
+  const start = -0.75 + (character % 90) / 100
+  const end = start + 0.32 + (character % 13) / 100
+  const xAt = (distance: number, fraction: number) => screenX(p, distance, centerAt(view, view.depth + distance) + fraction * p.half)
+  const yAt = (distance: number) => wallY(p, distance, 0)
+  ctx.globalAlpha = 0.2
+  quad(ctx,
+    { x: xAt(near, start), y: yAt(near) },
+    { x: xAt(near, end), y: yAt(near) },
+    { x: xAt(far, end - 0.08), y: yAt(far) },
+    { x: xAt(far, start + 0.06), y: yAt(far) },
+    '#5a4518',
+  )
+  ctx.globalAlpha = 1
+}
+
 function drawTurnSign(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
   const bend = view.phase === 'turn' ? view.bends.find((item) => item.endZ > view.depth && item.startZ - view.depth < 16) : undefined
   if (!bend) return
@@ -223,7 +326,7 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
   }
   ctx.restore()
   const farOpening = project(p, far, centerAt(view, view.depth + far))
-  ctx.fillStyle = '#080b0d'
+  ctx.fillStyle = palette.void
   ctx.fillRect(farOpening.left, farOpening.ceiling, farOpening.right - farOpening.left, farOpening.floor - farOpening.ceiling)
   const first = Math.floor(view.depth + near)
   const last = Math.ceil(view.depth + far)
@@ -240,6 +343,7 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
     const pf = project(p, farDistance, cf)
     const shade = index % 2 === 0
     const size = pn.floor - pn.ceiling
+    const character = hashTile(index * 3 + 1, view.seed)
 
     quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, shade ? palette.floorAlt : palette.floor)
     quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.right, y: pf.ceiling }, { x: pn.right, y: pn.ceiling }, { x: pn.left, y: pn.ceiling }, shade ? palette.ceilingAlt : palette.ceiling)
@@ -249,6 +353,9 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
     if (size > 12) {
       drawWallpaper(ctx, p, view, 'left', zNear, zFar, index)
       drawWallpaper(ctx, p, view, 'right', zNear, zFar, index)
+      if (character % 6 === 0) drawFloorStain(ctx, p, view, zNear, character)
+      if (character % 7 === 3) drawWallStain(ctx, p, view, character % 2 === 0 ? 'left' : 'right', zNear, character)
+      if (character % 13 === 5 && Math.abs(cn - cf) < 0.05) drawSideDoorway(ctx, p, view, character % 2 === 0 ? 'right' : 'left', zNear)
     }
 
     const fade = Math.max(0.1, Math.min(0.65, 10 / Math.max(farDistance, 1)))
@@ -287,10 +394,10 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
 
     const fog = Math.min(0.9, 0.1 + Math.pow(Math.max(0, farDistance - 3) / 23, 1.35) * 0.82)
     ctx.globalAlpha = fog
-    quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, '#080b0d')
-    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.right, y: pf.ceiling }, { x: pn.right, y: pn.ceiling }, { x: pn.left, y: pn.ceiling }, '#080b0d')
-    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.left, y: pf.floor }, { x: pn.left, y: pn.floor }, { x: pn.left, y: pn.ceiling }, '#080b0d')
-    quad(ctx, { x: pf.right, y: pf.ceiling }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.right, y: pn.ceiling }, '#080b0d')
+    quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, palette.void)
+    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.right, y: pf.ceiling }, { x: pn.right, y: pn.ceiling }, { x: pn.left, y: pn.ceiling }, palette.void)
+    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.left, y: pf.floor }, { x: pn.left, y: pn.floor }, { x: pn.left, y: pn.ceiling }, palette.void)
+    quad(ctx, { x: pf.right, y: pf.ceiling }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.right, y: pn.ceiling }, palette.void)
     ctx.globalAlpha = 1
 
     const nearestLight = Math.round((index - 2) / 5) * 5 + 2
@@ -298,15 +405,18 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
     // A failing fixture also removes its light from the nearby room surfaces.
     const localStrength = view.roomLight > 0 ? fixtureStrength(view, nearestLight) / view.roomLight : 1
     ctx.globalAlpha = (1 - localStrength) * 0.62
-    quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, '#080b0d')
-    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.right, y: pf.ceiling }, { x: pn.right, y: pn.ceiling }, { x: pn.left, y: pn.ceiling }, '#080b0d')
-    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.left, y: pf.floor }, { x: pn.left, y: pn.floor }, { x: pn.left, y: pn.ceiling }, '#080b0d')
-    quad(ctx, { x: pf.right, y: pf.ceiling }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.right, y: pn.ceiling }, '#080b0d')
+    quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, palette.void)
+    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.right, y: pf.ceiling }, { x: pn.right, y: pn.ceiling }, { x: pn.left, y: pn.ceiling }, palette.void)
+    quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.left, y: pf.floor }, { x: pn.left, y: pn.floor }, { x: pn.left, y: pn.ceiling }, palette.void)
+    quad(ctx, { x: pf.right, y: pf.ceiling }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.right, y: pn.ceiling }, palette.void)
     ctx.globalAlpha = 1
     if (lightDistance <= 2 && nearDistance > 0.3) {
       const strength = fixtureStrength(view, nearestLight)
       ctx.globalAlpha = (0.11 - lightDistance * 0.035) * strength
       quad(ctx, { x: pf.left, y: pf.floor }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.left, y: pn.floor }, '#ffe29a')
+      ctx.globalAlpha = (0.08 - lightDistance * 0.025) * strength
+      quad(ctx, { x: pf.left, y: pf.ceiling }, { x: pf.left, y: pf.floor }, { x: pn.left, y: pn.floor }, { x: pn.left, y: pn.ceiling }, '#fff1b8')
+      quad(ctx, { x: pf.right, y: pf.ceiling }, { x: pf.right, y: pf.floor }, { x: pn.right, y: pn.floor }, { x: pn.right, y: pn.ceiling }, '#fff1b8')
       ctx.globalAlpha = 1
     }
 
@@ -362,7 +472,28 @@ function drawCorridor(ctx: CanvasRenderingContext2D, width: number, height: numb
       }
     }
   }
+}
 
+// Dust hangs in the fluorescent light, fixed in the world so it drifts past.
+function drawDust(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  const band = 14
+  const base = Math.floor(view.depth / band) * band
+  ctx.fillStyle = '#fff3c4'
+  for (let index = 0; index < 56; index += 1) {
+    const cycle = Math.floor(index / 28)
+    const z = base + cycle * band + (hashTile(index + cycle * 97, view.seed) % 1400) / 100
+    const distance = z - view.depth
+    if (distance < 0.5 || distance > 13) continue
+    const drift = view.reduced ? 0 : Math.sin(view.time * 0.35 + index) * 0.03
+    const x = centerAt(view, z) + ((hashTile(index * 7, view.seed) % 140) / 100 - 0.7) * 0.95 + drift
+    const v = 0.08 + (hashTile(index * 13, view.seed) % 88) / 100 + (view.reduced ? 0 : Math.sin(view.time * 0.22 + index * 1.7) * 0.02)
+    const sx = screenX(p, distance, x)
+    const sy = wallY(p, distance, v)
+    const size = Math.max(0.7, 2.2 / perspectiveDistance(distance) * 3)
+    ctx.globalAlpha = 0.22 * (1 - distance / 13) * Math.max(0.15, view.roomLight)
+    ctx.fillRect(sx, sy, size, size)
+  }
+  ctx.globalAlpha = 1
 }
 
 function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
@@ -373,7 +504,7 @@ function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: Backro
     const distance = obstacle.z - view.depth
     if (distance <= 0.2 || distance > 18) continue
     const unit = p.focal * 0.83 / perspectiveDistance(distance)
-    const x = p.cx + (obstacle.x - p.playerX) * p.focal / perspectiveDistance(distance)
+    const x = screenX(p, distance, obstacle.x)
     const floor = p.horizon + unit * p.eye
     const width = unit * 0.36
     const height = unit * 0.5
@@ -414,7 +545,95 @@ function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: Backro
   }
 }
 
-function drawGateStructure(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, distance: number, center: number, gateNumber: number, active: boolean, open: number, detailed: boolean, blinkRate: number, upcoming = false) {
+// A tall, thin figure at the end of the corridor, only ever seen in failing light.
+function drawEntity(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  const entity = view.entity
+  if (!entity || entity.alpha <= 0.01) return
+  const distance = entity.z - view.depth
+  if (distance < 2 || distance > 25) return
+  const fog = Math.min(0.9, 0.1 + Math.pow(Math.max(0, distance - 3) / 23, 1.35) * 0.82)
+  const jitter = view.reduced ? 0 : (hashTile(Math.floor(view.time * 18), view.seed) % 100 - 50) / 2400
+  const x = screenX(p, distance, entity.x + jitter)
+  const feet = wallY(p, distance, 0)
+  const head = wallY(p, distance, 0.94)
+  const height = feet - head
+  const width = height * 0.17
+  ctx.save()
+  ctx.globalAlpha = entity.alpha * (1 - fog * 0.55)
+  ctx.fillStyle = '#050403'
+  ctx.fillRect(x - width * 0.5, head + height * 0.16, width, height * 0.5)
+  ctx.fillRect(x - width * 0.44, head + height * 0.6, width * 0.32, height * 0.4)
+  ctx.fillRect(x + width * 0.12, head + height * 0.6, width * 0.32, height * 0.4)
+  ctx.fillRect(x - width * 0.78, head + height * 0.2, width * 0.24, height * 0.5)
+  ctx.fillRect(x + width * 0.54, head + height * 0.2, width * 0.24, height * 0.5)
+  ctx.beginPath()
+  ctx.ellipse(x, head + height * 0.08, width * 0.36, height * 0.085, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+interface GateLook {
+  signal: GateSignal | 'upcoming'
+  fork: boolean
+  trueSide: -1 | 1
+  open: number
+  doorOpen: [number, number]
+  flashSide: -1 | 0 | 1
+  label: string
+  blinkRate: number
+}
+
+function signalColor(signal: GateLook['signal']): [string, string] {
+  switch (signal) {
+    case 'true': return [palette.green, palette.greenDark]
+    case 'false': return [palette.red, palette.redDark]
+    case 'unknown': return [palette.amber, palette.amberDark]
+    case 'upcoming': return [palette.cyan, palette.cyanDark]
+  }
+}
+
+function drawShutter(ctx: CanvasRenderingContext2D, left: number, right: number, top: number, bottom: number, open: number, post: number) {
+  const width = right - left
+  const visible = (bottom - top) * (1 - open)
+  if (width < 1 || visible < 0.6) return
+  ctx.fillStyle = palette.steel
+  ctx.fillRect(left, top, width, visible)
+  ctx.fillStyle = palette.steelDark
+  const slat = Math.max(2, (bottom - top) / 11)
+  for (let y = top + slat; y < top + visible; y += slat) ctx.fillRect(left, y, width, Math.max(1, slat * 0.18))
+  ctx.fillStyle = palette.steelLight
+  ctx.fillRect(left, top, width, Math.max(1, slat * 0.3))
+  const stripe = Math.max(1, (bottom - top) * 0.1)
+  ctx.fillStyle = palette.hazard
+  ctx.fillRect(left, top + visible - stripe, width, stripe)
+  ctx.fillStyle = palette.steelDark
+  const step = Math.max(4, post * 0.9)
+  for (let x = left; x < right; x += step) ctx.fillRect(x, top + visible - stripe, Math.max(1.5, post * 0.32), stripe)
+  ctx.strokeStyle = palette.outline
+  ctx.lineWidth = Math.max(1, post * 0.08)
+  ctx.strokeRect(left, top, width, visible)
+}
+
+function drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, height: number, color: string, border: string) {
+  ctx.fillStyle = palette.steelDark
+  ctx.fillRect(x - width / 2 - 1.5, y - 1.5, width + 3, height + 3)
+  ctx.fillStyle = palette.sign
+  ctx.fillRect(x - width / 2, y, width, height)
+  ctx.strokeStyle = border
+  ctx.lineWidth = Math.max(1, height * 0.08)
+  ctx.strokeRect(x - width / 2 + 1, y + 1, width - 2, height - 2)
+  ctx.save()
+  ctx.shadowColor = color
+  ctx.shadowBlur = Math.max(2, height * 0.35)
+  ctx.fillStyle = color
+  ctx.font = `bold ${Math.max(6, Math.round(height * 0.62))}px "Backroom Pixel", monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, x, y + height * 0.54)
+  ctx.restore()
+}
+
+function drawGateStructure(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, distance: number, center: number, look: GateLook) {
   const proj = project(p, distance, center)
   const span = proj.right - proj.left
   const gateHeight = proj.floor - proj.ceiling
@@ -428,40 +647,68 @@ function drawGateStructure(ctx: CanvasRenderingContext2D, p: Projector, view: Ba
   const top = proj.ceiling
   const doorTop = top + beam
   const doorBottom = proj.floor
+  const [color, dark] = signalColor(look.signal)
 
-  const glow = ctx.createRadialGradient(p.cx, doorBottom, 1, p.cx, doorBottom, Math.max(6, span))
-  glow.addColorStop(0, upcoming ? 'rgba(83,191,245,.25)' : active ? 'rgba(92,232,127,.55)' : 'rgba(255,85,96,.3)')
+  // Light spills through the doorway; it fades as the doors open so the corridor beyond shows.
+  const opened = look.fork ? Math.max(look.doorOpen[0], look.doorOpen[1]) : look.open
+  const glow = ctx.createRadialGradient((innerLeft + innerRight) / 2, doorBottom, 1, (innerLeft + innerRight) / 2, doorBottom, Math.max(6, span))
+  const strength = 1 - opened * 0.8
+  glow.addColorStop(0, look.signal === 'true' ? `rgba(92,232,127,${0.55 * strength})` : look.signal === 'false' ? `rgba(255,85,96,${0.3 * strength})` : look.signal === 'unknown' ? `rgba(255,180,59,${0.3 * strength})` : 'rgba(83,191,245,.25)')
   glow.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = glow
   ctx.fillRect(innerLeft, doorTop, innerRight - innerLeft, doorBottom - doorTop)
 
-  const halfDoor = ((innerRight - innerLeft) / 2) * (1 - open)
-  if (halfDoor > 0.6) {
-    ctx.fillStyle = palette.steel
-    ctx.fillRect(innerLeft, doorTop, halfDoor, doorBottom - doorTop)
-    ctx.fillRect(innerRight - halfDoor, doorTop, halfDoor, doorBottom - doorTop)
-    ctx.fillStyle = palette.steelDark
-    const grooves = 3
-    for (let g = 1; g < grooves; g += 1) {
-      const gx = innerLeft + (halfDoor * g) / grooves
-      ctx.fillRect(gx, doorTop + gateHeight * 0.05, Math.max(1, post * 0.1), (doorBottom - doorTop) * 0.9)
-      ctx.fillRect(innerRight - (halfDoor * g) / grooves, doorTop + gateHeight * 0.05, Math.max(1, post * 0.1), (doorBottom - doorTop) * 0.9)
+  if (look.fork) {
+    const mid = (innerLeft + innerRight) / 2
+    const pillar = Math.max(2, post * 0.8)
+    const doors: Array<[number, number, -1 | 1]> = [[innerLeft, mid - pillar / 2, -1], [mid + pillar / 2, innerRight, 1]]
+    for (const [left, right, side] of doors) {
+      const open = side === -1 ? look.doorOpen[0] : look.doorOpen[1]
+      drawShutter(ctx, left, right, doorTop, doorBottom, open, post)
+      if (look.flashSide === side) {
+        const blink = view.reduced || Math.sin(view.time * 22) > -0.3
+        ctx.globalAlpha = blink ? 0.45 : 0.2
+        ctx.fillStyle = palette.red
+        ctx.fillRect(left, doorTop, right - left, doorBottom - doorTop)
+        ctx.globalAlpha = 1
+      }
     }
-    ctx.fillStyle = palette.steelLight
-    ctx.fillRect(innerLeft, doorTop, halfDoor, Math.max(1, gateHeight * 0.05))
-    ctx.fillRect(innerRight - halfDoor, doorTop, halfDoor, Math.max(1, gateHeight * 0.05))
+    ctx.fillStyle = palette.steel
+    ctx.fillRect(mid - pillar / 2, doorTop, pillar, doorBottom - doorTop)
     ctx.fillStyle = palette.hazard
-    const stripeHeight = Math.max(1, (doorBottom - doorTop) * 0.13)
-    ctx.fillRect(innerLeft, doorBottom - stripeHeight, halfDoor, stripeHeight)
-    ctx.fillRect(innerRight - halfDoor, doorBottom - stripeHeight, halfDoor, stripeHeight)
-    ctx.fillStyle = palette.steelDark
-    const step = Math.max(4, post * 0.9)
-    for (let x = innerLeft; x < innerLeft + halfDoor; x += step) ctx.fillRect(x, doorBottom - stripeHeight, Math.max(1.5, post * 0.32), stripeHeight)
-    for (let x = innerRight - halfDoor; x < innerRight; x += step) ctx.fillRect(x, doorBottom - stripeHeight, Math.max(1.5, post * 0.32), stripeHeight)
+    const band = Math.max(2, pillar * 0.9)
+    for (let y = doorTop + band; y < doorBottom; y += band * 2) ctx.fillRect(mid - pillar / 2, y, pillar, band)
     ctx.strokeStyle = palette.outline
     ctx.lineWidth = Math.max(1, post * 0.08)
-    ctx.strokeRect(innerLeft, doorTop, halfDoor, doorBottom - doorTop)
-    ctx.strokeRect(innerRight - halfDoor, doorTop, halfDoor, doorBottom - doorTop)
+    ctx.strokeRect(mid - pillar / 2, doorTop, pillar, doorBottom - doorTop)
+  } else {
+    const halfDoor = ((innerRight - innerLeft) / 2) * (1 - look.open)
+    if (halfDoor > 0.6) {
+      ctx.fillStyle = palette.steel
+      ctx.fillRect(innerLeft, doorTop, halfDoor, doorBottom - doorTop)
+      ctx.fillRect(innerRight - halfDoor, doorTop, halfDoor, doorBottom - doorTop)
+      ctx.fillStyle = palette.steelDark
+      for (let g = 1; g < 3; g += 1) {
+        const gx = innerLeft + (halfDoor * g) / 3
+        ctx.fillRect(gx, doorTop + gateHeight * 0.05, Math.max(1, post * 0.1), (doorBottom - doorTop) * 0.9)
+        ctx.fillRect(innerRight - (halfDoor * g) / 3, doorTop + gateHeight * 0.05, Math.max(1, post * 0.1), (doorBottom - doorTop) * 0.9)
+      }
+      ctx.fillStyle = palette.steelLight
+      ctx.fillRect(innerLeft, doorTop, halfDoor, Math.max(1, gateHeight * 0.05))
+      ctx.fillRect(innerRight - halfDoor, doorTop, halfDoor, Math.max(1, gateHeight * 0.05))
+      ctx.fillStyle = palette.hazard
+      const stripeHeight = Math.max(1, (doorBottom - doorTop) * 0.13)
+      ctx.fillRect(innerLeft, doorBottom - stripeHeight, halfDoor, stripeHeight)
+      ctx.fillRect(innerRight - halfDoor, doorBottom - stripeHeight, halfDoor, stripeHeight)
+      ctx.fillStyle = palette.steelDark
+      const step = Math.max(4, post * 0.9)
+      for (let x = innerLeft; x < innerLeft + halfDoor; x += step) ctx.fillRect(x, doorBottom - stripeHeight, Math.max(1.5, post * 0.32), stripeHeight)
+      for (let x = innerRight - halfDoor; x < innerRight; x += step) ctx.fillRect(x, doorBottom - stripeHeight, Math.max(1.5, post * 0.32), stripeHeight)
+      ctx.strokeStyle = palette.outline
+      ctx.lineWidth = Math.max(1, post * 0.08)
+      ctx.strokeRect(innerLeft, doorTop, halfDoor, doorBottom - doorTop)
+      ctx.strokeRect(innerRight - halfDoor, doorTop, halfDoor, doorBottom - doorTop)
+    }
   }
 
   ctx.fillStyle = palette.steel
@@ -478,13 +725,25 @@ function drawGateStructure(ctx: CanvasRenderingContext2D, p: Projector, view: Ba
   ctx.strokeRect(xRight - post, top, post, proj.floor - top)
   ctx.strokeRect(xLeft, top, span, beam)
 
+  if (look.fork) {
+    // Door labels sit on the beam, so they are drawn after it.
+    const mid = (innerLeft + innerRight) / 2
+    const pillar = Math.max(2, post * 0.8)
+    for (const [left, right, side] of [[innerLeft, mid - pillar / 2, -1], [mid + pillar / 2, innerRight, 1]] as Array<[number, number, -1 | 1]>) {
+      const isTrueDoor = side === look.trueSide
+      const labelWidth = (right - left) * 0.9
+      const labelHeight = Math.max(7, beam * 1.25)
+      if (labelWidth > 10) drawLabel(ctx, isTrueDoor ? 'TRUE' : 'FALSE', (left + right) / 2, top - labelHeight * 0.32, labelWidth, labelHeight, isTrueDoor ? palette.green : palette.red, isTrueDoor ? palette.greenDark : palette.redDark)
+    }
+  }
+
   const stripHeight = gateHeight * 0.52
   const stripY = top + gateHeight * 0.24
   const stripWidth = Math.max(1.5, post * 0.24)
   ctx.save()
-  ctx.shadowColor = upcoming ? '#73d5ff' : active ? palette.green : palette.red
+  ctx.shadowColor = color
   ctx.shadowBlur = Math.max(5, stripWidth * 2)
-  ctx.fillStyle = upcoming ? '#73d5ff' : active ? palette.green : palette.red
+  ctx.fillStyle = color
   ctx.fillRect(innerLeft - stripWidth * 1.1, stripY, stripWidth, stripHeight)
   ctx.fillRect(innerRight + stripWidth * 0.1, stripY, stripWidth, stripHeight)
   ctx.restore()
@@ -497,42 +756,46 @@ function drawGateStructure(ctx: CanvasRenderingContext2D, p: Projector, view: Ba
   for (let x = xLeft; x < xLeft + post; x += Math.max(3, post * 0.5)) ctx.fillRect(x, proj.floor - hazardHeight, Math.max(1.5, post * 0.22), hazardHeight)
   for (let x = xRight - post; x < xRight; x += Math.max(3, post * 0.5)) ctx.fillRect(x, proj.floor - hazardHeight, Math.max(1.5, post * 0.22), hazardHeight)
 
-  const blink = view.reduced || Math.sin(view.time * blinkRate) > -0.2
+  const blink = view.reduced || Math.sin(view.time * look.blinkRate) > -0.2
   const lampSize = Math.max(2, post * 0.5)
-  ctx.fillStyle = upcoming ? '#73d5ff' : active ? palette.green : blink ? palette.red : palette.redDark
+  ctx.fillStyle = look.signal === 'false' && !blink ? palette.redDark : color
   ctx.fillRect(xLeft + post * 0.24, top + gateHeight * 0.06, lampSize, lampSize)
   ctx.fillRect(xRight - post * 0.24 - lampSize, top + gateHeight * 0.06, lampSize, lampSize)
 
-  const signWidth = span * 0.82
-  const signHeight = Math.max(9, gateHeight * 0.22)
+  const signWidth = span * (look.fork ? 0.5 : 0.82)
+  const signHeight = Math.max(9, gateHeight * 0.2)
   const signCenter = (xLeft + xRight) / 2
-  const signX = signCenter - signWidth / 2
-  const signY = top - signHeight * 0.55
-  ctx.fillStyle = palette.steelDark
-  ctx.fillRect(signX - 2, signY - 2, signWidth + 4, signHeight + 4)
-  ctx.fillStyle = palette.sign
-  ctx.fillRect(signX, signY, signWidth, signHeight)
-  ctx.strokeStyle = upcoming ? '#346785' : active ? palette.greenDark : palette.redDark
-  ctx.lineWidth = 2
-  ctx.strokeRect(signX + 1, signY + 1, signWidth - 2, signHeight - 2)
-  ctx.fillStyle = upcoming ? '#73d5ff' : active ? palette.green : palette.red
-  ctx.font = `bold ${Math.max(7, Math.round(signHeight * 0.58))}px "IBM Plex Mono", monospace`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(upcoming ? `GATE ${String(gateNumber).padStart(2, '0')}` : active ? 'TRUE' : 'FALSE', signCenter, signY + signHeight * 0.4)
-  if (signHeight > 14) {
-    ctx.font = `bold ${Math.max(5, Math.round(signHeight * 0.2))}px "IBM Plex Mono", monospace`
-    ctx.fillStyle = upcoming ? '#b9eaff' : active ? '#a9ffc5' : '#ffb3b9'
-    ctx.fillText(upcoming ? 'CHALLENGE AHEAD' : active ? 'Gate opening...' : 'Condition not met.', signCenter, signY + signHeight * 0.75)
+  const signY = top - signHeight * 0.62
+  const signText = look.signal === 'upcoming' ? look.label
+    : look.signal === 'true' ? 'TRUE' : look.signal === 'false' ? 'FALSE' : '?  ?  ?'
+  // Fork gates carry their TRUE / FALSE signs instead of a single top sign.
+  if (!look.fork) drawLabel(ctx, signText, signCenter, signY, signWidth, signHeight, color, dark)
+}
+
+function drawLaneLine(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  const end = view.gateZ - view.depth
+  if (end <= 0.3) return
+  const start = Math.max(0.35, end - 7)
+  ctx.save()
+  const steps = 14
+  for (let step = 0; step < steps; step += 1) {
+    if (step % 2 === 1) continue
+    const d0 = start + ((end - start) * step) / steps
+    const d1 = start + ((end - start) * (step + 1)) / steps
+    const w0 = 0.025
+    quad(ctx,
+      { x: screenX(p, d0, view.gateCenter - w0), y: wallY(p, d0, 0) },
+      { x: screenX(p, d0, view.gateCenter + w0), y: wallY(p, d0, 0) },
+      { x: screenX(p, d1, view.gateCenter + w0), y: wallY(p, d1, 0) },
+      { x: screenX(p, d1, view.gateCenter - w0), y: wallY(p, d1, 0) },
+      'rgba(224,137,47,.8)',
+    )
   }
-  if (detailed) {
-    ctx.fillStyle = '#8a97ad'
-    ctx.font = `bold ${Math.max(5, Math.round(gateHeight * 0.07))}px "IBM Plex Mono", monospace`
-    ctx.fillText(String(gateNumber).padStart(2, '0'), xLeft + post * 0.5, top + beam * 0.65)
-  }
+  ctx.restore()
 }
 
 function drawGate(ctx: CanvasRenderingContext2D, view: BackroomView, p: Projector) {
+  if (view.hideGate) return
   const distance = view.gateZ - view.depth
   const blinkRate = 6 + view.falseIntensity * 9
   if (view.phase === 'turn') {
@@ -541,25 +804,31 @@ function drawGate(ctx: CanvasRenderingContext2D, view: BackroomView, p: Projecto
     if (lastBend && view.depth >= lastBend.endZ - 3 && nextDistance > 0) {
       ctx.save()
       ctx.globalAlpha = Math.min(1, (view.depth - lastBend.endZ + 3) / 3)
-      drawGateStructure(ctx, p, view, nextDistance, view.nextGateCenter, view.gateNumber + 1, false, 0, true, blinkRate, true)
+      drawGateStructure(ctx, p, view, nextDistance, view.nextGateCenter, {
+        signal: 'upcoming', fork: view.nextGateKind === 'fork', trueSide: view.nextTrueSide, open: 0, doorOpen: [0, 0], flashSide: 0,
+        label: `GATE ${String(view.gateNumber + 1).padStart(2, '0')}`, blinkRate,
+      })
       ctx.restore()
     }
     return
   }
   if (distance <= 0.1) return
-  const gateCenter = view.gateCenter
 
   const signDistance = distance - 4
   if (signDistance > 2.4) {
-    const sp = project(p, signDistance, gateCenter)
+    const sp = project(p, signDistance, view.gateCenter)
     const wallSignSize = Math.max(7, (sp.floor - sp.ceiling) * 0.16)
     drawWallSign(ctx, p, view, 'left', signDistance, wallSignSize, `GATE ${String(view.gateNumber).padStart(2, '0')}`)
   }
+  if (view.gateKind === 'fork') drawLaneLine(ctx, p, view)
 
-  drawGateStructure(ctx, p, view, distance, gateCenter, view.gateNumber, view.conditionTrue, view.openAmount, true, blinkRate)
+  drawGateStructure(ctx, p, view, distance, view.gateCenter, {
+    signal: view.signal, fork: view.gateKind === 'fork', trueSide: view.trueSide, open: view.openAmount, doorOpen: view.doorOpen,
+    flashSide: view.flashSide, label: `GATE ${String(view.gateNumber).padStart(2, '0')}`, blinkRate,
+  })
 
-  if (view.falseIntensity > 0.05 && !view.conditionTrue) {
-    const proj = project(p, distance, gateCenter)
+  if (view.falseIntensity > 0.05 && view.signal === 'false' && view.gateKind === 'set') {
+    const proj = project(p, distance, view.gateCenter)
     const span = proj.right - proj.left
     const gateHeight = proj.floor - proj.ceiling
     const post = Math.max(2, span * 0.13)
@@ -588,16 +857,62 @@ function drawWallSign(ctx: CanvasRenderingContext2D, p: Projector, view: Backroo
 }
 
 function drawFloorGlow(ctx: CanvasRenderingContext2D, width: number, height: number, view: BackroomView, p: Projector) {
-  if (view.phase !== 'gate' || view.gateZ <= view.depth) return
+  if (view.hideGate || view.phase !== 'gate' || view.gateZ <= view.depth) return
   const distance = Math.max(view.gateZ - view.depth, 0.4)
   const proj = project(p, distance, view.gateCenter)
   const radius = Math.max(8, Math.min(width * 0.42, (proj.right - proj.left) * 0.65))
   const gradient = ctx.createRadialGradient((proj.left + proj.right) / 2, proj.floor, 1, (proj.left + proj.right) / 2, proj.floor, radius)
-  const active = view.conditionTrue
-  gradient.addColorStop(0, active ? 'rgba(92,232,127,.33)' : 'rgba(255,85,96,.12)')
+  gradient.addColorStop(0, view.signal === 'true' ? 'rgba(92,232,127,.33)' : view.signal === 'false' ? 'rgba(255,85,96,.12)' : 'rgba(255,180,59,.14)')
   gradient.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = gradient
   ctx.fillRect(0, p.horizon, width, height - p.horizon)
+}
+
+// The camcorder's infrared mode: green monochrome, lifted blacks, sensor noise.
+function applyNightVision(ctx: CanvasRenderingContext2D, width: number, height: number, amount: number, time: number, reduced: boolean) {
+  ctx.save()
+  ctx.globalAlpha = Math.min(1, amount)
+  ctx.globalCompositeOperation = 'color'
+  ctx.fillStyle = '#4dff86'
+  ctx.fillRect(0, 0, width, height)
+  ctx.globalCompositeOperation = 'screen'
+  ctx.globalAlpha = amount * 0.42
+  ctx.fillStyle = '#123d1f'
+  ctx.fillRect(0, 0, width, height)
+  ctx.globalCompositeOperation = 'source-over'
+  const gradient = ctx.createRadialGradient(width / 2, height / 2, height * 0.2, width / 2, height / 2, width * 0.7)
+  gradient.addColorStop(0, 'rgba(0,0,0,0)')
+  gradient.addColorStop(1, `rgba(0,12,4,${0.75 * amount})`)
+  ctx.globalAlpha = 1
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+  if (!reduced) {
+    const dots = Math.round(width * height * 0.006 * amount)
+    const seed = Math.floor(time * 30)
+    for (let index = 0; index < dots; index += 1) {
+      const h = hashTile(index * 31 + seed * 7919, 3)
+      const h2 = hashTile(index * 17 + seed * 104729, 11)
+      ctx.fillStyle = h % 2 === 0 ? 'rgba(190,255,205,.32)' : 'rgba(0,0,0,.35)'
+      ctx.fillRect((h / 1000) * width + (h2 % 7), (h2 / 1000) * height, 1, 1)
+    }
+  }
+  ctx.restore()
+}
+
+// VHS tracking error: horizontal slices of the frame slip sideways.
+function applyTrackingGlitch(ctx: CanvasRenderingContext2D, width: number, height: number, amount: number, time: number) {
+  const canvas = ctx.canvas
+  const bands = 2 + Math.round(amount * 4)
+  const seed = Math.floor(time * 24)
+  for (let band = 0; band < bands; band += 1) {
+    const y = (hashTile(band * 13 + seed, 5) / 1000) * height
+    const h = Math.max(2, (hashTile(band * 7 + seed, 9) / 1000) * height * 0.12 * amount + 1)
+    const shift = ((hashTile(band * 3 + seed, 2) / 1000) - 0.5) * width * 0.08 * amount
+    try { ctx.drawImage(canvas, 0, y, width, h, shift, y, width, h) } catch { return }
+  }
+  ctx.fillStyle = `rgba(255,255,255,${0.18 * amount})`
+  const line = ((time * 90) % (height + 20)) - 10
+  ctx.fillRect(0, line, width, Math.max(1, height * 0.012))
 }
 
 export function drawBackroom(ctx: CanvasRenderingContext2D, width: number, height: number, view: BackroomView) {
@@ -613,23 +928,27 @@ export function drawBackroom(ctx: CanvasRenderingContext2D, width: number, heigh
   ctx.imageSmoothingEnabled = false
   drawCorridor(ctx, width, height, view, p)
   drawTurnSign(ctx, p, view)
+  // The figure is hidden by a gate in front of it, and covers one behind it.
+  const gateAhead = view.phase === 'gate' ? view.gateZ : view.nextGateZ
+  const figureInFront = !!view.entity && (view.hideGate || view.entity.z < gateAhead)
+  if (!figureInFront) drawEntity(ctx, p, view)
   drawFloorGlow(ctx, width, height, view, p)
   drawObstacles(ctx, p, view)
   drawGate(ctx, view, p)
+  if (figureInFront) drawEntity(ctx, p, view)
+  drawDust(ctx, p, view)
   if (view.falseIntensity > 0.02) {
     const rate = 5 + view.falseIntensity * 14
     const pulse = view.reduced ? 0.6 : (Math.sin(view.time * rate) > 0 ? 1 : 0.3)
-    ctx.fillStyle = `rgba(255,42,56,${Math.min(0.34, view.falseIntensity * 0.3 * pulse)})`
-    ctx.fillRect(0, 0, width, height)
-    const gradient = ctx.createRadialGradient(width / 2, height * 0.46, height * 0.18, width / 2, height * 0.46, width * 0.62)
-    gradient.addColorStop(0, 'rgba(255,60,72,0)')
-    gradient.addColorStop(1, `rgba(255,52,66,${Math.min(0.34, view.falseIntensity * 0.4 * pulse)})`)
-    ctx.fillStyle = gradient
+    ctx.fillStyle = `rgba(255,42,56,${Math.min(0.3, view.falseIntensity * 0.26 * pulse)})`
     ctx.fillRect(0, 0, width, height)
   }
-  // Retain a little ambient visibility even with every fluorescent switched off.
-  // This shades the corridor, obstacles and gate together; the HUD stays readable.
-  ctx.fillStyle = `rgba(0,0,0,${(1 - (view.reduced || view.gateNumber < lightingStartGate ? 1 : view.roomLight)) * 0.94})`
+  // Keep a little ambient light even with every fluorescent switched off.
+  // Night vision lifts most of the darkness back out in green.
+  const darkness = (1 - (view.reduced || !view.lightsActive ? 1 : view.roomLight)) * 0.94
+  ctx.fillStyle = `rgba(0,0,0,${darkness * (1 - view.nightVision * 0.8)})`
   ctx.fillRect(0, 0, width, height)
   ctx.restore()
+  if (view.nightVision > 0.01) applyNightVision(ctx, width, height, view.nightVision, view.time, view.reduced)
+  if (view.glitch > 0.02 && !view.reduced) applyTrackingGlitch(ctx, width, height, view.glitch, view.time)
 }

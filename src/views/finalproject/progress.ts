@@ -1,10 +1,12 @@
 import { challenges, flows, questions } from "./content";
-import { comparisonOperators, type ComparisonOperator } from "./backroom/backroomEngine";
+import { comparisonOperators, skillKeys, type ComparisonOperator } from "./backroom/backroomEngine";
+import { levelCount, normalizeStars } from "./backroom/backroomLevels";
+import type { SkillRecord } from "./backroom/types";
 export const activities = ["overview","matrix","transition","lab","flow","builder","quiz-intro","quiz","shadow","report"] as const;
 export type Activity = typeof activities[number];
 export type Progress = {
   version: 1; activity: Activity; best: number; transition: boolean; legacyXp: number;
-  backroom: { bestXp: number; gates: number; operators: ComparisonOperator[] };
+  backroom: { bestXp: number; gates: number; operators: ComparisonOperator[]; levels: number[]; skills: SkillRecord };
   flowIndex: number; flowPaths: Record<string,string[]>; flowValues: number[];
   labVisited: boolean;
   builderIndex: number; built: number[]; drafts: Record<string,string[]>;
@@ -12,7 +14,7 @@ export type Progress = {
   missionIndex: number; observed: number[]; repaired: number[]; patches: Record<string,string[]>;
   reflection: string; completedAt: string; awards: Record<string,number>;
 };
-export const freshProgress = (): Progress => ({version:1,activity:"overview",best:0,transition:false,legacyXp:0,backroom:{bestXp:0,gates:0,operators:[]},labVisited:false,flowIndex:0,flowPaths:{},flowValues:[5,12,900],builderIndex:0,built:[],drafts:{},quizIndex:0,answers:{},attempts:{},mastered:[],missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
+export const freshProgress = (): Progress => ({version:1,activity:"overview",best:0,transition:false,legacyXp:0,backroom:{bestXp:0,gates:0,operators:[],levels:normalizeStars([]),skills:{}},labVisited:false,flowIndex:0,flowPaths:{},flowValues:[5,12,900],builderIndex:0,built:[],drafts:{},quizIndex:0,answers:{},attempts:{},mastered:[],missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
 export const storageKey = (student: string) => `sharpie:final-project:v1:${encodeURIComponent(student.trim().toLowerCase())}`;
 const count = (v: unknown,max: number, fallback=0) => typeof v === "number" && Number.isFinite(v) ? Math.max(0,Math.min(max,Math.floor(v))) : fallback;
 const indices = (v:unknown,max:number):number[] => Array.isArray(v) ? [...new Set(v.filter((x):x is number=>Number.isInteger(x)&&x>=0&&x<max))] : [];
@@ -29,7 +31,10 @@ export function sanitizeProgress(raw: unknown): Progress {
     bestXp:count(s.backroom?.bestXp,1500000,p.best*15),
     gates:Math.max(p.best,count(s.backroom?.gates,10000000,p.best)),
     operators:Array.isArray(s.backroom?.operators)?[...new Set(s.backroom.operators.filter(op=>comparisonOperators.includes(op)))]:[],
+    levels:normalizeStars(Array.isArray(s.backroom?.levels)?s.backroom.levels:[]),
+    skills:{},
   };
+  for (const key of skillKeys) { const record=s.backroom?.skills?.[key]; if(record&&typeof record==="object")p.backroom.skills[key]={right:count(record.right,1000000),wrong:count(record.wrong,1000000)}; }
   p.flowIndex=count(s.flowIndex,2); p.builderIndex=count(s.builderIndex,9); p.quizIndex=count(s.quizIndex,20); p.missionIndex=count(s.missionIndex,3);
   p.built=indices(s.built,10); p.observed=indices(s.observed,4); p.repaired=indices(s.repaired,4);
   p.flowValues=p.flowValues.map((v,i)=>{
@@ -53,6 +58,7 @@ export function sanitizeProgress(raw: unknown): Progress {
   // Reconstruct XP from learning records; repeat runs cannot duplicate rewards.
   p.awards={};
   if(p.backroom.bestXp)p.awards["backroom:best-run"]=p.backroom.bestXp;
+  p.backroom.levels.forEach((stars,i)=>{if(stars>0)p.awards[`backroom:level:${i}`]=levelXp;});
   if(p.legacyXp)p.awards["legacy:checks"]=p.legacyXp;
   Object.entries(p.flowPaths).forEach(([i,paths])=>paths.forEach(path=>p.awards[`flow:${i}:${path}`]=10));
   p.built.forEach(i=>p.awards[`builder:${i}`]=30);
@@ -70,7 +76,9 @@ export function saveProgress(student:string,p:Progress):boolean {
   try {localStorage.setItem(storageKey(student),JSON.stringify(p));return true;} catch{return false;}
 }
 export const xp = (p:Progress) => Object.values(p.awards).reduce((a,b)=>a+b,0);
-export const stageOneDone = (p:Progress) => p.best>=3;
+export const levelXp = 20;
+// Older saves finished stage 1 with three gates in the original game.
+export const stageOneDone = (p:Progress) => p.best>=3 || (p.backroom.levels.length===levelCount && p.backroom.levels.every(stars=>stars>0));
 export const stageTwoDone = (p:Progress) => [0,1,2].every(i=>(p.flowPaths[i]?.length??0)===2) && [0,1,2].every(i=>p.built.includes(i));
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
 export function canOpen(activity:Activity,p:Progress,preview:boolean) {

@@ -23,8 +23,9 @@ const core={best:3,transition:true,flowPaths:{0:['true','false'],1:['true','fals
 const range=async(label,value)=>{await evaluate(`(()=>{const input=document.querySelector('input[aria-label="${label}"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));})()`);await delay(80);};
 const saved=()=>evaluate(`JSON.parse(localStorage.getItem(finalQA.storageKey('final-qa')))`);
 const energyTo=async target=>{
-  await evaluate(`(()=>{const current=Number(document.querySelector('.br-variable strong').textContent);const label=${target}>current?'Increase energy':'Decrease energy';const button=[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===label);for(let i=0;i<Math.abs(${target}-current);i++)button.click();})()`);
+  await evaluate(`(()=>{const current=Number(document.querySelector('.br-slot').textContent);const label=${target}>current?'Increase energy':'Decrease energy';const button=[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===label);for(let i=0;i<Math.abs(${target}-current);i++)button.click();})()`);
 };
+const startTutorial=async()=>{await evaluate('document.querySelector(".br-primary--hero").click()');await delay(150);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
 const pressLabel=async label=>{await evaluate(`[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);await delay(120);};
 try{
   let target;for(let i=0;i<70;i++){try{const list=await(await fetch(`http://127.0.0.1:${port}/json`)).json();target=list.find(t=>t.type==='page');if(target)break;}catch{}await delay(150);}
@@ -100,17 +101,17 @@ try{
   }
   }
   if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_FLOW_ONLY){
-  await seed({activity:'matrix'});await click('PLAY GAME');
-  await wait('!!document.querySelector(".br-overlay--crash")',10000);assert.match(await evaluate('document.querySelector(".br-overlay--crash").textContent'),/THE GATE STAYED CLOSED/);
-  await click('TRY AGAIN');await energyTo(61);
-  await wait('JSON.parse(localStorage.getItem(finalQA.storageKey("final-qa")))?.best>=1',10000);
-  await wait('document.querySelector(".br-screen").classList.contains("is-neutral")');
+  await seed({activity:'matrix'});await startTutorial();
+  assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/MAKE IT TRUE/);
+  await energyTo(61);await wait('!document.querySelector(".br-coach")',5000);
+  await wait('JSON.parse(localStorage.getItem(finalQA.storageKey("final-qa")))?.backroom?.gates>=1',15000);
+  await wait('!!document.querySelector(".br-coach")',20000);assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/FOLLOW THE CORRIDOR/);
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
-  await wait('!!document.querySelector(".br-overlay--crash")',10000);await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
-  assert.match(await evaluate('document.querySelector(".br-overlay--crash").textContent'),/YOU HIT THE WALL/);
-  await click('TRY AGAIN');await pressLabel('Pause run');await click('KEEP RUNNING');await pressLabel('Pause run');
-  assert.doesNotMatch(await evaluate('document.querySelector(".br-overlay").textContent'),/THE C# CONNECTION/);
-  console.log('PASS copied game: closed gate, opening and crossing, traveling corridor, steering/wall collision, retry, pause and resume');
+  await wait('!!document.querySelector(".br-toast.is-bad")',15000);await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
+  assert.match(await evaluate('document.querySelector(".br-toast").textContent'),/WALL SCRAPE/);assert.equal(await evaluate('!!document.querySelector(".br-overlay--gameOver")'),false);
+  await pressLabel('Pause run');assert.match(await evaluate('document.querySelector(".br-overlay").textContent'),/PAUSE/);await click('KEEP RUNNING');
+  await wait('!!document.querySelector(".br-overlay--mistake")',30000);assert.match(await evaluate('document.querySelector(".br-overlay--mistake").textContent'),/THE GATE STAYED SHUT[\s\S]*70 < 30/);
+  console.log('PASS Backrooms tutorial guide, gate opening, wall scrape without game over, pause and resume, closed-gate explanation');
   }
   const checks=[];
   for(const size of [{name:'desktop',width:1366,height:900},{name:'ipad',width:1024,height:768},{name:'ipad-short',width:1024,height:694},{name:'phone',width:390,height:844}]){
@@ -119,15 +120,15 @@ try{
     for(const activity of navigationOnly?['overview','matrix','lab','flow','quiz-intro']:process.env.SHARPIE_QA_HUB_ONLY?[]:process.env.SHARPIE_QA_OVERVIEW_ONLY?['overview']:process.env.SHARPIE_QA_BACKROOM_ONLY?['overview','matrix']:['overview','matrix','lab','flow','builder','quiz-intro','quiz','shadow','report']){
       await seed({...core,activity,repaired:[0,1,2,3],observed:[0,1,2,3],completedAt:'2026-10-13T12:00:00Z'});
       if(activity==='matrix'){
-        await click('PLAY GAME');await energyTo(75);
+        await startTutorial();await energyTo(75);
         if(size.name==='ipad'){
           await send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
           const point=await evaluate(`(()=>{const r=document.querySelector('[aria-label="Increase energy"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
           await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await delay(150);
-          const afterTouch=await evaluate('Number(document.querySelector(".br-variable strong").textContent)');assert(afterTouch>75&&afterTouch<=100);
-          await send('Input.dispatchKeyEvent',{type:'keyDown',key:'d',code:'KeyD'});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'d',code:'KeyD'});await delay(120);
-          assert(await evaluate('Number(document.querySelector(".br-variable strong").textContent)')>afterTouch);
-          await pressLabel('Pause run');assert.match(await evaluate('document.querySelector(".br-overlay").textContent'),/PAUSED/);await click('KEEP RUNNING');
+          const afterTouch=await evaluate('Number(document.querySelector(".br-slot").textContent)');assert(afterTouch>75&&afterTouch<=100);
+          await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowUp',code:'ArrowUp'});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowUp',code:'ArrowUp'});await delay(120);
+          assert(await evaluate('Number(document.querySelector(".br-slot").textContent)')>afterTouch);
+          await pressLabel('Pause run');assert.match(await evaluate('document.querySelector(".br-overlay").textContent'),/PAUSE/);await click('KEEP RUNNING');
           await send('Emulation.setTouchEmulationEnabled',{enabled:false});console.log('PASS native tablet tap, keyboard after focus, and pause and resume');
         }
         if(size.name==='ipad-short'){await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});assert.equal(await evaluate('matchMedia("(prefers-reduced-motion: reduce)").matches'),true);}

@@ -66,6 +66,14 @@ describe("Final project profile persistence and milestones",()=>{
   });
   it("preserves the full game's best XP, gate count and operators on reload",()=>{
     const p=sanitizeProgress({...freshProgress(),best:4,backroom:{bestXp:55,gates:9,operators:[">","<=",">","bad"]}});
-    expect(p.backroom).toEqual({bestXp:55,gates:9,operators:[">","<="]});expect(xp(p)).toBe(55);
+    expect(p.backroom).toEqual({bestXp:55,gates:9,operators:[">","<="],levels:[0,0,0,0,0,0],skills:{}});expect(xp(p)).toBe(55);
+  });
+  it("restores Backrooms tape stars, field notes and their XP",()=>{
+    const p=sanitizeProgress({...freshProgress(),backroom:{bestXp:40,gates:12,operators:[],levels:[3,2,0,9,"x"],skills:{">":{right:4,wrong:1},bad:{right:1,wrong:0},"&&":{right:-3,wrong:2.7}}}});
+    expect(p.backroom.levels).toEqual([3,2,0,3,0,0]);
+    expect(p.backroom.skills).toEqual({">":{right:4,wrong:1},"&&":{right:0,wrong:2}});
+    expect(xp(p)).toBe(40+3*20);
+    expect(stageOneDone(p)).toBe(false);
+    expect(stageOneDone({...p,backroom:{...p.backroom,levels:[1,1,1,1,1,1]}})).toBe(true);
   });
 });

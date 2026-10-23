@@ -1,6 +1,6 @@
 import { BackroomRun } from './backroom/BackroomRun';
 import type { BackroomProgress } from './backroom/types';
-import { award, type Progress, type Update } from './progress';
+import { award, levelXp, type Progress, type Update } from './progress';
 
 // The complete PixPy game lives in ./backroom. This adapter only connects its
 // player identity, score records, and navigation to the Sharpie module.
@@ -21,18 +21,25 @@ export function MatrixRun({ progress, update, name, studentKey, isTeacher, onBac
     backroomRunXp: progress.backroom.bestXp,
     backroomRunGates: progress.backroom.gates,
     backroomRunOperators: progress.backroom.operators,
+    levelStars: progress.backroom.levels,
+    skills: progress.backroom.skills,
   };
   const save = (next: BackroomProgress) => update(p => {
     const bestXp = Math.max(p.backroom.bestXp, next.backroomRunXp);
-    return award({
+    const levels = p.backroom.levels.map((stars, i) => Math.max(stars, next.levelStars[i] ?? 0));
+    let saved = award({
       ...p,
       best: Math.max(p.best, next.backroomRunBest),
       backroom: {
         bestXp,
         gates: Math.max(p.backroom.gates, next.backroomRunGates),
         operators: [...new Set([...p.backroom.operators, ...next.backroomRunOperators])],
+        levels,
+        skills: next.skills,
       },
     }, 'backroom:best-run', bestXp);
+    levels.forEach((stars, i) => { if (stars > 0) saved = award(saved, `backroom:level:${i}`, levelXp); });
+    return saved;
   });
   return <BackroomRun progress={gameProgress} onProgress={save} onBack={onBack} paused={paused} />;
 }

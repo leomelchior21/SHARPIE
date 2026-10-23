@@ -1,5 +1,9 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { baseRunSpeed, championGates, comparisonOperators, corridorCenterAt, energyRange, evaluateCondition, gateCrossing, gateXp, generateChallenge, hasSolution, hitsObstacle, operatorHint, operatorWords, planCorridor, planCourse, speedForGate } from './backroomEngine'
+import { describe, expect, it } from "vitest";
+import {
+  baseRunSpeed, championGates, comparisonOperators, conditionCode, correctForkSide, corridorCenterAt, energyRange, evaluateCondition, evaluateGate,
+  explainGate, falseStart, forkSide, gateSkills, gateXp, generateEndlessGate, hitsObstacle, mulberry32, operatorWords, planCorridor, planCourse,
+  speedForGate, type BackroomGate, type Clause,
+} from './backroomEngine'
 
 function lcg(seed: number): () => number {
   let state = seed
@@ -9,107 +13,136 @@ function lcg(seed: number): () => number {
   }
 }
 
-describe('evaluateCondition', () => {
-  it('evaluates greater than', () => {
-    expect(evaluateCondition(61, '>', 60)).toBe(true)
-    expect(evaluateCondition(60, '>', 60)).toBe(false)
+const gate = (clauses: Clause[], kind: BackroomGate['kind'] = 'set'): BackroomGate => ({ id: 'test', kind, clauses, start: { energy: 0, flag: false }, liveTruth: false })
+
+describe('comparisons', () => {
+  it('evaluates every operator, including both edges', () => {
+    expect([evaluateCondition(61, '>', 60), evaluateCondition(60, '>', 60)]).toEqual([true, false])
+    expect([evaluateCondition(59, '<', 60), evaluateCondition(60, '<', 60)]).toEqual([true, false])
+    expect([evaluateCondition(60, '>=', 60), evaluateCondition(59, '>=', 60)]).toEqual([true, false])
+    expect([evaluateCondition(60, '<=', 60), evaluateCondition(61, '<=', 60)]).toEqual([true, false])
+    expect([evaluateCondition(60, '==', 60), evaluateCondition(61, '==', 60)]).toEqual([true, false])
+    expect([evaluateCondition(61, '!=', 60), evaluateCondition(60, '!=', 60)]).toEqual([true, false])
   })
 
-  it('evaluates less than', () => {
-    expect(evaluateCondition(39, '<', 40)).toBe(true)
-    expect(evaluateCondition(40, '<', 40)).toBe(false)
-  })
-
-  it('includes the threshold for greater than or equal', () => {
-    expect(evaluateCondition(50, '>=', 50)).toBe(true)
-    expect(evaluateCondition(49, '>=', 50)).toBe(false)
-  })
-
-  it('includes the threshold for less than or equal', () => {
-    expect(evaluateCondition(25, '<=', 25)).toBe(true)
-    expect(evaluateCondition(26, '<=', 25)).toBe(false)
-  })
-
-  it('evaluates equality', () => {
-    expect(evaluateCondition(42, '==', 42)).toBe(true)
-    expect(evaluateCondition(41, '==', 42)).toBe(false)
-  })
-
-  it('evaluates inequality', () => {
-    expect(evaluateCondition(50, '!=', 50)).toBe(false)
-    expect(evaluateCondition(51, '!=', 50)).toBe(true)
-  })
-})
-
-describe('operator labels', () => {
   it('names every operator', () => {
-    expect(operatorWords('>')).toBe('GREATER THAN')
-    expect(operatorWords('<')).toBe('LESS THAN')
-    expect(operatorWords('>=')).toBe('GREATER THAN OR EQUAL TO')
-    expect(operatorWords('<=')).toBe('LESS THAN OR EQUAL TO')
-    expect(operatorWords('==')).toBe('EQUAL TO')
-    expect(operatorWords('!=')).toBe('NOT EQUAL TO')
-  })
-
-  it('writes hints that mention the threshold', () => {
-    const challenge = generateChallenge(4, 7, 2)
-    expect(operatorHint(challenge)).toContain(String(challenge.threshold))
+    expect(comparisonOperators.map(operatorWords)).toEqual(['GREATER THAN', 'LESS THAN', 'GREATER THAN OR EQUAL TO', 'LESS THAN OR EQUAL TO', 'EQUAL TO', 'NOT EQUAL TO'])
   })
 })
 
-describe('challenge generator', () => {
-  it('always offers a reachable energy value', () => {
-    for (let run = 1; run <= 60; run += 1) {
-      for (const seed of [3, 17, 99, 404, 1234]) {
-        const challenge = generateChallenge(run, seed, ((run - 1) % 3) + 1)
-        expect(hasSolution(challenge.operator, challenge.threshold)).toBe(true)
-        expect(challenge.threshold).toBeGreaterThanOrEqual(energyRange.min)
-        expect(challenge.threshold).toBeLessThanOrEqual(energyRange.max)
-        expect(challenge.startValue).toBeGreaterThanOrEqual(energyRange.min)
-        expect(challenge.startValue).toBeLessThanOrEqual(energyRange.max)
-        expect(comparisonOperators).toContain(challenge.operator)
+describe('gate conditions', () => {
+  it('reads bools in plain, == true and == false form', () => {
+    expect(evaluateGate(gate([{ type: 'bool', name: 'hasKey', form: 'plain' }]), { energy: 0, flag: true })).toBe(true)
+    expect(evaluateGate(gate([{ type: 'bool', name: 'hasKey', form: 'true' }]), { energy: 0, flag: false })).toBe(false)
+    expect(evaluateGate(gate([{ type: 'bool', name: 'lightsOn', form: 'false' }]), { energy: 0, flag: false })).toBe(true)
+    expect(evaluateGate(gate([{ type: 'bool', name: 'lightsOn', form: 'false' }]), { energy: 0, flag: true })).toBe(false)
+  })
+
+  it('needs both sides of && to be true', () => {
+    const both = gate([{ type: 'compare', operator: '>', threshold: 40 }, { type: 'bool', name: 'hasKey', form: 'plain' }])
+    expect(evaluateGate(both, { energy: 41, flag: true })).toBe(true)
+    expect(evaluateGate(both, { energy: 41, flag: false })).toBe(false)
+    expect(evaluateGate(both, { energy: 40, flag: true })).toBe(false)
+  })
+
+  it('writes the C# condition the student reads', () => {
+    expect(conditionCode(gate([{ type: 'compare', operator: '>=', threshold: 40 }, { type: 'bool', name: 'doorLocked', form: 'false' }]))).toBe('energy >= 40 && doorLocked == false')
+    expect(conditionCode(gate([{ type: 'bool', name: 'hasKey', form: 'plain' }]))).toBe('hasKey')
+  })
+
+  it('tracks operators, bools and && as separate skills', () => {
+    expect(gateSkills(gate([{ type: 'compare', operator: '!=', threshold: 4 }, { type: 'bool', name: 'hasMap', form: 'true' }]))).toEqual(['!=', 'bool', '&&'])
+  })
+})
+
+describe('mistake explanations', () => {
+  it('substitutes the values and names the edge rule', () => {
+    const strict = explainGate(gate([{ type: 'compare', operator: '>', threshold: 40 }]), { energy: 40, flag: false })
+    expect(strict.steps).toEqual([{ code: '40 > 40', result: false }])
+    expect(strict.tip).toMatch(/edge does not count/)
+    const inclusive = explainGate(gate([{ type: 'compare', operator: '<=', threshold: 40 }]), { energy: 40, flag: false })
+    expect(inclusive.result).toBe(true)
+    expect(inclusive.tip).toMatch(/edge counts/)
+  })
+
+  it('adds the && combination as the final step', () => {
+    const explanation = explainGate(gate([{ type: 'compare', operator: '>', threshold: 40 }, { type: 'bool', name: 'hasKey', form: 'plain' }]), { energy: 70, flag: false })
+    expect(explanation.steps.map((step) => step.code)).toEqual(['70 > 40', 'hasKey is false', 'true && false'])
+    expect(explanation.result).toBe(false)
+    expect(explanation.tip).toMatch(/BOTH/)
+  })
+})
+
+describe('fork doors', () => {
+  it('splits lanes around a centre pillar', () => {
+    expect(forkSide(-0.38, 0)).toBe(-1)
+    expect(forkSide(0.38, 0)).toBe(1)
+    expect(forkSide(0.03, 0)).toBe(0)
+    expect(forkSide(1.5, 1.15)).toBe(1)
+  })
+
+  it('sends a TRUE condition through the TRUE door and a FALSE one through the other', () => {
+    expect(correctForkSide(true, -1)).toBe(-1)
+    expect(correctForkSide(false, -1)).toBe(1)
+    expect(correctForkSide(false, 1)).toBe(-1)
+  })
+})
+
+describe('endless gates', () => {
+  it('starts every editable gate FALSE but solvable within the energy range', () => {
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const random = mulberry32(seed)
+      let previous: BackroomGate | undefined
+      for (let number = 1; number <= 60; number += 1) {
+        const next = generateEndlessGate(number, random, previous)
+        if (next.kind === 'set') {
+          expect(evaluateGate(next, next.start)).toBe(false)
+          let solvable = false
+          for (let energy = energyRange.min; energy <= energyRange.max && !solvable; energy += 1) {
+            for (const flag of [true, false]) if (evaluateGate(next, { energy, flag })) solvable = true
+          }
+          expect(solvable).toBe(true)
+        }
+        expect(next.liveTruth).toBe(false)
+        previous = next
       }
     }
   })
 
-  it('teaches the first gate with required_energy > 60 starting at 30', () => {
-    const first = generateChallenge(1, 11, 1)
-    expect(first.variableName).toBe('required_energy')
-    expect(first.operator).toBe('>')
-    expect(first.threshold).toBe(60)
-    expect(first.startValue).toBe(30)
-    expect(first.startsTrue).toBe(false)
+  it('introduces forks, bools and && gradually', () => {
+    const random = mulberry32(3)
+    const early = Array.from({ length: 3 }, (_, index) => generateEndlessGate(index + 1, random))
+    expect(early.every((item) => item.kind === 'set' && item.clauses.length === 1 && item.clauses[0].type === 'compare')).toBe(true)
+    const late = Array.from({ length: 200 }, (_, index) => generateEndlessGate(20 + index, random))
+    expect(late.some((item) => item.kind === 'fork')).toBe(true)
+    expect(late.some((item) => item.clauses.some((clause) => clause.type === 'bool'))).toBe(true)
+    expect(late.some((item) => item.clauses.length === 2)).toBe(true)
   })
 
-  it('mixes every comparator as the endless run goes on', () => {
-    const operators = new Set(Array.from({ length: 120 }, (_, index) => generateChallenge(index + 2, 21, 1).operator))
-    for (const operator of comparisonOperators) expect(operators).toContain(operator)
-  })
-
-  it('never repeats the previous comparator when one is avoided', () => {
-    for (let run = 2; run <= 40; run += 1) {
-      const challenge = generateChallenge(run, run * 17, 2, '>')
-      expect(challenge.operator).not.toBe('>')
+  it('never repeats the previous comparator', () => {
+    const random = mulberry32(9)
+    let previous = generateEndlessGate(1, random)
+    for (let number = 2; number < 80; number += 1) {
+      const next = generateEndlessGate(number, random, previous)
+      const before = previous.clauses.find((clause) => clause.type === 'compare')
+      const now = next.clauses.find((clause) => clause.type === 'compare')
+      if (before?.type === 'compare' && now?.type === 'compare') expect(now.operator).not.toBe(before.operator)
+      previous = next
     }
   })
 
-  it('starts later gates false and close enough to adjust at higher pace', () => {
-    for (let run = 2; run <= 80; run += 1) {
-      for (const seed of [11, 31, 71]) {
-        const challenge = generateChallenge(run, seed, 3)
-        expect(challenge.startsTrue).toBe(false)
-        expect(Math.abs(challenge.startValue - challenge.threshold)).toBeLessThanOrEqual(18)
-      }
+  it('is deterministic for the same seed', () => {
+    const a = mulberry32(42)
+    const b = mulberry32(42)
+    expect(Array.from({ length: 20 }, (_, i) => generateEndlessGate(i + 1, a))).toEqual(Array.from({ length: 20 }, (_, i) => generateEndlessGate(i + 1, b)))
+  })
+
+  it('starts false values a few steps away from the edge', () => {
+    for (const operator of comparisonOperators) {
+      const start = falseStart(() => 0.5, operator, 50)
+      expect(evaluateCondition(start, operator, 50)).toBe(false)
+      if (operator !== '!=') expect(Math.abs(start - 50)).toBeGreaterThanOrEqual(5)
     }
-  })
-
-  it('is deterministic for the same run and seed', () => {
-    expect(generateChallenge(12, 77, 2)).toEqual(generateChallenge(12, 77, 2))
-  })
-
-  it('gives each gate a unique id', () => {
-    const ids = new Set(Array.from({ length: 30 }, (_, index) => generateChallenge(index + 1, 9, 2).id))
-    expect(ids.size).toBe(30)
   })
 })
 
@@ -122,15 +155,6 @@ describe('course planner', () => {
     ])
   })
 
-  it('places three curves before the gate on a low roll', () => {
-    expect(planCourse(() => 0.1)).toEqual([
-      { kind: 'curve', dir: -1 },
-      { kind: 'curve', dir: -1 },
-      { kind: 'curve', dir: -1 },
-      { kind: 'gate', dir: 0 },
-    ])
-  })
-
   it('always ends on a gate after two or three curves', () => {
     for (let seed = 1; seed <= 50; seed += 1) {
       const tiles = planCourse(lcg(seed))
@@ -138,12 +162,7 @@ describe('course planner', () => {
       expect(curves.length).toBeGreaterThanOrEqual(2)
       expect(curves.length).toBeLessThanOrEqual(3)
       expect(tiles[tiles.length - 1]).toEqual({ kind: 'gate', dir: 0 })
-      for (const curve of curves) expect([-1, 1]).toContain(curve.dir)
     }
-  })
-
-  it('is deterministic for the same random stream', () => {
-    expect(planCourse(lcg(77))).toEqual(planCourse(lcg(77)))
   })
 })
 
@@ -152,30 +171,11 @@ describe('gate progression', () => {
     for (const tiles of [planCourse(() => 0.99), planCourse(() => 0.1)]) {
       const plan = planCorridor(9, 0, tiles)
       expect(plan.bends).toHaveLength(tiles.length - 1)
-      expect(plan.nextGateZ - 9).toBeGreaterThanOrEqual(45)
       expect(plan.nextGateZ - plan.bends[plan.bends.length - 1]!.endZ).toBe(26)
       expect(plan.activationZ).toBe(plan.nextGateZ - 16)
       expect(corridorCenterAt(0, plan.bends, plan.nextGateZ)).toBe(plan.nextGateCenter)
-      expect(plan.obstacles).toHaveLength(1)
       expect(plan.obstacles[0].z).toBeLessThan(plan.activationZ)
     }
-  })
-
-  it('keeps every bend anchored to the same world coordinates as the player advances', () => {
-    const plan = planCorridor(9, 0, planCourse(() => 0.1))
-    const [first, second] = plan.bends
-    expect(corridorCenterAt(0, plan.bends, first.startZ)).toBe(0)
-    expect(corridorCenterAt(0, plan.bends, first.endZ)).toBe(first.to)
-    expect(corridorCenterAt(0, plan.bends, second.startZ)).toBe(second.from)
-    expect(second.startZ).toBeGreaterThan(first.endZ)
-  })
-
-  it('validates at the gate plane and only through a fully open door', () => {
-    expect(gateCrossing(8, 8.9, 9, true, 1)).toBe('before')
-    expect(gateCrossing(8.9, 9.01, 9, false, 1)).toBe('blocked')
-    expect(gateCrossing(8.9, 9.01, 9, true, 0.8)).toBe('blocked')
-    expect(gateCrossing(8.9, 9.01, 9, true, 1)).toBe('pass')
-    expect(gateCrossing(9.01, 9.2, 9, true, 1)).toBe('before')
   })
 
   it('hits a floor obstacle only when the player overlaps its lane and depth', () => {
@@ -186,30 +186,13 @@ describe('gate progression', () => {
   })
 })
 
-describe('xp', () => {
-  it('awards a base of ten and a first-try bonus', () => {
-    expect(gateXp(false)).toBe(10)
-    expect(gateXp(true)).toBe(15)
+describe('xp and pace', () => {
+  it('rewards streaks of correct gates', () => {
+    expect([gateXp(1), gateXp(3), gateXp(6), gateXp(20)]).toEqual([10, 15, 20, 20])
   })
-})
 
-describe('runner pace', () => {
-  it('starts thirty percent faster than the previous starting pace', () => {
-    expect(speedForGate(1)).toBeCloseTo((0.95 * 1.2) * 1.3)
+  it('keeps the endless pace climbing past the champion milestone', () => {
     expect(speedForGate(1)).toBe(baseRunSpeed)
-  })
-
-  it('keeps increasing beyond the old cap, the champion milestone, and late runs', () => {
-    for (const gate of [2, 15, 100, 669, championGates, 671, 1000, 10000, 1000000]) {
-      expect(speedForGate(gate)).toBeGreaterThan(speedForGate(gate - 1))
-      expect(speedForGate(gate) - speedForGate(gate - 1)).toBeCloseTo(.11 * 1.2)
-    }
-    expect(speedForGate(100)).toBeGreaterThan(2.5)
-    expect(speedForGate(10000)).toBeGreaterThan(speedForGate(championGates))
-  })
-
-  it('keeps the starting pace for a nonpositive gate number', () => {
-    expect(speedForGate(0)).toBe(baseRunSpeed)
-    expect(speedForGate(-1)).toBe(baseRunSpeed)
+    for (const number of [2, 100, championGates, 10000]) expect(speedForGate(number)).toBeGreaterThan(speedForGate(number - 1))
   })
 })

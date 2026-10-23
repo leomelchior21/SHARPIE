@@ -1,11 +1,19 @@
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, Infinity as InfinityIcon, Lightbulb, Pause, Play, RotateCcw, Siren, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
+import { ArrowLeft, BatteryFull, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Lightbulb, Pause, Play, RotateCcw, SkipForward, ToggleLeft, ToggleRight, Volume2, VolumeX, Zap } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { baseRunSpeed, championGates, corridorCenterAt, energyRange, evaluateCondition, gateCrossing, gateXp, generateChallenge, hitsObstacle, planCorridor, planCourse, speedForGate, type BackroomChallenge, type ComparisonOperator } from './backroomEngine'
+import {
+  baseRunSpeed, championGates, comparisonOperators, conditionCode, corridorCenterAt, correctForkSide, energyRange, evaluateGate, explainGate,
+  forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, mulberry32,
+  planCorridor, planCourse, speedForGate, type BackroomGate, type ComparisonOperator, type GateExplanation, type GateValues,
+} from './backroomEngine'
+import { backroomLevels, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
+import { BackroomAudio, loadAudioPreference, saveAudioPreference } from './backroomAudio'
+import { drawBackroom, type BackroomEntity, type GateSignal } from './backroomRenderer'
+import { advanceBackroomLighting, createBackroomLighting } from './backroomLighting'
 import { rememberBackroomScore, type BackroomScore } from './backroomScores'
-import type { BackroomProgress } from './types'
-import { drawBackroom } from './backroomRenderer'
-import { advanceBackroomLighting, createBackroomLighting, lightingStartGate } from './backroomLighting'
+import { BackroomMenu, Stars } from './BackroomMenu'
+import { CodePanel, CodeTokens, type CodeTruth } from './BackroomCode'
 import { BackroomChampionAward, BackroomChampionBadge } from './BackroomChampion'
+import type { BackroomProgress, SkillRecord } from './types'
 import './backroomRun.css'
 
 interface Props {
@@ -15,261 +23,571 @@ interface Props {
   paused?: boolean
 }
 
-type RunStatus = 'ready' | 'running' | 'passing' | 'paused' | 'crashed' | 'summary'
+type Mode = { type: 'level'; index: number } | { type: 'endless' }
+type Status = 'menu' | 'briefing' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
+type MistakeReason = 'closed' | 'wrong-door' | 'pillar'
 
-const START_DISTANCE = 9
+interface Mistake {
+  gate: BackroomGate
+  values: GateValues
+  explanation: GateExplanation
+  reason: MistakeReason
+  chosenSide: -1 | 0 | 1
+  trueSide: -1 | 1
+  livesLeft: number
+}
+
+interface RunResult {
+  mode: Mode
+  cleared: boolean
+  gates: number
+  totalGates: number
+  xp: number
+  mistakes: Mistake[]
+  bestCombo: number
+  stars: number
+  newBest: boolean
+}
+
+interface Coach {
+  moment: CoachMoment
+  satisfied: boolean
+  direction?: -1 | 1
+}
+
+const START_DISTANCE = 13
+const LOCK_DISTANCE = 1.6
 const PASS_CLEARANCE = 1.8
-const OPEN_SECONDS = 0.7
-const CLOSE_SECONDS = 0.4
 const STEER_SPEED = 0.72
-const WALL_LIMIT = 0.78
-const MILESTONE_GATES = 5
+const WALL_LIMIT = 0.74
 const SEED_BASE = 20260214
-const HINT_AFTER_MS = 26000
+const RECHARGE_EVERY = 10
+// Old saves played the original single-gate game; past five gates they know the basics.
+const LEGACY_TUTORIAL_GATES = 5
+
+const timecode = (seconds: number) => {
+  const whole = Math.floor(seconds)
+  return `${String(Math.floor(whole / 3600)).padStart(2, '0')}:${String(Math.floor(whole / 60) % 60).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`
+}
+
+const sideWord = (side: number) => side < 0 ? 'LEFT' : 'RIGHT'
+
+function createGameState() {
+  return {
+    depth: 0,
+    gateZ: START_DISTANCE,
+    gateCenter: 0,
+    bends: [] as ReturnType<typeof planCorridor>['bends'],
+    obstacles: [] as ReturnType<typeof planCorridor>['obstacles'],
+    nextGateZ: START_DISTANCE,
+    nextGateCenter: 0,
+    activationZ: 0,
+    phase: 'gate' as 'gate' | 'turn',
+    playerX: 0,
+    gate: null as BackroomGate | null,
+    nextGate: null as BackroomGate | null,
+    nextTrueSide: 1 as -1 | 1,
+    values: { energy: 50, flag: false } as GateValues,
+    truth: false,
+    resolved: 'none' as 'none' | 'pass' | 'fail',
+    trueSide: 1 as -1 | 1,
+    openAmount: 0,
+    doorOpen: [0, 0] as [number, number],
+    flashSide: 0 as -1 | 0 | 1,
+    speed: baseRunSpeed,
+    slow: 0,
+    wallContact: false,
+    falseIntensity: 0,
+    time: 0,
+    lighting: createBackroomLighting(),
+    lightsActive: false,
+    blackoutFor: 0,
+    nightVision: 0,
+    entity: null as BackroomEntity | null,
+    glitch: 0,
+    shake: 0,
+    stepDistance: 0,
+    status: 'menu' as Status,
+    reduced: false,
+    menu: true,
+  }
+}
 
 export function BackroomRun({ progress, onProgress, onBack, paused = false }: Props) {
-  const startingGate = 1
-  const [challenge, setChallenge] = useState<BackroomChallenge>(() => generateChallenge(startingGate, SEED_BASE))
-  const [value, setValue] = useState(challenge.startValue)
-  const [status, setStatus] = useState<RunStatus>('ready')
+  const [status, setStatus] = useState<Status>('menu')
+  const [mode, setMode] = useState<Mode>({ type: 'level', index: 0 })
+  const [gate, setGate] = useState<BackroomGate | null>(null)
+  const [values, setValues] = useState<GateValues>({ energy: 50, flag: false })
+  const [trueSide, setTrueSide] = useState<-1 | 1>(1)
   const [phase, setPhase] = useState<'gate' | 'turn'>('gate')
-  const [runNumber, setRunNumber] = useState(startingGate)
-  const [sessionGates, setSessionGates] = useState(0)
-  const [sessionXp, setSessionXp] = useState(0)
-  const [sessionOperators, setSessionOperators] = useState<ComparisonOperator[]>([])
-  const [assistLevel, setAssistLevel] = useState(0)
-  const [hintOpen, setHintOpen] = useState(false)
-  const [microReveal, setMicroReveal] = useState<{ title: string; caption: string } | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-  const [audioOn, setAudioOn] = useState(false)
-  const [showMilestone, setShowMilestone] = useState(false)
-  const [showChampion, setShowChampion] = useState(false)
-  const [scores, setScores] = useState<BackroomScore[]>([])
-  const scoreSource = 'THIS DEVICE · BEST GATES / BEST XP'
+  const [gateNumber, setGateNumber] = useState(1)
+  const [lives, setLives] = useState(maxBatteries)
+  const [xp, setXp] = useState(0)
+  const [combo, setCombo] = useState(0)
+  const [clock, setClock] = useState(0)
+  const [coach, setCoachState] = useState<Coach | null>(null)
+  const [mistake, setMistake] = useState<Mistake | null>(null)
+  const [result, setResult] = useState<RunResult | null>(null)
+  const [toast, setToast] = useState<{ text: string; tone: 'good' | 'bad' | 'info' } | null>(null)
+  const [reveal, setReveal] = useState<{ code: string; result: boolean; note: string } | null>(null)
   const [turnHint, setTurnHint] = useState<0 | -1 | 1>(0)
   const [hazardHint, setHazardHint] = useState<0 | -1 | 1>(0)
-  const [crashReason, setCrashReason] = useState<'gate' | 'wall' | 'obstacle'>('gate')
+  const [nightshot, setNightshot] = useState(false)
+  const [audioOn, setAudioOn] = useState(loadAudioPreference)
+  const [scores, setScores] = useState<BackroomScore[]>([])
+  const [showChampion, setShowChampion] = useState(false)
+  const [hintOpen, setHintOpen] = useState(false)
+  // The choice locks just before the gate; controls show it.
+  const [locked, setLocked] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const screenRef = useRef<HTMLElement>(null)
-  const challengeRef = useRef(challenge)
-  const valueRef = useRef(value)
-  const runXpRef = useRef(0)
-  const runNumberRef = useRef(runNumber)
+  const game = useRef(createGameState())
   const progressRef = useRef(progress)
-  const farSolveRef = useRef(true)
-  const hintTimerRef = useRef<number | null>(null)
-  const revealTimerRef = useRef<number | null>(null)
-  const toastTimerRef = useRef<number | null>(null)
-  const championTimerRef = useRef<number | null>(null)
-  const achievementTimerRef = useRef<number | null>(null)
-  const seenOperatorsRef = useRef<Set<ComparisonOperator>>(new Set())
-  const audioRef = useRef<AudioContext | null>(null)
+  const audio = useRef<BackroomAudio | null>(null)
+  if (!audio.current) audio.current = new BackroomAudio()
+  const run = useRef({
+    mode: { type: 'level', index: 0 } as Mode,
+    gateNumber: 1,
+    lives: maxBatteries,
+    combo: 0,
+    bestCombo: 0,
+    xp: 0,
+    gates: 0,
+    mistakes: [] as Mistake[],
+    clock: 0,
+    random: Math.random,
+    coachDone: new Set<CoachMoment>(),
+    coachAllowed: false,
+    bestAtStart: 0,
+  })
   const steerRef = useRef({ left: false, right: false })
   const steerStartRef = useRef({ left: 0, right: 0 })
   const turnHintRef = useRef<0 | -1 | 1>(0)
   const hazardHintRef = useRef<0 | -1 | 1>(0)
-  const energyHoldRef = useRef<{ delay: number | null; interval: number | null; startedAt: number; repeated: boolean }>({ delay: null, interval: null, startedAt: 0, repeated: false })
-  const initialPlanRef = useRef<ReturnType<typeof planCorridor> | null>(null)
-  if (!initialPlanRef.current) initialPlanRef.current = planCorridor(START_DISTANCE, 0, planCourse())
+  const timers = useRef<number[]>([])
+  const toastTimer = useRef<number | null>(null)
+  const revealTimer = useRef<number | null>(null)
+  const coachTimer = useRef<number | null>(null)
+  const coachRef = useRef<Coach | null>(null)
+  const setCoach = (next: Coach | null) => { coachRef.current = next; setCoachState(next) }
+  const energyHold = useRef<{ delay: number | null; interval: number | null; startedAt: number; repeated: boolean }>({ delay: null, interval: null, startedAt: 0, repeated: false })
 
-  const game = useRef({
-    depth: 0,
-    gateZ: START_DISTANCE,
-    gateCenter: 0,
-    ...initialPlanRef.current,
-    playerX: 0,
-    phase: 'gate' as 'gate' | 'turn',
-    openAmount: 0,
-    speed: speedForGate(startingGate),
-    status: 'ready' as RunStatus,
-    value: challenge.startValue,
-    operator: challenge.operator,
-    threshold: challenge.threshold,
-    true: evaluateCondition(challenge.startValue, challenge.operator, challenge.threshold),
-    falseIntensity: 0,
-    time: 0,
-    lighting: createBackroomLighting(),
-    shake: 0,
-    passLatched: false,
-    reduced: false,
-  })
+  const stars = normalizeStars(progress.levelStars)
+  const champion = progress.backroomRunBest >= championGates
+  const level = mode.type === 'level' ? backroomLevels[mode.index] : null
 
-  const isTrue = evaluateCondition(value, challenge.operator, challenge.threshold)
-  const firstGate = sessionGates === 0 && runNumber === 1
-  const isChampion = Math.max(progress.backroomRunBest, sessionGates) >= championGates
-  const pace = speedForGate(phase === 'turn' || status === 'passing' ? runNumber + 1 : runNumber) / baseRunSpeed
-
-  useEffect(() => { challengeRef.current = challenge }, [challenge])
-  useEffect(() => { valueRef.current = value; game.current.value = value }, [value])
-  useEffect(() => { runNumberRef.current = runNumber }, [runNumber])
   useEffect(() => { progressRef.current = progress }, [progress])
+
   useEffect(() => {
-    if (status !== 'passing') game.current.status = status
+    if (status === 'menu' || status === 'gameOver') setScores(rememberBackroomScore(progressRef.current))
   }, [status])
 
   useEffect(() => {
-    if (status === 'running' || status === 'passing') screenRef.current?.focus({ preventScroll: true })
-  }, [phase, status])
+    if (status === 'running' || status === 'coach') screenRef.current?.focus({ preventScroll: true })
+  }, [status, phase])
 
-  useEffect(() => {
-    if (status !== 'ready' && status !== 'crashed' && status !== 'summary') return
-    const local = rememberBackroomScore(progressRef.current)
-    setScores(local)
-  }, [status])
+  const later = (callback: () => void, ms: number) => {
+    const id = window.setTimeout(() => {
+      timers.current = timers.current.filter((item) => item !== id)
+      callback()
+    }, ms)
+    timers.current.push(id)
+    return id
+  }
 
-  const playTone = (frequency: number, durationMs: number, type: OscillatorType, gain = 0.04) => {
-    if (!audioOn) return
-    try {
-      const context = audioRef.current ?? new AudioContext()
-      audioRef.current = context
-      const oscillator = context.createOscillator()
-      const volume = context.createGain()
-      oscillator.type = type
-      oscillator.frequency.value = frequency
-      volume.gain.value = gain
-      oscillator.connect(volume)
-      volume.connect(context.destination)
-      oscillator.start()
-      volume.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + durationMs / 1000)
-      oscillator.stop(context.currentTime + durationMs / 1000)
-    } catch { /* audio is optional */ }
+  const showToast = (text: string, tone: 'good' | 'bad' | 'info' = 'good') => {
+    setToast({ text, tone })
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 1500)
+  }
+
+  const commit = (change: (current: BackroomProgress) => BackroomProgress) => {
+    const next = change(progressRef.current)
+    progressRef.current = next
+    onProgress(next)
+  }
+
+  const recordSkills = (target: BackroomGate, right: boolean) => {
+    commit((current) => {
+      const skills: SkillRecord = { ...current.skills }
+      for (const skill of gateSkills(target)) {
+        const record = skills[skill] ?? { right: 0, wrong: 0 }
+        skills[skill] = right ? { ...record, right: record.right + 1 } : { ...record, wrong: record.wrong + 1 }
+      }
+      const operators = [...new Set([...current.backroomRunOperators, ...gateOperators(target)])].filter((operator): operator is ComparisonOperator => comparisonOperators.includes(operator))
+      return { ...current, skills, backroomRunOperators: operators, backroomRunGates: current.backroomRunGates + (right ? 1 : 0) }
+    })
+  }
+
+  const stopEnergyHold = () => {
+    const hold = energyHold.current
+    if (hold.delay !== null) window.clearTimeout(hold.delay)
+    if (hold.interval !== null) window.clearInterval(hold.interval)
+    hold.delay = null
+    hold.interval = null
+    if (hold.repeated) window.setTimeout(() => { hold.repeated = false }, 0)
   }
 
   const clearTimers = () => {
-    if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-    if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current)
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current)
-    if (championTimerRef.current) window.clearTimeout(championTimerRef.current)
-    championTimerRef.current = null
-    if (achievementTimerRef.current) window.clearTimeout(achievementTimerRef.current)
-    hintTimerRef.current = null
-    revealTimerRef.current = null
-    toastTimerRef.current = null
-    if (energyHoldRef.current.delay !== null) window.clearTimeout(energyHoldRef.current.delay)
-    if (energyHoldRef.current.interval !== null) window.clearInterval(energyHoldRef.current.interval)
-    energyHoldRef.current.delay = null
-    energyHoldRef.current.interval = null
+    timers.current.forEach((id) => window.clearTimeout(id))
+    timers.current = []
+    for (const ref of [toastTimer, revealTimer, coachTimer]) {
+      if (ref.current) window.clearTimeout(ref.current)
+      ref.current = null
+    }
+    stopEnergyHold()
   }
 
-  const showToast = (message: string) => {
-    setToast(message)
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 1600)
+  const setGameStatus = (next: Status) => {
+    game.current.status = next
+    setStatus(next)
   }
 
-  const scheduleHint = () => {
-    if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-    hintTimerRef.current = window.setTimeout(() => {
-      setAssistLevel((level) => Math.max(level, 1))
-      setHintOpen(true)
-    }, HINT_AFTER_MS)
+  const gateFor = (number: number, previous: BackroomGate | null): BackroomGate | null => {
+    const current = run.current.mode
+    if (current.type === 'level') return backroomLevels[current.index].gates[number - 1] ?? null
+    return generateEndlessGate(number, run.current.random, previous ?? undefined)
   }
 
-  const beginGate = (gateNumber: number, previousOperator?: ComparisonOperator) => {
-    const nextChallenge = generateChallenge(gateNumber, SEED_BASE, 1, previousOperator)
+  const speedFor = (number: number) => {
+    const current = run.current.mode
+    return current.type === 'level' ? backroomLevels[current.index].speed : speedForGate(number)
+  }
+
+  const lightsActiveFor = () => {
+    const current = run.current.mode
+    return current.type === 'level' ? current.index >= 2 : run.current.gateNumber >= 4
+  }
+
+  const syncHud = () => {
     const g = game.current
+    setGate(g.gate)
+    setValues({ ...g.values })
+    setTrueSide(g.trueSide)
+    setGateNumber(run.current.gateNumber)
+    setPhase(g.phase)
+  }
+
+  const beginGate = () => {
+    const g = game.current
+    const r = run.current
+    const nextGate = g.nextGate
+    if (!nextGate) return
     g.phase = 'gate'
+    g.gate = nextGate
     g.gateZ = g.nextGateZ
     g.gateCenter = g.nextGateCenter
     Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse()))
-    setPhase('gate')
+    g.values = { ...nextGate.start }
+    g.truth = evaluateGate(nextGate, g.values)
+    g.trueSide = g.nextTrueSide
+    g.resolved = 'none'
     g.openAmount = 0
+    g.doorOpen = [0, 0]
+    g.flashSide = 0
     g.falseIntensity = 0
-    g.speed = speedForGate(gateNumber)
-    g.value = nextChallenge.startValue
-    g.operator = nextChallenge.operator
-    g.threshold = nextChallenge.threshold
-    g.true = evaluateCondition(nextChallenge.startValue, nextChallenge.operator, nextChallenge.threshold)
-    g.passLatched = false
-    setChallenge(nextChallenge)
-    setValue(nextChallenge.startValue)
-    setRunNumber(gateNumber)
-    setStatus('running')
-    setAssistLevel(0)
+    g.speed = speedFor(r.gateNumber)
+    g.nextGate = null
+    setLocked(false)
     setHintOpen(false)
     setTurnHint(0)
     turnHintRef.current = 0
     setHazardHint(0)
     hazardHintRef.current = 0
-    farSolveRef.current = true
-    scheduleHint()
+    syncHud()
+  }
+
+  const prepareNext = (number: number) => {
+    const g = game.current
+    g.nextGate = gateFor(number, g.gate)
+    g.nextTrueSide = run.current.random() < 0.5 ? -1 : 1
   }
 
   const beginTurn = () => {
     const g = game.current
     g.phase = 'turn'
+    prepareNext(run.current.gateNumber + 1)
     setPhase('turn')
-    setStatus('running')
     setTurnHint(0)
     turnHintRef.current = 0
-    playTone(420, 220, 'triangle', 0.03)
   }
 
-  const handlePass = () => {
-    const current = challengeRef.current
-    setStatus('passing')
-    game.current.speed = speedForGate(runNumberRef.current + 1)
-    if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-
-    const xp = gateXp(farSolveRef.current)
-    const runXp = runXpRef.current + xp
-    runXpRef.current = runXp
-    setSessionGates((gates) => gates + 1)
-    setSessionXp(runXp)
-
-    const seen = seenOperatorsRef.current
-    const newOperator = !seen.has(current.operator)
-    seen.add(current.operator)
-    setSessionOperators([...seen])
-
-    setMicroReveal(newOperator
-      ? { title: `${current.operator} ${current.threshold}`, caption: current.operatorWords }
-      : { title: `${valueRef.current} ${current.operator} ${current.threshold}`, caption: 'TRUE' })
-    if (revealTimerRef.current) window.clearTimeout(revealTimerRef.current)
-    revealTimerRef.current = window.setTimeout(() => setMicroReveal(null), 1900)
-
-    const base = progressRef.current
-    const operators = [...new Set([...base.backroomRunOperators, current.operator])]
-    const next: BackroomProgress = {
-      ...base,
-      backroomRunXp: Math.max(base.backroomRunXp, runXp),
-      backroomRunGates: base.backroomRunGates + 1,
-      backroomRunBest: Math.max(base.backroomRunBest, runNumberRef.current),
-      backroomRunOperators: operators,
-    }
-    progressRef.current = next
-    onProgress(next)
-    if (runNumberRef.current === championGates) {
-      setShowChampion(true)
-      if (championTimerRef.current) window.clearTimeout(championTimerRef.current)
-      championTimerRef.current = window.setTimeout(() => setShowChampion(false), 10000)
-    }
-    rememberBackroomScore(next)
-    if (runNumberRef.current === MILESTONE_GATES) {
-      setShowMilestone(true)
-      achievementTimerRef.current = window.setTimeout(() => setShowMilestone(false), 6500)
-    }
-    showToast(`+${xp} XP · PACE UP`)
-    playTone(660, 180, 'square', 0.035)
+  const resetWorld = () => {
+    const g = game.current
+    const reduced = g.reduced
+    Object.assign(g, createGameState())
+    g.reduced = reduced
+    g.menu = false
   }
 
-  const handleGateComplete = () => {
+  const startMode = (next: Mode) => {
+    clearTimers()
+    resetWorld()
+    const seed = next.type === 'endless' ? (Date.now() ^ SEED_BASE) >>> 0 : SEED_BASE + (next.type === 'level' ? next.index : 0)
+    const tutorialDone = progressRef.current.levelStars[0] > 0 || progressRef.current.backroomRunBest >= LEGACY_TUTORIAL_GATES
+    const levelCleared = next.type === 'level' && (progressRef.current.levelStars[next.index] ?? 0) > 0
+    run.current = {
+      mode: next,
+      gateNumber: 1,
+      lives: maxBatteries,
+      combo: 0,
+      bestCombo: 0,
+      xp: 0,
+      gates: 0,
+      mistakes: [],
+      clock: 0,
+      random: mulberry32(seed),
+      coachDone: new Set(),
+      coachAllowed: next.type === 'level' && !levelCleared && !(next.index === 0 && tutorialDone),
+      bestAtStart: progressRef.current.backroomRunBest,
+    }
+    const g = game.current
+    g.nextGateZ = START_DISTANCE
+    g.nextGateCenter = 0
+    prepareNext(1)
+    beginGate()
+    g.lightsActive = lightsActiveFor()
+    setMode(next)
+    setLives(maxBatteries)
+    setXp(0)
+    setCombo(0)
+    setClock(0)
+    setCoach(null)
+    setMistake(null)
+    setResult(null)
+    setReveal(null)
+    setToast(null)
+    setNightshot(false)
+    setShowChampion(false)
+    steerRef.current = { left: false, right: false }
+    setGameStatus('briefing')
+  }
+
+  const enableAudioFromGesture = () => {
+    if (!audioOn) return
+    audio.current?.enable()
+    audio.current?.startHum()
+  }
+
+  const launch = () => {
+    enableAudioFromGesture()
+    setGameStatus('running')
+    screenRef.current?.focus()
+  }
+
+  const toMenu = () => {
+    clearTimers()
+    resetWorld()
+    game.current.menu = true
+    audio.current?.stopHum()
+    setCoach(null)
+    setMistake(null)
+    setResult(null)
+    setNightshot(false)
+    setGameStatus('menu')
+  }
+
+  const finishRun = (cleared: boolean) => {
+    const r = run.current
+    const g = game.current
+    if (g.status === 'levelClear' || g.status === 'gameOver') return
+    const current = r.mode
+    const levelStars = current.type === 'level' && cleared ? starsFor(r.mistakes.length) : 0
+    const bonus = levelStars * 10
+    r.xp += bonus
+    setXp(r.xp)
+    const before = progressRef.current
+    const newBest = current.type === 'endless' ? r.gates > r.bestAtStart : r.xp > before.backroomRunXp
+    commit((p) => {
+      const nextStars = normalizeStars(p.levelStars)
+      if (current.type === 'level' && cleared) nextStars[current.index] = Math.max(nextStars[current.index], levelStars)
+      return {
+        ...p,
+        levelStars: nextStars,
+        backroomRunXp: Math.max(p.backroomRunXp, r.xp),
+        backroomRunBest: current.type === 'endless' ? Math.max(p.backroomRunBest, r.gates) : p.backroomRunBest,
+      }
+    })
+    if (current.type === 'endless') setScores(rememberBackroomScore(progressRef.current))
+    setResult({
+      mode: current,
+      cleared,
+      gates: r.gates,
+      totalGates: current.type === 'level' ? backroomLevels[current.index].gates.length : r.gates,
+      xp: r.xp,
+      mistakes: r.mistakes,
+      bestCombo: r.bestCombo,
+      stars: levelStars,
+      newBest,
+    })
+    g.glitch = cleared ? 0 : 1
+    audio.current?.stopHum()
+    if (cleared) audio.current?.clear()
+    setGameStatus(cleared ? 'levelClear' : 'gameOver')
+  }
+
+  const afterGate = () => {
+    const r = run.current
+    const current = r.mode
+    if (current.type === 'level' && r.gateNumber >= backroomLevels[current.index].gates.length) {
+      finishRun(true)
+      return
+    }
     beginTurn()
   }
 
-  const handleCrash = (reason: 'gate' | 'wall' | 'obstacle') => {
-    if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-    setStatus('crashed')
-    setCrashReason(reason)
-    playTone(90, 620, 'sawtooth', 0.05)
+  const handlePass = () => {
+    const g = game.current
+    const r = run.current
+    const target = g.gate!
+    r.combo += 1
+    r.bestCombo = Math.max(r.bestCombo, r.combo)
+    const earned = gateXp(r.combo)
+    r.xp += earned
+    r.gates += 1
+    setCombo(r.combo)
+    setXp(r.xp)
+    recordSkills(target, true)
+    const explanation = explainGate(target, g.values)
+    const last = explanation.steps[explanation.steps.length - 1]
+    setReveal({
+      code: last.code,
+      result: explanation.result,
+      note: target.kind === 'fork' ? `${explanation.result ? 'TRUE' : 'FALSE'} DOOR` : explanation.steps.length > 1 ? 'BOTH SIDES TRUE' : 'GATE OPEN',
+    })
+    if (revealTimer.current) window.clearTimeout(revealTimer.current)
+    revealTimer.current = window.setTimeout(() => setReveal(null), 1700)
+    showToast(`+${earned} XP${r.combo >= 3 ? ` · COMBO ${r.combo}` : ''}`)
+    audio.current?.doorOpen()
+    audio.current?.correct()
+    if (r.combo === 3 || r.combo === 6) audio.current?.combo()
+    if (r.mode.type === 'endless') {
+      commit((p) => ({ ...p, backroomRunBest: Math.max(p.backroomRunBest, r.gates), backroomRunXp: Math.max(p.backroomRunXp, r.xp) }))
+      if (r.gates % RECHARGE_EVERY === 0 && r.lives < maxBatteries) {
+        r.lives += 1
+        setLives(r.lives)
+        later(() => { showToast('BATTERY FOUND · +1', 'info'); audio.current?.battery() }, 900)
+      }
+      if (r.gates === championGates) {
+        setShowChampion(true)
+        later(() => setShowChampion(false), 10000)
+      }
+    }
   }
 
-  const eventsRef = useRef({ handlePass, handleGateComplete, handleCrash })
-  useEffect(() => { eventsRef.current = { handlePass, handleGateComplete, handleCrash } })
+  const handleMistake = (reason: MistakeReason, chosenSide: -1 | 0 | 1) => {
+    const g = game.current
+    const r = run.current
+    const target = g.gate!
+    r.lives -= 1
+    r.combo = 0
+    const entry: Mistake = { gate: target, values: { ...g.values }, explanation: explainGate(target, g.values), reason, chosenSide, trueSide: g.trueSide, livesLeft: r.lives }
+    r.mistakes = [...r.mistakes, entry]
+    setLives(r.lives)
+    setCombo(0)
+    setMistake(entry)
+    recordSkills(target, false)
+    g.shake = 1
+    g.glitch = 1
+    steerRef.current = { left: false, right: false }
+    stopEnergyHold()
+    audio.current?.slam()
+    audio.current?.mistake()
+    setGameStatus('mistake')
+  }
 
-  const beginGateRef = useRef(beginGate)
-  useEffect(() => { beginGateRef.current = beginGate })
+  const continueAfterMistake = () => {
+    const g = game.current
+    if (run.current.lives <= 0) {
+      finishRun(false)
+      return
+    }
+    g.resolved = 'pass'
+    g.flashSide = 0
+    if (g.gate?.kind === 'fork') g.playerX = g.gateCenter + correctForkSide(g.truth, g.trueSide) * forkLaneOffset
+    setMistake(null)
+    setGameStatus('running')
+    screenRef.current?.focus()
+  }
+
+  const resolveGate = () => {
+    const g = game.current
+    const target = g.gate!
+    setLocked(true)
+    if (target.kind === 'set') {
+      if (g.truth) {
+        g.resolved = 'pass'
+        handlePass()
+      } else {
+        g.resolved = 'fail'
+        handleMistake('closed', 0)
+      }
+      return
+    }
+    const side = forkSide(g.playerX, g.gateCenter)
+    const correct = correctForkSide(g.truth, g.trueSide)
+    if (side === correct) {
+      g.resolved = 'pass'
+      handlePass()
+    } else {
+      g.resolved = 'fail'
+      g.flashSide = side
+      handleMistake(side === 0 ? 'pillar' : 'wrong-door', side)
+    }
+  }
+
+  const openCoach = (moment: CoachMoment, direction?: -1 | 1) => {
+    run.current.coachDone.add(moment)
+    steerRef.current = { left: false, right: false }
+    setCoach({ moment, satisfied: false, direction })
+    setGameStatus('coach')
+  }
+
+  const closeCoach = () => {
+    if (coachTimer.current) window.clearTimeout(coachTimer.current)
+    coachTimer.current = null
+    setCoach(null)
+    if (game.current.status === 'coach') setGameStatus('running')
+  }
+
+  // Coach moments that wait for a TRUE condition resume shortly after it turns TRUE.
+  const checkCoach = () => {
+    const g = game.current
+    const current = coachRef.current
+    if (g.status !== 'coach' || !g.gate || !current || current.satisfied || !['energy', 'bool', 'and'].includes(current.moment)) return
+    if (!evaluateGate(g.gate, g.values)) return
+    setCoach({ ...current, satisfied: true })
+    coachTimer.current = window.setTimeout(closeCoach, 1100)
+  }
+
+  const scrape = () => {
+    const g = game.current
+    const r = run.current
+    g.slow = 0.45
+    g.shake = Math.max(g.shake, 0.35)
+    audio.current?.scrape()
+    if (r.combo > 0) {
+      r.combo = 0
+      setCombo(0)
+      showToast('WALL SCRAPE · COMBO LOST', 'bad')
+    } else showToast('WALL SCRAPE · SLOWED', 'bad')
+  }
+
+  const stumble = () => {
+    const g = game.current
+    const r = run.current
+    g.obstacles = []
+    g.slow = 0.9
+    g.shake = 0.8
+    audio.current?.stumble()
+    r.combo = 0
+    setCombo(0)
+    showToast('YOU STUMBLED · COMBO LOST', 'bad')
+  }
+
+  const events = useRef({ beginGate, afterGate, resolveGate, openCoach, scrape, stumble, setClock, setNightshot })
+  useEffect(() => { events.current = { beginGate, afterGate, resolveGate, openCoach, scrape, stumble, setClock, setNightshot } })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -277,10 +595,10 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     const context = canvas.getContext('2d')
     if (!context) return
     const g = game.current
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const motionPreference = () => { g.reduced = media.matches }
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    const motionPreference = () => { g.reduced = !!media?.matches }
     motionPreference()
-    media.addEventListener?.('change', motionPreference)
+    media?.addEventListener?.('change', motionPreference)
     let frame = 0
     let last = performance.now()
 
@@ -290,57 +608,117 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       canvas.height = Math.max(140, Math.round(rect.height / 3))
     }
     resize()
-    const observer = new ResizeObserver(resize)
-    observer.observe(canvas)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
+    observer?.observe(canvas)
+
+    const atmosphere = (dt: number, lightsActive: boolean, canBlackout: boolean) => {
+      const previousMode = g.lighting.mode
+      advanceBackroomLighting(g.lighting, dt, canBlackout, g.reduced || !lightsActive)
+      if (previousMode === 'steady' && g.lighting.mode !== 'steady') {
+        if (g.lighting.mode === 'blackout') audio.current?.blackout()
+        const lowBattery = run.current.lives === 1 && !g.menu
+        if (!g.entity && Math.random() < (lowBattery ? 0.85 : 0.5)) {
+          const z = g.depth + 17 + Math.random() * 5
+          g.entity = { z, x: corridorCenterAt(g.gateCenter, g.bends, z) + (Math.random() - 0.5) * 0.5, alpha: 0 }
+          audio.current?.presence()
+        }
+      }
+      g.blackoutFor = g.lighting.mode === 'blackout' && g.lighting.strength < 0.2 ? g.blackoutFor + dt : 0
+      const nightTarget = g.blackoutFor > 0.25 ? 1 : 0
+      const before = g.nightVision
+      g.nightVision = nightTarget > g.nightVision ? Math.min(1, g.nightVision + dt * 4) : Math.max(0, g.nightVision - dt * 2.2)
+      if (before < 0.5 && g.nightVision >= 0.5) { audio.current?.nightshot(); events.current.setNightshot(true) }
+      if (before >= 0.5 && g.nightVision < 0.5) events.current.setNightshot(false)
+      if (g.entity) {
+        const visible = g.lighting.mode !== 'steady' && g.entity.z - g.depth > 8
+        g.entity.alpha = visible ? Math.min(0.92, g.entity.alpha + dt * 3) : Math.max(0, g.entity.alpha - dt * 5)
+        if (!visible && g.entity.alpha <= 0) g.entity = null
+        else if (visible && !g.reduced) g.glitch = Math.max(g.glitch, 0.12)
+      }
+      audio.current?.setHumLevel(g.lighting.strength)
+    }
+
+    const idle = (dt: number) => {
+      g.time += dt
+      g.depth += dt * 0.55
+      atmosphere(dt, true, true)
+    }
 
     const update = (dt: number) => {
+      const r = run.current
       g.time += dt
+      r.clock += dt
+      if (Math.floor(r.clock) !== Math.floor(r.clock - dt)) events.current.setClock(r.clock)
+      g.lightsActive = r.mode.type === 'level' ? r.mode.index >= 2 : r.gateNumber >= 4
       const blackoutClearance = g.speed * 1.6 * 1.8 + 2
       const canBlackout = g.phase === 'gate'
         ? g.gateZ - g.depth > blackoutClearance
         : g.bends.every((bend) => bend.endZ < g.depth || bend.startZ - g.depth > blackoutClearance)
           && g.obstacles.every((obstacle) => obstacle.z + 0.35 < g.depth || obstacle.z - g.depth > blackoutClearance)
-      advanceBackroomLighting(g.lighting, dt, canBlackout, g.reduced || runNumberRef.current < lightingStartGate)
-      g.true = evaluateCondition(g.value, g.operator, g.threshold)
-      const distance = g.gateZ - g.depth
-      const progress = Math.max(0, Math.min(1, 1 - Math.max(distance, 0) / START_DISTANCE))
+      atmosphere(dt, g.lightsActive, canBlackout)
 
-      if (g.phase === 'gate') {
-        if (g.true) {
-          g.openAmount = Math.min(1, g.openAmount + dt * Math.max(1, g.speed / baseRunSpeed) / OPEN_SECONDS)
-          g.falseIntensity = Math.max(0, g.falseIntensity - dt * 2.4)
-        } else {
-          g.openAmount = Math.max(0, g.openAmount - dt / CLOSE_SECONDS)
-          g.falseIntensity = Math.min(1, Math.max(0, (progress - 0.35) / 0.55))
-          if (distance < 4.5) farSolveRef.current = false
+      const target = g.gate
+      const distance = g.gateZ - g.depth
+
+      // Guided pauses appear once per level, the first time it is played.
+      if (r.coachAllowed && target) {
+        const level = r.mode.type === 'level' ? backroomLevels[r.mode.index] : null
+        const allowed = (moment: CoachMoment) => !!level?.coach.includes(moment) && !r.coachDone.has(moment)
+        // Forks pause earlier: reading the condition takes longer than nudging a value.
+        if (g.phase === 'gate' && g.resolved === 'none' && distance <= (target.kind === 'fork' ? 10 : 7.5)) {
+          const truth = evaluateGate(target, g.values)
+          const moment: CoachMoment | null = target.kind === 'fork' ? (allowed('fork') ? 'fork' : null)
+            : truth ? null
+              : target.clauses.length > 1 ? (allowed('and') ? 'and' : null)
+                : gateBool(target) ? (allowed('bool') ? 'bool' : null)
+                  : allowed('energy') ? 'energy' : null
+          if (moment) { events.current.openCoach(moment); return }
+        }
+        if (g.phase === 'turn' && allowed('steer')) {
+          const bend = g.bends[0]
+          if (bend && g.depth >= bend.startZ - 3.2) { events.current.openCoach('steer', bend.dir); return }
+        }
+      }
+
+      if (g.phase === 'gate' && target) {
+        g.truth = evaluateGate(target, g.values)
+        const live = target.kind === 'set' && target.liveTruth
+        if (target.kind === 'set') {
+          const opening = g.resolved === 'pass' || (live && g.truth && g.resolved === 'none')
+          g.openAmount = opening ? Math.min(1, g.openAmount + dt / (g.resolved === 'pass' ? 0.28 : 0.6)) : Math.max(0, g.openAmount - dt / 0.4)
+          const approach = Math.max(0, Math.min(1, 1 - Math.max(distance, 0) / 16))
+          g.falseIntensity = live && !g.truth && g.resolved === 'none' ? Math.min(1, Math.max(0, (approach - 0.35) / 0.55)) : Math.max(0, g.falseIntensity - dt * 2.4)
+        } else if (g.resolved === 'pass') {
+          const side = correctForkSide(g.truth, g.trueSide)
+          g.doorOpen[side < 0 ? 0 : 1] = Math.min(1, g.doorOpen[side < 0 ? 0 : 1] + dt / 0.28)
+          g.falseIntensity = 0
         }
       } else {
-        g.openAmount = 1
         g.falseIntensity = Math.max(0, g.falseIntensity - dt * 2.4)
       }
 
       const steer = (steerRef.current.left ? -1 : 0) + (steerRef.current.right ? 1 : 0)
       g.playerX += steer * (STEER_SPEED + Math.max(0, g.speed - baseRunSpeed) * 0.35) * dt
-      if (g.phase === 'gate' && steer === 0 && distance > 4) {
-        g.playerX += (g.gateCenter - g.playerX) * Math.min(1, dt * 2.8)
+      if (g.phase === 'gate' && target) {
+        if (target.kind === 'set' && steer === 0 && distance > 4) g.playerX += (g.gateCenter - g.playerX) * Math.min(1, dt * 2.8)
+        if (target.kind === 'fork' && g.resolved === 'pass') {
+          const lane = g.gateCenter + correctForkSide(g.truth, g.trueSide) * forkLaneOffset
+          g.playerX += (lane - g.playerX) * Math.min(1, dt * 6)
+        }
       }
 
       const previousDepth = g.depth
-      // Keep the corridor pace through the gate, including while it opens.
-      if (g.status === 'running') g.depth += dt * g.speed * 1.6
+      g.slow = Math.max(0, g.slow - dt)
+      g.depth += dt * g.speed * (g.slow > 0 ? 0.55 : 1) * 1.6
+      g.stepDistance += g.depth - previousDepth
+      if (g.stepDistance >= 0.85) { g.stepDistance = 0; audio.current?.footstep() }
 
       const bend = g.phase === 'turn' ? g.bends.find((item) => g.depth >= item.startZ - 3 && g.depth < item.endZ) : undefined
       const hint = bend?.dir ?? 0
-      if (hint !== turnHintRef.current) {
-        turnHintRef.current = hint
-        setTurnHint(hint)
-      }
+      if (hint !== turnHintRef.current) { turnHintRef.current = hint; setTurnHint(hint) }
       const obstacle = g.phase === 'turn' ? g.obstacles[0] : undefined
       const hazard = obstacle && g.depth >= (g.bends[g.bends.length - 1]?.endZ ?? 0) - 1 && obstacle.z - g.depth <= 8 && obstacle.z - g.depth > -0.4 ? -obstacle.side as -1 | 1 : 0
-      if (hazard !== hazardHintRef.current) {
-        hazardHintRef.current = hazard
-        setHazardHint(hazard)
-      }
+      if (hazard !== hazardHintRef.current) { hazardHintRef.current = hazard; setHazardHint(hazard) }
 
       const center = corridorCenterAt(g.gateCenter, g.bends, g.depth)
       const offset = g.playerX - center
@@ -349,38 +727,26 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         screen.style.setProperty('--wall-right', Math.max(0, Math.min(1, offset / WALL_LIMIT)).toFixed(2))
         screen.style.setProperty('--wall-left', Math.max(0, Math.min(1, -offset / WALL_LIMIT)).toFixed(2))
       }
-      if (g.status === 'running' && Math.abs(offset) >= WALL_LIMIT) {
-        g.status = 'crashed'
-        g.shake = 1
-        eventsRef.current.handleCrash('wall')
-        return
-      }
-      if (g.status === 'running' && obstacle && hitsObstacle(previousDepth, g.depth, g.playerX, obstacle)) {
-        g.status = 'crashed'
-        g.shake = 1
-        eventsRef.current.handleCrash('obstacle')
-        return
-      }
-      if (g.phase === 'gate' && !g.passLatched && g.status === 'running') {
-        const crossing = gateCrossing(previousDepth, g.depth, g.gateZ, g.true, g.openAmount)
-        if (crossing === 'blocked') {
-          g.status = 'crashed'
-          g.shake = 1
-          eventsRef.current.handleCrash('gate')
+      // Walls do not end the run: they stop you, slow you and break the combo.
+      if (Math.abs(offset) >= WALL_LIMIT) {
+        g.playerX = center + Math.sign(offset) * WALL_LIMIT
+        if (!g.wallContact) { g.wallContact = true; events.current.scrape() }
+      } else if (Math.abs(offset) < WALL_LIMIT - 0.06) g.wallContact = false
+      if (obstacle && hitsObstacle(previousDepth, g.depth, g.playerX, obstacle)) events.current.stumble()
+
+      if (g.phase === 'gate' && target) {
+        if (g.resolved === 'none' && distance <= LOCK_DISTANCE) {
+          events.current.resolveGate()
           return
         }
-        if (crossing === 'pass') {
-          g.passLatched = true
-          eventsRef.current.handlePass()
+        if (g.resolved === 'pass' && g.depth >= g.gateZ + PASS_CLEARANCE) {
+          events.current.afterGate()
+          return
         }
       }
-      if (g.phase === 'gate' && g.passLatched && g.depth >= g.gateZ + PASS_CLEARANCE) {
-        eventsRef.current.handleGateComplete()
-        return
-      }
       if (g.phase === 'turn' && g.depth >= g.activationZ) {
-        beginGateRef.current(runNumberRef.current + 1, g.operator)
-        return
+        r.gateNumber += 1
+        events.current.beginGate()
       }
       g.shake = Math.max(0, g.shake - dt * 1.6)
     }
@@ -389,7 +755,17 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       frame = requestAnimationFrame(frameLoop)
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
-      if (!document.hidden && (g.status === 'running' || g.status === 'passing')) update(dt)
+      if (!document.hidden) {
+        if (g.status === 'running') update(dt)
+        else if (g.status === 'menu') idle(dt)
+        else g.time += dt
+        g.glitch = Math.max(0, g.glitch - dt * 1.4)
+      }
+      // Values can change while the run is frozen for a guide, so the sign follows them.
+      if (g.gate) g.truth = evaluateGate(g.gate, g.values)
+      const signal: GateSignal = !g.gate ? 'unknown'
+        : g.gate.kind === 'set' && g.gate.liveTruth ? (g.truth ? 'true' : 'false')
+          : g.resolved === 'none' ? 'unknown' : g.truth ? 'true' : 'false'
       drawBackroom(context, canvas.width, canvas.height, {
         depth: g.depth,
         gateZ: g.gateZ,
@@ -400,403 +776,472 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         nextGateCenter: g.nextGateCenter,
         phase: g.phase,
         playerX: g.playerX,
+        gateKind: g.gate?.kind ?? 'set',
+        nextGateKind: g.nextGate?.kind ?? 'set',
+        signal,
+        trueSide: g.trueSide,
+        nextTrueSide: g.nextTrueSide,
         openAmount: g.openAmount,
-        conditionTrue: g.true,
+        doorOpen: g.doorOpen,
+        flashSide: g.flashSide,
         falseIntensity: g.falseIntensity,
         time: g.time,
         roomLight: g.lighting.strength,
-        gateNumber: runNumberRef.current,
+        lightsActive: g.menu || g.lightsActive,
+        nightVision: g.nightVision,
+        entity: g.entity,
+        glitch: g.glitch,
+        gateNumber: run.current.gateNumber,
         seed: SEED_BASE,
         reduced: g.reduced,
         shake: g.shake,
+        hideGate: g.menu,
       })
       screenRef.current?.style.setProperty('--false', g.falseIntensity.toFixed(3))
     }
     frame = requestAnimationFrame(frameLoop)
     return () => {
       cancelAnimationFrame(frame)
-      observer.disconnect()
-      media.removeEventListener?.('change', motionPreference)
+      observer?.disconnect()
+      media?.removeEventListener?.('change', motionPreference)
     }
   }, [])
 
   useEffect(() => {
-    return clearTimers
-  }, [])
-
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.hidden && (game.current.status === 'running' || game.current.status === 'passing')) {
-        game.current.status = 'paused'
-        setStatus('paused')
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [])
-
-  useEffect(() => {
-    const stopSteering = () => { steerRef.current.left = false; steerRef.current.right = false }
-    window.addEventListener('pointerup', stopSteering)
-    window.addEventListener('pointercancel', stopSteering)
+    const player = audio.current
     return () => {
-      window.removeEventListener('pointerup', stopSteering)
-      window.removeEventListener('pointercancel', stopSteering)
+      clearTimers()
+      player?.dispose()
     }
   }, [])
 
-  const changeValue = (next: number) => {
+  const pause = () => {
     const g = game.current
-    if (g.phase !== 'gate' || g.passLatched || g.status !== 'running') return
-    const clamped = Math.max(energyRange.min, Math.min(energyRange.max, Math.round(next)))
-    valueRef.current = clamped
-    g.value = clamped
-    setValue(clamped)
+    if (g.status !== 'running' && g.status !== 'coach') return
+    steerRef.current = { left: false, right: false }
+    stopEnergyHold()
+    if (coachTimer.current) { window.clearTimeout(coachTimer.current); coachTimer.current = null }
+    // A paused coach moment shows again on resume.
+    if (coachRef.current) run.current.coachDone.delete(coachRef.current.moment)
+    setCoach(null)
+    setGameStatus('paused')
   }
 
-  const stopEnergyHold = () => {
-    const hold = energyHoldRef.current
-    if (hold.delay !== null) window.clearTimeout(hold.delay)
-    if (hold.interval !== null) window.clearInterval(hold.interval)
-    hold.delay = null
-    hold.interval = null
-    if (hold.repeated) window.setTimeout(() => { hold.repeated = false }, 0)
+  const resume = () => {
+    if (paused || game.current.status !== 'paused') return
+    enableAudioFromGesture()
+    setGameStatus('running')
+    screenRef.current?.focus()
+  }
+
+  const togglePause = () => {
+    const current = game.current.status
+    if (current === 'paused') resume()
+    else pause()
+  }
+
+  const pauseRef = useRef(pause)
+  useEffect(() => { pauseRef.current = pause })
+
+  useEffect(() => {
+    if (paused) pauseRef.current()
+  }, [paused])
+
+  useEffect(() => {
+    const onHidden = () => { if (document.hidden) pauseRef.current() }
+    const onBlur = () => {
+      steerRef.current = { left: false, right: false }
+      pauseRef.current()
+    }
+    document.addEventListener('visibilitychange', onHidden)
+    window.addEventListener('blur', onBlur)
+    const release = () => { steerRef.current = { left: false, right: false } }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', release)
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden)
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', release)
+    }
+  }, [])
+
+  const editable = () => {
+    const g = game.current
+    return g.phase === 'gate' && g.resolved === 'none' && g.gate?.kind === 'set' && (g.status === 'running' || g.status === 'coach')
+  }
+
+  const changeEnergy = (next: number) => {
+    const g = game.current
+    if (!editable() || !g.gate || !gateUsesEnergy(g.gate)) return
+    const clamped = Math.max(energyRange.min, Math.min(energyRange.max, Math.round(next)))
+    if (clamped === g.values.energy) return
+    g.values = { ...g.values, energy: clamped }
+    setValues({ ...g.values })
+    audio.current?.tick()
+    checkCoach()
+  }
+
+  const toggleFlag = () => {
+    const g = game.current
+    if (!editable() || !g.gate || !gateBool(g.gate)) return
+    g.values = { ...g.values, flag: !g.values.flag }
+    setValues({ ...g.values })
+    audio.current?.toggle()
+    checkCoach()
   }
 
   const startEnergyHold = (direction: -1 | 1) => {
     stopEnergyHold()
-    const hold = energyHoldRef.current
+    const hold = energyHold.current
     hold.startedAt = performance.now()
     hold.repeated = false
     hold.delay = window.setTimeout(() => {
       hold.repeated = true
-      changeValue(valueRef.current + direction)
+      changeEnergy(game.current.values.energy + direction)
       hold.interval = window.setInterval(() => {
         const elapsed = performance.now() - hold.startedAt
         const step = elapsed > 1400 ? 3 : elapsed > 700 ? 2 : 1
-        changeValue(valueRef.current + direction * step)
+        changeEnergy(game.current.values.energy + direction * step)
       }, 70)
     }, 220)
   }
 
   const clickEnergy = (direction: -1 | 1) => {
-    if (energyHoldRef.current.repeated) {
-      energyHoldRef.current.repeated = false
+    if (energyHold.current.repeated) {
+      energyHold.current.repeated = false
       return
     }
-    changeValue(valueRef.current + direction)
-  }
-
-  const openHint = () => {
-    setHintOpen(true)
-    setAssistLevel(2)
-  }
-
-  const togglePause = () => {
-    const current = game.current.status
-    if (current !== 'paused' && current !== 'running' && current !== 'passing') return
-    const next = current === 'paused' ? 'running' : 'paused'
-    game.current.status = next
-    steerRef.current.left = false
-    steerRef.current.right = false
-    stopEnergyHold()
-    setStatus(next)
-  }
-
-  const toggleAudio = () => {
-    setAudioOn((on) => {
-      if (!on) {
-        try {
-          audioRef.current = audioRef.current ?? new AudioContext()
-          const context = audioRef.current
-          const oscillator = context.createOscillator()
-          const volume = context.createGain()
-          oscillator.frequency.value = 520
-          volume.gain.value = 0.03
-          oscillator.connect(volume)
-          volume.connect(context.destination)
-          oscillator.start()
-          oscillator.stop(context.currentTime + 0.09)
-        } catch { /* audio is optional */ }
-      }
-      return !on
-    })
-  }
-
-  const openSummary = () => setStatus('summary')
-  const resume = () => { if (paused) return; setShowMilestone(false); setStatus('running') }
-  const tryAgain = () => {
-    clearTimers()
-    stopEnergyHold()
-    if (championTimerRef.current) window.clearTimeout(championTimerRef.current)
-    championTimerRef.current = null
-    setShowChampion(false)
-    setSessionGates(0)
-    runXpRef.current = 0
-    setSessionXp(0)
-    setSessionOperators([])
-    seenOperatorsRef.current.clear()
-    setMicroReveal(null)
-    setToast(null)
-    setShowMilestone(false)
-    steerRef.current.left = false
-    steerRef.current.right = false
-    const g = game.current
-    g.depth = 0
-    g.time = 0
-    g.lighting = createBackroomLighting()
-    g.playerX = 0
-    g.nextGateZ = START_DISTANCE
-    g.nextGateCenter = 0
-    g.shake = 0
-    g.falseIntensity = 0
-    g.openAmount = 0
-    beginGate(1)
-    screenRef.current?.focus()
+    changeEnergy(game.current.values.energy + direction)
   }
 
   const steerDown = (direction: -1 | 1) => {
-    if (game.current.status !== 'running') return
+    const g = game.current
+    const current = coachRef.current
+    if (g.status === 'coach' && current && (current.moment === 'steer' || current.moment === 'fork')) closeCoach()
+    else if (g.status !== 'running') return
     const side = direction === -1 ? 'left' : 'right'
     if (!steerRef.current[side]) steerStartRef.current[side] = performance.now()
     steerRef.current[side] = true
   }
+
   const steerUp = (direction: -1 | 1) => {
     const side = direction === -1 ? 'left' : 'right'
     if (!steerRef.current[side]) return
     const heldFor = performance.now() - steerStartRef.current[side]
     steerRef.current[side] = false
     steerStartRef.current[side] = 0
-    if (heldFor < 170 && game.current.status === 'running') {
-      const g = game.current
-      g.playerX += direction * 0.23
-    }
-  }
-
-  const focusScreen = (event: React.PointerEvent) => {
-    const tag = (event.target as HTMLElement).tagName
-    if (tag === 'BUTTON') return
-    screenRef.current?.focus()
+    if (heldFor < 170 && game.current.status === 'running') game.current.playerX += direction * 0.23
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target instanceof HTMLElement ? event.target : null
-    const tag = target?.tagName
     if (target?.matches('input, textarea, select') || target?.isContentEditable) return
     const key = event.key
-    if (key === 'ArrowLeft' || key === 'ArrowRight') {
-      if (game.current.status !== 'running') return
+    const current = game.current.status
+    if (key === 'ArrowLeft' || key === 'a' || key === 'A' || key === 'ArrowRight' || key === 'd' || key === 'D') {
+      if (current !== 'running' && current !== 'coach') return
       event.preventDefault()
-      steerDown(key === 'ArrowLeft' ? -1 : 1)
+      if (!event.repeat) steerDown(key === 'ArrowLeft' || key === 'a' || key === 'A' ? -1 : 1)
       return
+    }
+    if (key === 'ArrowUp' || key === 'w' || key === 'W' || key === 'ArrowDown' || key === 's' || key === 'S') {
+      if (current !== 'running' && current !== 'coach') return
+      event.preventDefault()
+      changeEnergy(game.current.values.energy + (key === 'ArrowUp' || key === 'w' || key === 'W' ? 1 : -1))
+      return
+    }
+    if (key === 't' || key === 'T' || key === 'e' || key === 'E') {
+      if (current !== 'running' && current !== 'coach') return
+      event.preventDefault()
+      toggleFlag()
+      return
+    }
+    // A focused button handles Enter and Space itself.
+    if ((key === 'Enter' || key === ' ') && target?.tagName === 'BUTTON') return
+    if (key === 'Enter' || key === ' ') {
+      if (current === 'briefing') { event.preventDefault(); launch(); return }
+      if (current === 'mistake') { event.preventDefault(); continueAfterMistake(); return }
     }
     if (key === ' ' || key === 'Escape') {
-      if (tag === 'BUTTON') return
-      event.preventDefault()
-      togglePause()
-      return
-    }
-    if (key === 'a' || key === 'A' || key === 'ArrowDown') {
-      if (game.current.status !== 'running') return
-      event.preventDefault()
-      changeValue(valueRef.current - 1)
-    } else if (key === 'd' || key === 'D' || key === 'ArrowUp') {
-      if (game.current.status !== 'running') return
-      event.preventDefault()
-      changeValue(valueRef.current + 1)
+      if (current === 'running' || current === 'coach' || current === 'paused') {
+        event.preventDefault()
+        togglePause()
+      }
     }
   }
 
   const onKeyUp = (event: KeyboardEvent) => {
     const key = event.key
-    if (key === 'ArrowLeft') steerUp(-1)
-    if (key === 'ArrowRight') steerUp(1)
+    if (key === 'ArrowLeft' || key === 'a' || key === 'A') steerUp(-1)
+    if (key === 'ArrowRight' || key === 'd' || key === 'D') steerUp(1)
   }
 
-  const keysRef = useRef({ onKeyDown, onKeyUp, stopEnergyHold })
-  useEffect(() => { keysRef.current = { onKeyDown, onKeyUp, stopEnergyHold } })
+  const keys = useRef({ onKeyDown, onKeyUp })
+  useEffect(() => { keys.current = { onKeyDown, onKeyUp } })
   useEffect(() => {
-    if (!paused || (game.current.status !== 'running' && game.current.status !== 'passing')) return
-    game.current.status = 'paused'
-    steerRef.current.left = false
-    steerRef.current.right = false
-    stopEnergyHold()
-    setStatus('paused')
-  }, [paused])
-  useEffect(() => {
-    const down = (event: KeyboardEvent) => keysRef.current.onKeyDown(event)
-    const up = (event: KeyboardEvent) => keysRef.current.onKeyUp(event)
-    const release = () => {
-      steerRef.current.left = false
-      steerRef.current.right = false
-      keysRef.current.stopEnergyHold()
-    }
-    const blur = () => {
-      release()
-      if (game.current.status === 'running' || game.current.status === 'passing') {
-        game.current.status = 'paused'
-        setStatus('paused')
-      }
-    }
+    const down = (event: KeyboardEvent) => keys.current.onKeyDown(event)
+    const up = (event: KeyboardEvent) => keys.current.onKeyUp(event)
     window.addEventListener('keydown', down, true)
     window.addEventListener('keyup', up, true)
-    window.addEventListener('blur', blur)
-    document.addEventListener('visibilitychange', release)
     return () => {
       window.removeEventListener('keydown', down, true)
       window.removeEventListener('keyup', up, true)
-      window.removeEventListener('blur', blur)
-      document.removeEventListener('visibilitychange', release)
     }
   }, [])
 
-  const leaderboard = <section className="br-leaderboard" aria-label="Top scorers">
-    <h3><Trophy size={22} /> TOP SCORERS</h3>
-    <small>{scoreSource}</small>
-    {scores.length > 0 ? <ol>{scores.map((score, index) => <li key={score.username} className={score.username === progress.username ? 'is-you' : ''}>
-      <b>{index + 1}</b><span>{score.name}{score.username === progress.username ? ' (YOU)' : ''}</span><strong>{score.gates} GATES <small>{score.xp} XP</small></strong>
-    </li>)}</ol> : <p>Open a gate to set the first score.</p>}
-  </section>
+  const toggleAudio = () => {
+    const next = !audioOn
+    setAudioOn(next)
+    saveAudioPreference(next)
+    if (next) {
+      audio.current?.enable()
+      audio.current?.toggle()
+      if (game.current.status === 'running') audio.current?.startHum()
+    } else audio.current?.disable()
+  }
+
+  const focusScreen = (event: React.PointerEvent) => {
+    if ((event.target as HTMLElement).closest('button')) return
+    screenRef.current?.focus()
+  }
+
+  const playLevel = (index: number) => startMode({ type: 'level', index })
+  const playEndless = () => startMode({ type: 'endless' })
+  const retry = () => startMode(run.current.mode)
+
+  const live = status !== 'menu'
+  const inGate = phase === 'gate'
+  const canEdit = inGate && !locked && gate?.kind === 'set' && (status === 'running' || status === 'coach')
+  const usesEnergy = !!gate && gateUsesEnergy(gate)
+  const flagName = gate ? gateBool(gate) : null
+  // Value controls only appear for gates the student edits.
+  const padGate = phase === 'turn' ? game.current.nextGate ?? gate : gate
+  const showValues = padGate?.kind === 'set'
+  const truthNow = gate ? evaluateGate(gate, values) : false
+  const codeGate = phase === 'turn' ? game.current.nextGate ?? gate : gate
+  const codeValues = phase === 'turn' && game.current.nextGate ? game.current.nextGate.start : values
+  const codeTruth: CodeTruth = phase === 'turn' ? 'next' : gate?.liveTruth ? (truthNow ? 'true' : 'false') : 'unknown'
+  const levelGates = level ? level.gates.length : 0
+  const forkNow = inGate && gate?.kind === 'fork'
+  const nextIndex = nextLevelIndex(stars)
+
+  const coachCopy = (() => {
+    if (!coach || !gate) return null
+    switch (coach.moment) {
+      case 'energy': return coach.satisfied
+        ? { title: 'TRUE. THE GATE OPENS.', body: `${values.energy} ${conditionCode(gate).replace('energy ', '')} is TRUE. Keep going.` }
+        : { title: 'MAKE IT TRUE', body: `This gate runs if (${conditionCode(gate)}). energy is ${values.energy}, so the condition is FALSE. Use ▲ / ▼ (or ↑ / ↓) to change energy until it reads TRUE.` }
+      case 'steer': return { title: 'FOLLOW THE CORRIDOR', body: `The corridor bends ${sideWord(coach.direction ?? 1)}. Hold ${coach.direction === -1 ? '◀ (or ←)' : '▶ (or →)'} to steer. Scraping a wall slows you down and breaks your combo.` }
+      case 'fork': return { title: 'TWO DOORS', body: 'This time the code sets the values. Read the condition: is it TRUE or FALSE? Steer into that door. Your choice locks just before the gate.' }
+      case 'bool': return coach.satisfied
+        ? { title: 'TRUE. THE GATE OPENS.', body: `${flagName} is now ${String(values.flag)}, so the condition is TRUE.` }
+        : { title: 'TRUE OR FALSE', body: `${flagName} is a bool: it can only be true or false. Tap the switch (or press T) until the condition reads TRUE.` }
+      case 'and': return coach.satisfied
+        ? { title: 'BOTH SIDES TRUE', body: 'true && true is TRUE. The gate opens.' }
+        : { title: 'BOTH SIDES', body: '&& needs BOTH sides TRUE. Fix energy AND the bool before the gate.' }
+    }
+  })()
+
+  const hint = (() => {
+    if (!gate || gate.kind === 'fork') return 'Work out the condition with the given values, then pick the door that matches.'
+    const compare = gate.clauses.find((clause) => clause.type === 'compare')
+    const lines: string[] = []
+    if (compare?.type === 'compare') {
+      const t = compare.threshold
+      lines.push(compare.operator === '>' ? `Try a number above ${t}.` : compare.operator === '<' ? `Try a number below ${t}.`
+        : compare.operator === '>=' ? `${t} works too. Try ${t} or more.` : compare.operator === '<=' ? `${t} works too. Try ${t} or less.`
+          : compare.operator === '==' ? `Land exactly on ${t}.` : `Any number except ${t}.`)
+    }
+    const flagClause = gate.clauses.find((clause) => clause.type === 'bool')
+    if (flagClause?.type === 'bool') lines.push(`${flagClause.name} must be ${flagClause.form === 'false' ? 'false' : 'true'}.`)
+    return lines.join(' ')
+  })()
+
+  const mistakeTitle = mistake?.reason === 'closed' ? 'THE GATE STAYED SHUT' : mistake?.reason === 'pillar' ? 'YOU HIT THE PILLAR' : 'WRONG DOOR'
+  const mistakeLead = mistake
+    ? mistake.reason === 'closed' ? 'The condition was FALSE when you reached the gate.'
+      : mistake.reason === 'pillar' ? `You stayed in the middle. The condition is ${mistake.explanation.result ? 'TRUE' : 'FALSE'}, so the ${mistake.explanation.result ? 'TRUE' : 'FALSE'} door was the way.`
+        : `You took the ${mistake.chosenSide === mistake.trueSide ? 'TRUE' : 'FALSE'} door, but the condition is ${mistake.explanation.result ? 'TRUE' : 'FALSE'}.`
+    : ''
+
+  const gateCode = (target: BackroomGate, given: GateValues) => {
+    const lines: string[] = []
+    if (gateUsesEnergy(target)) lines.push(`int energy = ${given.energy};`)
+    const name = gateBool(target)
+    if (name) lines.push(`bool ${name} = ${given.flag};`)
+    lines.push(`if (${conditionCode(target)})`)
+    return lines
+  }
+
+  const batteries = (count: number) => <span className={`br-battery ${count <= 1 ? 'is-low' : ''}`} aria-label={`${count} of ${maxBatteries} batteries`}>
+    {Array.from({ length: maxBatteries }, (_, index) => <i key={index} className={index < count ? 'is-full' : ''} />)}
+  </span>
 
   return <main
     ref={screenRef}
-    className={`br-screen br-screen--${status} ${phase === 'turn' ? 'is-neutral' : isTrue ? 'is-true' : 'is-false'}`}
+    className={`br-screen br-screen--${status} ${live ? 'is-live' : ''} ${nightshot ? 'is-nightshot' : ''} ${lives <= 1 && live ? 'is-low-battery' : ''}`}
     tabIndex={0}
     onPointerDown={focusScreen}
   >
     <canvas ref={canvasRef} className="br-canvas" aria-hidden="true" />
     <div className="br-wall-warning" aria-hidden="true"><i /><i /></div>
-    <div className="br-vignette" aria-hidden="true" />
+    <div className="br-film" aria-hidden="true"><i className="br-grain" /><i className="br-scan" /><i className="br-vignette" /></div>
 
-    <header className="br-hud">
-      {isChampion ? <BackroomChampionBadge /> : <span className="br-badge"><Footprints size={18} /> BACKROOMS RUN</span>}
-      <div className="br-stats">
-        <span className="br-stat"><b>RUN</b> {String(runNumber).padStart(3, '0')}</span>
-        <span className="br-stat" aria-label="Run score"><Zap size={14} fill="currentColor" /> XP {sessionXp} <b aria-label="Best score">BEST {progress.backroomRunXp}</b></span>
-        <span className="br-stat br-stat--pace">PACE {pace.toFixed(1)}×</span>
-        <span className="br-stat br-stat--endless"><InfinityIcon size={16} /> ENDLESS</span>
-      </div>
-      <div className="br-actions">
-        <button onClick={toggleAudio} aria-label={audioOn ? 'Turn sound off' : 'Turn sound on'}>{audioOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
-        <button onClick={togglePause} aria-label={status === 'paused' ? 'Resume run' : 'Pause run'}>{status === 'paused' ? <Play size={17} /> : <Pause size={17} />}</button>
-        <button className="br-exit" onClick={openSummary}><ArrowLeft size={15} /> FINISH RUN</button>
-      </div>
-    </header>
-
-    {toast && <div className="br-toast">{toast}</div>}
-    {showChampion && (status === 'running' || status === 'passing') && <BackroomChampionAward celebrate />}
-    {showMilestone && <aside className="br-achievement" role="status"><Trophy size={26} /><div><small>ACHIEVEMENT UNLOCKED</small><strong>YOU GET IT.</strong><p>5 gates opened. Make a condition TRUE to open the gate.</p></div></aside>}
-    {microReveal && <div className="br-reveal" role="status"><strong>{microReveal.title}</strong><span>{microReveal.caption}</span></div>}
-    <section className="br-console">
-      {turnHint !== 0 && hazardHint === 0 && sessionGates < 3 && status === 'running' && <div className={`br-turn ${turnHint < 0 ? 'is-left' : 'is-right'}`} role="status">
-        {turnHint < 0 ? <ChevronLeft size={22} /> : <ChevronRight size={22} />}
-        <strong>TURN {turnHint < 0 ? 'LEFT' : 'RIGHT'}</strong>
-      </div>}
-      <div className="br-input-group br-input-group--energy" aria-label="Energy controls">
-        <span className="br-control-heading">ENERGY · ↓ / ↑</span>
-        <div className="br-energy-controls" aria-label="Adjust energy">
-          <button className="br-energy-button" aria-label="Decrease energy" disabled={phase === 'turn' || status !== 'running'} onPointerDown={(event) => { if (event.button === 0) startEnergyHold(-1) }} onPointerUp={stopEnergyHold} onPointerLeave={stopEnergyHold} onPointerCancel={stopEnergyHold} onClick={() => clickEnergy(-1)}><ChevronDown size={30} /><span>LESS</span><kbd>↓ / A</kbd></button>
-          <button className="br-energy-button" aria-label="Increase energy" disabled={phase === 'turn' || status !== 'running'} onPointerDown={(event) => { if (event.button === 0) startEnergyHold(1) }} onPointerUp={stopEnergyHold} onPointerLeave={stopEnergyHold} onPointerCancel={stopEnergyHold} onClick={() => clickEnergy(1)}><ChevronUp size={30} /><span>MORE</span><kbd>↑ / D</kbd></button>
+    {live && <>
+      <div className="br-viewfinder" aria-hidden="true"><i /><i /><i /><i /></div>
+      <header className="br-osd">
+        <div className="br-osd-left">
+          <span className="br-rec"><i /> REC</span>
+          <span className="br-timecode">{timecode(clock)}</span>
+          <span className="br-tapename">{level ? `TAPE ${String(level.id).padStart(2, '0')} · ${level.title}` : 'THE DEEP · ENDLESS'}</span>
+          {nightshot && <span className="br-nightshot">NIGHTSHOT</span>}
         </div>
-      </div>
-      <div className="br-panel">
-        <div className="br-readouts">
-          <div className="br-condition" aria-label={phase === 'turn' ? `Next gate ${runNumber + 1}` : `Condition: energy ${challenge.operator} ${challenge.threshold}`}>
-            {phase === 'turn' ? <><b>NEXT GATE</b><strong>{String(runNumber + 1).padStart(2, '0')}</strong></> : <><b>energy</b><span className="br-operator">{challenge.operator}</span><strong>{challenge.threshold}</strong>{runNumber < 6 && <span className="br-comparator-words">{challenge.operatorWords}</span>}</>}
+        <div className="br-osd-center" aria-label={level ? `Gate ${gateNumber} of ${levelGates}` : `Gate ${gateNumber}`}>
+          {level ? <span className="br-pips">{level.gates.map((_, index) => <i key={index} className={index < gateNumber - (phase === 'gate' ? 1 : 0) ? 'is-done' : index === gateNumber - 1 && phase === 'gate' ? 'is-now' : ''} />)}</span>
+            : <span className="br-gatecount">GATE {String(gateNumber).padStart(3, '0')}</span>}
+        </div>
+        <div className="br-osd-right">
+          {champion && mode.type === 'endless' && <BackroomChampionBadge />}
+          {combo >= 2 && <span className="br-combo" key={combo}>COMBO {combo}</span>}
+          <span className="br-xp"><Zap size={15} fill="currentColor" /> {xp}</span>
+          {batteries(lives)}
+          <button className="br-icon" onClick={toggleAudio} aria-label={audioOn ? 'Turn sound off' : 'Turn sound on'}>{audioOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
+          <button className="br-icon" onClick={togglePause} aria-label={status === 'paused' ? 'Resume run' : 'Pause run'}>{status === 'paused' ? <Play size={17} /> : <Pause size={17} />}</button>
+        </div>
+      </header>
+
+      {toast && <div className={`br-toast is-${toast.tone}`} role="status">{toast.text}</div>}
+      {showChampion && <BackroomChampionAward celebrate />}
+      {reveal && <div className="br-reveal" role="status"><code><CodeTokens code={reveal.code} /></code><strong className={reveal.result ? 'is-true' : 'is-false'}>→ {reveal.result ? 'TRUE' : 'FALSE'}</strong><span>{reveal.note}</span></div>}
+
+      <section className={`br-console ${forkNow ? 'is-fork' : ''}`}>
+        <div className="br-pad br-pad--values" aria-label="Value controls">
+          {showValues && usesEnergy && <div className="br-energy">
+            <button className="br-key" aria-label="Increase energy" disabled={!canEdit} onPointerDown={(event) => { if (event.button === 0) startEnergyHold(1) }} onPointerUp={stopEnergyHold} onPointerLeave={stopEnergyHold} onPointerCancel={stopEnergyHold} onClick={() => clickEnergy(1)} onContextMenu={(event) => event.preventDefault()}><ChevronUp size={30} /><kbd>↑</kbd></button>
+            <span className="br-energy-label">ENERGY</span>
+            <button className="br-key" aria-label="Decrease energy" disabled={!canEdit} onPointerDown={(event) => { if (event.button === 0) startEnergyHold(-1) }} onPointerUp={stopEnergyHold} onPointerLeave={stopEnergyHold} onPointerCancel={stopEnergyHold} onClick={() => clickEnergy(-1)} onContextMenu={(event) => event.preventDefault()}><ChevronDown size={30} /><kbd>↓</kbd></button>
+          </div>}
+          {showValues && flagName && <button className={`br-switch ${values.flag ? 'is-on' : 'is-off'}`} aria-label={`Toggle ${flagName}`} aria-pressed={values.flag} disabled={!canEdit} onClick={toggleFlag}>
+            {values.flag ? <ToggleRight size={34} /> : <ToggleLeft size={34} />}
+            <span>{flagName}</span><b>{String(values.flag)}</b><kbd>T</kbd>
+          </button>}
+          {!showValues && <span className="br-pad-given">VALUES<br />GIVEN</span>}
+        </div>
+
+        <div className="br-console-center">
+          {codeGate && <CodePanel gate={codeGate} values={codeValues} editable={canEdit} truth={codeTruth} trueSide={phase === 'turn' ? game.current.nextTrueSide : trueSide} label={phase === 'turn' ? `NEXT · GATE ${String(gateNumber + 1).padStart(2, '0')}` : `GATE ${String(gateNumber).padStart(2, '0')}`} />}
+          <div className="br-console-foot">
+            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · READ THE NEXT GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
+            <button className="br-hint-button" disabled={!inGate || (status !== 'running' && status !== 'coach')} onClick={() => setHintOpen((open) => !open)} aria-expanded={hintOpen}><Lightbulb size={15} /> HINT</button>
           </div>
-          <div className="br-variable"><span>energy =</span><strong>{value}</strong><small>{phase === 'turn' ? 'TRAVEL' : isTrue ? 'TRUE' : 'FALSE'}</small></div>
+          {hintOpen && inGate && <p className="br-hint" role="status"><Lightbulb size={15} /> {hint}</p>}
         </div>
-        <div className="br-energy-gauge" role="meter" aria-label="Energy" aria-valuemin={energyRange.min} aria-valuemax={energyRange.max} aria-valuenow={value}>
-          <span className="br-energy-gauge__title">ENERGY / 100</span>
-          <div className="br-energy-gauge__track"><i style={{ width: `${value}%` }} />{phase === 'gate' && assistLevel > 0 && <b style={{ left: `${challenge.threshold}%` }} />}</div>
-        </div>
-        <div className="br-below">
-          <p className="br-instruction">{phase === 'turn' ? 'FOLLOW THE CORRIDOR' : firstGate ? 'RAISE ENERGY' : 'MAKE IT TRUE'}</p>
-          <button className="br-hint-button" disabled={phase === 'turn' || status !== 'running'} onClick={openHint}><Lightbulb size={15} /> HINT</button>
-        </div>
-        {hintOpen && <p className="br-hint" role="status"><Lightbulb size={15} /> {challenge.hint}</p>}
-      </div>
-      <div className={`br-steer ${turnHint === -1 ? 'is-left' : turnHint === 1 ? 'is-right' : ''} ${hazardHint === -1 ? 'avoid-left' : hazardHint === 1 ? 'avoid-right' : ''}`} aria-label="Corridor steering">
-        <span className="br-control-heading">{hazardHint === 0 ? 'MOVE · ← / →' : `DODGE ${hazardHint < 0 ? 'LEFT' : 'RIGHT'}`}</span>
-        <div className="br-steer-buttons">
-          <button
-            className="br-steer-button"
-            aria-label="Move left"
-            onPointerDown={() => steerDown(-1)}
-            onPointerUp={() => steerUp(-1)}
-            onPointerLeave={() => steerUp(-1)}
-            onPointerCancel={() => steerUp(-1)}
-            onContextMenu={(event) => event.preventDefault()}
-          ><ChevronLeft size={30} /><kbd>←</kbd></button>
-          <button
-            className="br-steer-button"
-            aria-label="Move right"
-            onPointerDown={() => steerDown(1)}
-            onPointerUp={() => steerUp(1)}
-            onPointerLeave={() => steerUp(1)}
-            onPointerCancel={() => steerUp(1)}
-            onContextMenu={(event) => event.preventDefault()}
-          ><ChevronRight size={30} /><kbd>→</kbd></button>
-        </div>
-      </div>
-    </section>
 
-    {status === 'ready' && <div className="br-overlay br-overlay--start">
-      <Footprints size={34} /><h2>BACKROOMS RUN</h2>
-      {leaderboard}
-      <p>← / → move · ↓ / ↑ adjust energy<br />Make the condition TRUE. Keep running.</p>
-      <div className="br-overlay-actions"><button className="br-primary" onClick={tryAgain}><Play size={18} /> PLAY GAME</button><button className="br-secondary" onClick={onBack}>BACK TO MODULE</button></div>
-    </div>}
+        <div className={`br-pad br-pad--steer ${turnHint === -1 ? 'is-left' : turnHint === 1 ? 'is-right' : ''} ${hazardHint === -1 ? 'avoid-left' : hazardHint === 1 ? 'avoid-right' : ''}`} aria-label="Corridor steering">
+          <button className="br-key br-key--steer" aria-label="Move left" onPointerDown={() => steerDown(-1)} onPointerUp={() => steerUp(-1)} onPointerLeave={() => steerUp(-1)} onPointerCancel={() => steerUp(-1)} onContextMenu={(event) => event.preventDefault()}>
+            <ChevronLeft size={34} />{forkNow ? <small className={trueSide < 0 ? 'is-true' : 'is-false'}>{trueSide < 0 ? 'TRUE' : 'FALSE'}</small> : <kbd>←</kbd>}
+          </button>
+          <button className="br-key br-key--steer" aria-label="Move right" onPointerDown={() => steerDown(1)} onPointerUp={() => steerUp(1)} onPointerLeave={() => steerUp(1)} onPointerCancel={() => steerUp(1)} onContextMenu={(event) => event.preventDefault()}>
+            <ChevronRight size={34} />{forkNow ? <small className={trueSide > 0 ? 'is-true' : 'is-false'}>{trueSide > 0 ? 'TRUE' : 'FALSE'}</small> : <kbd>→</kbd>}
+          </button>
+        </div>
+      </section>
 
-    {status === 'paused' && <div className="br-overlay">
-      <Siren size={34} />
-      <h2>PAUSED</h2>
-      <p>The corridor waits. Your XP is safe.</p>
-      <div className="br-overlay-actions">
-        <button className="br-primary" onClick={resume}><Play size={16} /> KEEP RUNNING</button>
-        <button className="br-secondary" onClick={openSummary}>FINISH RUN</button>
+      {status === 'coach' && coachCopy && <div className={`br-coach br-coach--${coach?.moment} ${coach?.satisfied ? 'is-satisfied' : ''}`} role="dialog" aria-label={coachCopy.title}>
+        <small>{coach?.satisfied ? 'NICE' : 'FIELD GUIDE'}</small>
+        <strong>{coachCopy.title}</strong>
+        <p>{coachCopy.body}</p>
+        {(coach?.moment === 'steer' || coach?.moment === 'fork') && <button className="br-secondary" onClick={closeCoach}>GOT IT</button>}
+      </div>}
+    </>}
+
+    {status === 'menu' && <BackroomMenu progress={progress} scores={scores} audioOn={audioOn} champion={champion} onToggleAudio={toggleAudio} onPlayLevel={playLevel} onPlayEndless={playEndless} onBack={onBack} />}
+
+    {status === 'briefing' && <div className="br-overlay br-overlay--briefing" role="dialog" aria-label="Briefing">
+      <div className="br-card">
+        <small className="br-kicker"><i /> {level ? `TAPE ${String(level.id).padStart(2, '0')} · ${level.focus}` : 'THE DEEP · ENDLESS'}</small>
+        <h2 className="br-title br-title--md" data-text={level ? level.title : 'THE DEEP'}>{level ? level.title : 'THE DEEP'}</h2>
+        <p>{level ? level.lead : 'Everything you learned, mixed. No gate shows TRUE or FALSE before you reach it. The pace keeps climbing. Every 10 gates you find a battery.'}</p>
+        <ul className="br-examples">
+          {(level ? level.examples : [{ code: '70 >= 70', result: true }, { code: '30 > 40 && true', result: false }]).map((example) => <li key={example.code}><code><CodeTokens code={example.code} /></code><span className={example.result ? 'is-true' : 'is-false'}>→ {example.result ? 'TRUE' : 'FALSE'}</span></li>)}
+        </ul>
+        <div className="br-brief-meta">
+          <span>{level ? `${level.gates.length} GATES` : '∞ GATES'}</span>
+          <span>{batteries(maxBatteries)} {maxBatteries} BATTERIES</span>
+          <span>WRONG ANSWER = −1 BATTERY</span>
+        </div>
+        <div className="br-overlay-actions">
+          <button className="br-primary" onClick={launch}><Play size={18} fill="currentColor" /> {level && level.id === 1 && stars[0] === 0 ? 'START TUTORIAL' : 'PRESS PLAY'}</button>
+          <button className="br-secondary" onClick={toMenu}>TAPES</button>
+        </div>
+        <p className="br-keys-note">← → steer · ↑ ↓ energy · T toggle bool · SPACE pause</p>
       </div>
     </div>}
 
-    {status === 'crashed' && <div className="br-overlay br-overlay--crash">
-      <small>GAME OVER</small>
-      {isChampion && <BackroomChampionAward />}
-      <h2>{crashReason === 'wall' ? 'YOU HIT THE WALL' : crashReason === 'obstacle' ? 'YOU HIT AN OBSTACLE' : 'THE GATE STAYED CLOSED'}</h2>
-      <p>{crashReason === 'wall'
-        ? 'Keep away from the walls. Use the left and right arrow keys to follow the corridor.'
-        : crashReason === 'obstacle'
-          ? 'Watch the floor ahead. Use the left and right arrow keys to move around chairs and trash.'
-          : game.current.true
-            ? <>The condition was <b className="is-true">TRUE</b>, but you reached the gate before it finished opening. Change the energy earlier and keep running.</>
-            : <>The condition was <b className="is-false">FALSE</b>, so the gate never opened. Check the energy value, then try again.</>}</p>
-      <div className="br-summary-grid">
-        <article><strong>{sessionGates}</strong><span>GATES OPENED</span></article>
-        <article><strong>{sessionXp}</strong><span>XP THIS RUN</span></article>
-        <article><strong>{progress.backroomRunXp}</strong><span>BEST XP</span></article>
-      </div>
-      {leaderboard}
-      <div className="br-overlay-actions">
-        <button className="br-primary" onClick={tryAgain}><RotateCcw size={16} /> TRY AGAIN</button>
-        <button className="br-secondary" onClick={onBack}>BACK TO MODULE</button>
-        
+    {status === 'paused' && <div className="br-overlay br-overlay--paused" role="dialog" aria-label="Paused">
+      <div className="br-card br-card--compact">
+        <h2 className="br-title br-title--md" data-text="❚❚ PAUSE">❚❚ PAUSE</h2>
+        <p>The corridor waits. Your batteries and XP are safe.</p>
+        <div className="br-overlay-actions">
+          <button className="br-primary" onClick={resume}><Play size={16} fill="currentColor" /> KEEP RUNNING</button>
+          <button className="br-secondary" onClick={toMenu}>QUIT TO TAPES</button>
+        </div>
       </div>
     </div>}
 
-    {status === 'summary' && <div className="br-overlay br-overlay--summary">
-      <Footprints size={30} />
-      <small>FINAL PROJECT / BACKROOMS</small>
-      <h2>RUN SUMMARY</h2>
-      {isChampion && <BackroomChampionAward />}
-      <div className="br-summary-grid">
-        <article><strong>{sessionGates}</strong><span>GATES OPENED</span></article>
-        <article><strong>{sessionXp}</strong><span>XP EARNED</span></article>
-        <article><strong>{sessionOperators.join(' ') || '—'}</strong><span>OPERATORS SEEN</span></article>
+    {status === 'mistake' && mistake && <div className="br-overlay br-overlay--mistake" role="dialog" aria-label={mistakeTitle}>
+      <div className="br-card br-card--mistake">
+        <small className="br-kicker is-bad"><i /> −1 BATTERY · {mistake.livesLeft} LEFT</small>
+        <h2 className="br-title br-title--md is-bad" data-text={mistakeTitle}>{mistakeTitle}</h2>
+        <p>{mistakeLead}</p>
+        <pre className="br-trace">
+          {gateCode(mistake.gate, mistake.values).map((line) => <code key={line}><CodeTokens code={line} /></code>)}
+          {mistake.explanation.steps.map((step, index) => <code key={`${step.code}-${index}`} className="br-trace-step"><span className="br-trace-arrow">{index === mistake.explanation.steps.length - 1 && mistake.explanation.steps.length > 1 ? '⇒' : '→'}</span><span><CodeTokens code={step.code} /></span><b className={step.result ? 'is-true' : 'is-false'}>{step.result ? 'true' : 'false'}</b></code>)}
+        </pre>
+        <p className="br-tip"><Lightbulb size={16} /> {mistake.explanation.tip}</p>
+        <div className="br-overlay-actions">
+          <button className="br-primary" onClick={continueAfterMistake} autoFocus>{mistake.livesLeft > 0 ? <><Play size={16} fill="currentColor" /> CONTINUE</> : <><SkipForward size={16} /> SEE RESULTS</>}</button>
+        </div>
+        <span className="br-batteries-line">{batteries(mistake.livesLeft)}</span>
       </div>
-      <p>Best XP: <b>{progress.backroomRunXp}</b> · Best run: <b>{progress.backroomRunBest}</b></p>
-      <div className="br-overlay-actions">
-        <button className="br-primary" onClick={onBack}><ArrowLeft size={16} /> BACK TO MODULE</button>
-        <button className="br-secondary" onClick={resume}>KEEP RUNNING</button>
-        
+    </div>}
+
+    {(status === 'levelClear' || status === 'gameOver') && result && <div className={`br-overlay br-overlay--${status}`} role="dialog" aria-label={status === 'levelClear' ? 'Tape cleared' : 'Signal lost'}>
+      <div className="br-card br-card--result">
+        {status === 'levelClear' ? <>
+          <small className="br-kicker is-good"><i /> {result.mode.type === 'level' ? `TAPE ${String(result.mode.index + 1).padStart(2, '0')}` : 'THE DEEP'} · CLEARED</small>
+          <h2 className="br-title" data-text="TAPE CLEARED">TAPE CLEARED</h2>
+          <Stars count={result.stars} size={40} />
+          <p>{result.stars === 3 ? 'Perfect tape. Every condition read right.' : result.stars === 2 ? 'One wrong answer. Replay for three stars.' : 'Cleared. Replay it to read every gate right.'}</p>
+          {result.mode.type === 'level' && result.mode.index === backroomLevels.length - 1 && <div className="br-unlock"><BatteryFull size={20} /> THE DEEP IS OPEN · ENDLESS UNLOCKED</div>}
+        </> : <>
+          <small className="br-kicker is-bad"><i /> {result.mode.type === 'level' ? 'BATTERIES EMPTY' : 'THE DEEP'}</small>
+          <h2 className="br-title is-bad" data-text="SIGNAL LOST">SIGNAL LOST</h2>
+          <p>{result.mode.type === 'level' ? 'The camera died before the end of the tape. Read the notes below, then try again.' : result.newBest ? 'New personal record in The Deep.' : 'The Deep keeps going. So can you.'}</p>
+        </>}
+        <div className="br-summary-grid">
+          <article><strong>{result.mode.type === 'level' ? `${result.gates}/${result.totalGates}` : result.gates}</strong><span>GATES READ RIGHT</span></article>
+          <article><strong>{result.xp}</strong><span>XP{result.stars ? ` · +${result.stars * 10} CLEAR` : ''}</span></article>
+          <article><strong>{result.bestCombo}</strong><span>BEST COMBO</span></article>
+          {result.mode.type === 'endless' && <article><strong>{progress.backroomRunBest}</strong><span>BEST RUN</span></article>}
+        </div>
+        {result.mistakes.length > 0 && <div className="br-debrief">
+          <h3>FIELD NOTES · {result.mistakes.length} {result.mistakes.length === 1 ? 'MISTAKE' : 'MISTAKES'}</h3>
+          <ul>{result.mistakes.slice(-3).map((item, index) => <li key={index}>
+            <code><CodeTokens code={item.explanation.steps[item.explanation.steps.length - 1].code} /></code>
+            <b className={item.explanation.result ? 'is-true' : 'is-false'}>{item.explanation.result ? 'TRUE' : 'FALSE'}</b>
+            <span>{item.explanation.tip}</span>
+          </li>)}</ul>
+        </div>}
+        {status === 'gameOver' && result.mode.type === 'endless' && scores.length > 0 && <ol className="br-mini-board">{scores.map((score, index) => <li key={score.username} className={score.username === progress.username ? 'is-you' : ''}><b>{index + 1}</b><span>{score.name}</span><strong>{score.gates}</strong></li>)}</ol>}
+        <div className="br-overlay-actions">
+          {status === 'levelClear' && result.mode.type === 'level' && result.mode.index < backroomLevels.length - 1 && <button className="br-primary" onClick={() => playLevel((result.mode as { index: number }).index + 1)}><Play size={16} fill="currentColor" /> NEXT TAPE</button>}
+          {status === 'levelClear' && result.mode.type === 'level' && result.mode.index === backroomLevels.length - 1 && <button className="br-primary" onClick={playEndless}><Play size={16} fill="currentColor" /> ENTER THE DEEP</button>}
+          <button className={status === 'gameOver' ? 'br-primary' : 'br-secondary'} onClick={retry}><RotateCcw size={16} /> {result.mode.type === 'endless' ? 'RUN AGAIN' : status === 'gameOver' ? 'RETRY TAPE' : 'REPLAY'}</button>
+          <button className="br-secondary" onClick={toMenu}>TAPES</button>
+          {status === 'gameOver' && nextIndex === null && result.mode.type === 'level' && <button className="br-secondary" onClick={onBack}><ArrowLeft size={15} /> MODULE</button>}
+        </div>
       </div>
     </div>}
   </main>

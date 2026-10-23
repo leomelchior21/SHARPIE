@@ -1,21 +1,20 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { BackroomRun } from './BackroomRun'
 import type { BackroomView } from './backroomRenderer'
-import { speedForGate } from './backroomEngine'
-import * as engine from './backroomEngine'
-import * as lighting from './backroomLighting'
-import { createBackroomProgress as createSession } from './types'
+import { backroomLevels } from './backroomLevels'
+import { createBackroomProgress, type BackroomProgress } from './types'
 
 const renderer = vi.hoisted(() => ({ view: null as BackroomView | null }))
 vi.mock('./backroomRenderer', () => ({ drawBackroom: (_context: unknown, _width: number, _height: number, view: BackroomView) => { renderer.view = view } }))
 
-describe('Backroom running pace', () => {
+describe('Backrooms Run', () => {
   let frame: FrameRequestCallback
   let time: number
 
   beforeEach(() => {
     renderer.view = null
+    localStorage.clear()
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     time = 0
     vi.spyOn(performance, 'now').mockReturnValue(0)
@@ -38,276 +37,147 @@ describe('Backroom running pace', () => {
     return renderer.view!
   }
 
-  function start() {
-    render(<BackroomRun progress={createSession('Review', 'review', true)} onProgress={() => undefined} onBack={() => undefined} />)
-    const play = screen.queryByRole('button', { name: 'PLAY GAME' })
-    if (play) fireEvent.click(play)
-    return tick()
+  function until(check: () => boolean, limit = 4000) {
+    for (let count = 0; count < limit && !check(); count += 1) tick()
+    expect(check()).toBe(true)
   }
 
-  function approach(distance: number) {
-    let view = renderer.view!
-    for (let count = 0; view.gateZ - view.depth > distance && count < 500; count += 1) view = tick()
+  function mount(progress: BackroomProgress) {
+    const saves: BackroomProgress[] = []
+    let current = progress
+    const view = render(<BackroomRun progress={current} onProgress={(next) => { saves.push(next); current = next }} onBack={() => undefined} />)
+    tick()
+    return { saves, rerender: () => view.rerender(<BackroomRun progress={current} onProgress={(next) => { saves.push(next); current = next }} onBack={() => undefined} />) }
+  }
+
+  const student = (changes: Partial<BackroomProgress> = {}) => ({ ...createBackroomProgress('Ana', 'ana'), ...changes })
+
+  function playTape(title: string) {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }))
+    const briefing = screen.getByRole('dialog', { name: 'Briefing' })
+    fireEvent.click(within(briefing).getAllByRole('button')[0])
+    tick()
+  }
+
+  function setEnergy(target: number) {
+    const view = renderer.view!
+    const current = Number(document.querySelector('.br-slot')?.textContent)
+    const key = target > current ? 'ArrowUp' : 'ArrowDown'
+    act(() => { for (let count = 0; count < Math.abs(target - current); count += 1) fireEvent.keyDown(document.body, { key }) })
     return view
   }
 
-  function raiseEnergy() {
-    const increase = screen.getByRole('button', { name: 'Increase energy' })
-    act(() => { for (let count = 0; count < 31; count += 1) fireEvent.click(increase) })
-  }
-
-  it.each(['ArrowLeft', 'ArrowRight'])('crashes when holding %s toward a wall', (key) => {
-    start()
-    fireEvent.keyDown(document.body, { key })
-    for (let count = 0; count < 30; count += 1) tick()
-    expect(screen.getByRole('heading', { name: 'YOU HIT THE WALL' })).toBeInTheDocument()
-    expect(Math.abs(renderer.view!.playerX)).toBeGreaterThanOrEqual(0.78)
-    const depth = renderer.view!.depth
-    tick()
-    expect(renderer.view!.depth).toBe(depth)
+  it('opens on the tape library and offers the tutorial to a new student', () => {
+    mount(student())
+    expect(screen.getByRole('button', { name: /START TUTORIAL/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /THE EDGE/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /THE DEEP/ })).toBeDisabled()
   })
 
-  it.each(['Move left', 'Move right'])('crashes when repeatedly tapping %s toward a wall', (name) => {
-    start()
-    const button = screen.getByRole('button', { name: new RegExp(name, 'i') })
-    for (let count = 0; count < 8; count += 1) {
-      fireEvent.pointerDown(button)
-      fireEvent.pointerUp(button)
-      tick()
-    }
-    expect(screen.getByRole('heading', { name: 'YOU HIT THE WALL' })).toBeInTheDocument()
+  it('pauses the first gate with a guide and resumes once the condition is TRUE', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    mount(student())
+    fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getByRole('button', { name: /START TUTORIAL/ }))
+    until(() => !!screen.queryByRole('dialog', { name: 'MAKE IT TRUE' }))
+    const frozen = tick().depth
+    expect(tick().depth).toBe(frozen)
+    expect(screen.getByText(/energy is 20, so the condition is FALSE/)).toBeInTheDocument()
+    setEnergy(51)
+    expect(screen.getByRole('dialog', { name: 'TRUE. THE GATE OPENS.' })).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(1200) })
+    expect(screen.queryByRole('dialog', { name: /THE GATE OPENS/ })).not.toBeInTheDocument()
+    until(() => renderer.view!.phase === 'turn')
+    expect(screen.queryByRole('dialog', { name: /SHUT/ })).not.toBeInTheDocument()
   })
 
-  it('still crashes when a bend reaches a player who does not steer', () => {
-    start()
-    raiseEnergy()
-    for (let count = 0; count < 300 && !screen.queryByRole('heading', { name: 'YOU HIT THE WALL' }); count += 1) tick()
-    expect(renderer.view!.phase).toBe('turn')
-    expect(screen.getByRole('heading', { name: 'YOU HIT THE WALL' })).toBeInTheDocument()
+  it('skips the tutorial once tape 01 is cleared and explains a closed gate', () => {
+    mount(student({ levelStars: [2, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+    expect(screen.queryByRole('dialog', { name: 'MAKE IT TRUE' })).not.toBeInTheDocument()
+    const card = screen.getByRole('dialog', { name: 'THE GATE STAYED SHUT' })
+    expect(card).toHaveTextContent('20 > 50')
+    expect(card).toHaveTextContent('2 LEFT')
+    expect(screen.getByLabelText('2 of 3 batteries', { selector: '.br-osd .br-battery' })).toBeInTheDocument()
+    fireEvent.click(within(card).getByRole('button', { name: /CONTINUE/ }))
+    until(() => renderer.view!.phase === 'turn')
   })
 
-  it('keeps the corridor pace all the way to a closed gate', () => {
-    start()
-    const before = approach(3.4)
-    const after = tick()
-    expect(after.conditionTrue).toBe(false)
-    expect(after.depth - before.depth).toBeCloseTo(speedForGate(1) * 1.6 * .05, 8)
-    approach(0)
-    expect(screen.getByRole('heading', { name: 'THE GATE STAYED CLOSED' })).toBeInTheDocument()
-    expect(renderer.view!.depth).toBeGreaterThanOrEqual(renderer.view!.gateZ)
+  it('costs a battery for the wrong door and shows the evaluation', () => {
+    mount(student({ levelStars: [1, 1, 1, 1, 0, 0] }))
+    playTape('TWO DOORS')
+    until(() => renderer.view!.gateZ - renderer.view!.depth < 9)
+    const wrong = renderer.view!.trueSide === -1 ? 'ArrowRight' : 'ArrowLeft'
+    fireEvent.keyDown(document.body, { key: wrong })
+    for (let count = 0; count < 12; count += 1) tick()
+    fireEvent.keyUp(document.body, { key: wrong })
+    until(() => !!screen.queryByRole('dialog', { name: 'WRONG DOOR' }))
+    const card = screen.getByRole('dialog', { name: 'WRONG DOOR' })
+    expect(card).toHaveTextContent('70 > 50')
+    expect(card).toHaveTextContent('You took the FALSE door, but the condition is TRUE.')
   })
 
-  it('continues moving while the door opens and crashes if the player solves too late', () => {
-    start()
-    const before = approach(.4)
-    raiseEnergy()
-    const after = tick()
-    expect(after.conditionTrue).toBe(true)
-    expect(after.openAmount).toBeLessThan(.95)
-    expect(after.depth - before.depth).toBeCloseTo(speedForGate(1) * 1.6 * .05, 8)
-    approach(0)
-    expect(screen.getByText(/before it finished opening/)).toBeInTheDocument()
-    expect(renderer.view!.depth).toBeGreaterThanOrEqual(renderer.view!.gateZ)
-  })
-
-  it('maintains pace at an open gate and still awards progress when the gate is cleared', () => {
-    start()
-    raiseEnergy()
-    const before = approach(.4)
-    const after = tick()
-    expect(after.conditionTrue).toBe(true)
-    expect(after.openAmount).toBe(1)
-    expect(after.depth - before.depth).toBeCloseTo(speedForGate(1) * 1.6 * .05, 8)
-    approach(0)
-    expect(screen.queryByRole('heading', { name: 'THE GATE STAYED CLOSED' })).not.toBeInTheDocument()
-    expect(screen.getByText(/PACE UP/)).toBeInTheDocument()
-    const passed = renderer.view!
-    const next = tick()
-    expect(next.depth - passed.depth).toBeCloseTo(speedForGate(2) * 1.6 * .05, 8)
-  })
-
-  it('restores game focus after the energy control is disabled and accepts arrows through the corridor transition', () => {
-    start()
-    const increase = screen.getByRole('button', { name: 'Increase energy' })
-    increase.focus()
-    raiseEnergy()
-    approach(0)
-    expect(increase).toBeDisabled()
-    expect(document.activeElement).toBe(document.querySelector('.br-screen'))
-
-    const before = renderer.view!.playerX
+  it('lets walls slow the run instead of ending it', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    setEnergy(60)
     fireEvent.keyDown(document.body, { key: 'ArrowRight' })
-    tick()
-    expect(renderer.view!.playerX).toBeGreaterThan(before)
-    fireEvent.keyUp(document.body, { key: 'ArrowRight' })
-    approach(-1.8)
-    expect(renderer.view!.phase).toBe('turn')
-    expect(document.activeElement).toBe(document.querySelector('.br-screen'))
-    const turnPosition = renderer.view!.playerX
-    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' })
-    tick()
-    expect(renderer.view!.playerX).toBeLessThan(turnPosition)
-    fireEvent.keyUp(document.activeElement!, { key: 'ArrowLeft' })
+    for (let count = 0; count < 40; count += 1) tick()
+    expect(screen.getByText(/WALL SCRAPE/)).toBeInTheDocument()
+    expect(renderer.view!.playerX).toBeLessThanOrEqual(0.75)
+    expect(screen.queryByRole('dialog', { name: /SIGNAL LOST/ })).not.toBeInTheDocument()
   })
 
-  it('returns focus when resuming and leaves typing controls alone', () => {
-    start()
-    fireEvent.click(screen.getByRole('button', { name: 'Pause run' }))
-    const resume = screen.getByRole('button', { name: 'KEEP RUNNING' })
-    resume.focus()
-    fireEvent.click(resume)
-    expect(document.activeElement).toBe(document.querySelector('.br-screen'))
-    const input = document.createElement('input')
-    document.body.append(input)
-    input.focus()
-    const before = renderer.view!.playerX
-    fireEvent.keyDown(input, { key: 'ArrowRight' })
-    tick()
-    expect(renderer.view!.playerX).toBe(before)
-    input.remove()
+  it('loses the tape after three wrong answers', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    for (let mistake = 0; mistake < 3; mistake += 1) {
+      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+      fireEvent.click(screen.getByRole('button', { name: /CONTINUE|SEE RESULTS/ }))
+    }
+    expect(screen.getByRole('dialog', { name: 'Signal lost' })).toHaveTextContent('SIGNAL LOST')
+    expect(screen.getByRole('button', { name: /RETRY TAPE/ })).toBeInTheDocument()
   })
 
-  it('resets each attempt to zero and keeps the highest score after death and returning', () => {
-    vi.spyOn(engine, 'planCorridor').mockImplementation((gateZ, gateCenter) => ({
-      bends: [], obstacles: [], nextGateZ: gateZ + 20,
-      nextGateCenter: gateCenter, activationZ: gateZ + 8,
-    }))
-    let saved = createSession('Review', 'review', true)
-    const onProgress = vi.fn((next: typeof saved) => { saved = next })
-    const game = render(<BackroomRun progress={saved} onProgress={onProgress} onBack={() => undefined} />)
-    const refresh = () => game.rerender(<BackroomRun progress={saved} onProgress={onProgress} onBack={() => undefined} />)
-    const play = screen.queryByRole('button', { name: 'PLAY GAME' })
-    if (play) fireEvent.click(play)
+  it('clears a tape with three stars, saves it and offers the next one', () => {
+    const { saves } = mount(student({ backroomRunBest: 5 }))
+    fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getAllByRole('button')[0])
+    const targets = [60, 20, 80, 10]
+    backroomLevels[0].gates.forEach((_, index) => {
+      until(() => renderer.view!.phase === 'gate' && renderer.view!.gateNumber === index + 1)
+      setEnergy(targets[index])
+      until(() => renderer.view!.phase === 'turn' || !!screen.queryByRole('dialog', { name: 'Tape cleared' }))
+    })
+    until(() => !!screen.queryByRole('dialog', { name: 'Tape cleared' }))
+    expect(screen.queryByRole('dialog', { name: 'MAKE IT TRUE' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('3 of 3 stars', { selector: '.br-card .br-stars' })).toBeInTheDocument()
+    const saved = saves[saves.length - 1]
+    expect(saved.levelStars[0]).toBe(3)
+    expect(saved.backroomRunGates).toBe(4)
+    expect(saved.skills['>']).toEqual({ right: 2, wrong: 0 })
+    expect(screen.getByRole('button', { name: /NEXT TAPE/ })).toBeInTheDocument()
+  })
+
+  it('opens The Deep after all six tapes and for teachers', () => {
+    mount(student({ levelStars: [1, 2, 3, 1, 1, 1] }))
+    expect(screen.getByRole('button', { name: /ENTER THE DEEP/ })).toBeInTheDocument()
+    cleanup()
+    mount({ ...createBackroomProgress('Teacher', 'teacher', true) })
+    expect(screen.getByRole('button', { name: /THE DEEP/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /DOUBLE LOCK/ })).toBeEnabled()
+  })
+
+  it('pauses with Space and resumes without losing the run', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
     tick()
-
-    const pass = () => {
-      const operator = document.querySelector('.br-operator')!.textContent!
-      const threshold = Number(document.querySelector('.br-condition strong')!.textContent)
-      const current = Number(document.querySelector('.br-variable strong')!.textContent)
-      const target = operator === '>' || operator === '!=' ? threshold + 1 : operator === '<' ? threshold - 1 : threshold
-      const button = screen.getByRole('button', { name: target > current ? 'Increase energy' : 'Decrease energy' })
-      act(() => { for (let count = 0; count < Math.abs(target - current); count += 1) fireEvent.click(button) })
-      approach(0)
-      refresh()
-    }
-    const die = () => {
-      const saves = onProgress.mock.calls.length
-      fireEvent.keyDown(document.body, { key: 'ArrowRight' })
-      for (let count = 0; count < 30; count += 1) tick()
-      fireEvent.keyUp(document.body, { key: 'ArrowRight' })
-      expect(screen.getByRole('heading', { name: 'YOU HIT THE WALL' })).toBeInTheDocument()
-      expect(onProgress).toHaveBeenCalledTimes(saves)
-      fireEvent.click(screen.getByRole('button', { name: 'TRY AGAIN' }))
-      tick()
-      expect(screen.getByLabelText('Run score')).toHaveTextContent(/^XP 0 BEST/)
-    }
-
-    pass()
-    expect(saved.backroomRunXp).toBe(15)
-    die()
-    expect(screen.getByLabelText('Best score')).toHaveTextContent('BEST 15')
-    pass()
-    // A second 15-point attempt must not become a 30-point high score.
-    expect(saved.backroomRunXp).toBe(15)
-    expect(screen.getByLabelText('Run score')).toHaveTextContent('XP 15 BEST 15')
-    for (let count = 0; renderer.view!.gateNumber < 2 && count < 200; count += 1) tick()
-    pass()
-    expect(saved.backroomRunXp).toBe(30)
-    expect(saved.backroomRunBest).toBe(2)
-    die()
-    pass()
-    expect(saved.backroomRunXp).toBe(30)
-    expect(screen.getByLabelText('Run score')).toHaveTextContent('XP 15 BEST 30')
-    die()
-
-    game.unmount()
-    render(<BackroomRun progress={saved} onProgress={onProgress} onBack={() => undefined} />)
-    expect(screen.getByLabelText('Run score')).toHaveTextContent('XP 0 BEST 30')
-  }, 30_000)
-
-  it('keeps lighting steady for five gates and enables flickering at gate six', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-    vi.spyOn(lighting, 'createBackroomLighting').mockImplementation(() => ({
-      strength: 1, mode: 'steady', wait: 0, elapsed: 0, duration: 0, pulseWait: 0, events: 0,
-    }))
-    vi.spyOn(engine, 'speedForGate').mockReturnValue(100)
-    vi.spyOn(engine, 'planCorridor').mockImplementation((gateZ, gateCenter) => ({
-      bends: [], obstacles: [], nextGateZ: gateZ + 60,
-      nextGateCenter: gateCenter, activationZ: gateZ + 30,
-    }))
-    start()
-    for (let gate = 1; gate <= 5; gate += 1) {
-      expect(renderer.view!.gateNumber).toBe(gate)
-      expect(document.querySelector('.br-comparator-words')).toBeInTheDocument()
-      const operator = document.querySelector('.br-operator')!.textContent!
-      const threshold = Number(document.querySelector('.br-condition strong')!.textContent)
-      const current = Number(document.querySelector('.br-variable strong')!.textContent)
-      const target = operator === '>' || operator === '!=' ? threshold + 1 : operator === '<' ? threshold - 1 : threshold
-      const button = screen.getByRole('button', { name: target > current ? 'Increase energy' : 'Decrease energy' })
-      act(() => { for (let count = 0; count < Math.abs(target - current); count += 1) fireEvent.click(button) })
-      for (let count = 0; renderer.view!.gateNumber === gate && count < 20; count += 1) {
-        expect(renderer.view!.roomLight).toBe(1)
-        tick()
-        if (document.querySelector('.br-overlay--milestone')) fireEvent.click(screen.getByRole('button', { name: 'KEEP RUNNING' }))
-      }
-    }
-    expect(renderer.view!.gateNumber).toBe(6)
-    expect(document.querySelector('.br-comparator-words')).toBeNull()
-    expect(document.querySelector('.br-condition')).toHaveTextContent('energy')
-    expect(document.querySelector('.br-operator')).not.toBeNull()
-    tick()
-    expect(renderer.view!.roomLight).toBeLessThan(0.2)
-  }, 30_000)
-
-  it('awards champion only after 670 gates in one run, keeps running, and saves the title for a return visit', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    // Fast, straight travel isolates the real gate-pass and award flow from steering.
-    vi.spyOn(engine, 'speedForGate').mockReturnValue(100)
-    vi.spyOn(engine, 'planCorridor').mockImplementation((gateZ, gateCenter) => ({
-      bends: [], obstacles: [], nextGateZ: gateZ + 60,
-      nextGateCenter: gateCenter, activationZ: gateZ + 30,
-    }))
-    let saved = { ...createSession('Review', 'review', true), backroomRunBest: 669, backroomRunGates: 10000 }
-    const onProgress = vi.fn((next: typeof saved) => { saved = next })
-    const first = render(<BackroomRun progress={saved} onProgress={onProgress} onBack={() => undefined} />)
-    const play = screen.queryByRole('button', { name: 'PLAY GAME' })
-    if (play) fireEvent.click(play)
-    tick()
-    expect(screen.queryByText('BACKROOM CHAMPION')).not.toBeInTheDocument()
-    const increase = screen.getByRole('button', { name: 'Increase energy' })
-    const decrease = screen.getByRole('button', { name: 'Decrease energy' })
-
-    for (let gate = 1; gate <= engine.championGates; gate += 1) {
-      for (let attempt = 0; attempt < 10 && renderer.view!.gateNumber < gate; attempt += 1) tick()
-      expect(renderer.view!.gateNumber).toBe(gate)
-      const operator = document.querySelector('.br-operator')!.textContent!
-      const threshold = Number(document.querySelector('.br-condition strong')!.textContent)
-      const current = Number(document.querySelector('.br-variable strong')!.textContent)
-      const target = operator === '>' || operator === '!=' ? threshold + 1 : operator === '<' ? threshold - 1 : threshold
-      const button = target > current ? increase : decrease
-      act(() => { for (let step = 0; step < Math.abs(target - current); step += 1) fireEvent.click(button) })
-      for (let attempt = 0; attempt < 10 && onProgress.mock.calls.length < gate; attempt += 1) tick()
-      expect(onProgress).toHaveBeenCalledTimes(gate)
-      if (gate < engine.championGates) expect(document.querySelector('.br-badge--champion')).toBeNull()
-      // The original five-gate teaching checkpoint may need to be dismissed.
-      if (document.querySelector('.br-overlay--milestone')) fireEvent.click(screen.getByRole('button', { name: 'KEEP RUNNING' }))
-    }
-    expect(saved.backroomRunBest).toBe(670)
-    expect(saved.backroomRunGates).toBe(10670)
-    expect(document.querySelector('.br-champion-award--celebrate')).toHaveTextContent('BACKROOM CHAMPION')
-    expect(document.querySelector('.br-screen')).toHaveClass('br-screen--running')
-    const depth = renderer.view!.depth
-    tick()
-    expect(renderer.view!.depth).toBeGreaterThan(depth)
-    act(() => { vi.advanceTimersByTime(10001) })
-    expect(document.querySelector('.br-champion-award--celebrate')).toBeNull()
-    expect(document.querySelector('.br-badge--champion')).toHaveTextContent('BACKROOM CHAMPION')
-
-    first.unmount()
-    render(<BackroomRun progress={saved} onProgress={() => undefined} onBack={() => undefined} />)
-    expect(document.querySelector('.br-badge--champion')).toHaveTextContent('BACKROOM CHAMPION')
-    expect(document.querySelector('.br-champion-award--celebrate')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'FINISH RUN' }))
-    expect(document.querySelector('.br-overlay--summary .br-champion-award')).toHaveTextContent('670 gates cleared in one run.')
-  }, 90_000)
+    fireEvent.keyDown(document.body, { key: ' ' })
+    expect(screen.getByRole('dialog', { name: 'Paused' })).toBeInTheDocument()
+    const depth = tick().depth
+    expect(tick().depth).toBe(depth)
+    fireEvent.click(screen.getByRole('button', { name: /KEEP RUNNING/ }))
+    expect(tick().depth).toBeGreaterThan(depth)
+  })
 })

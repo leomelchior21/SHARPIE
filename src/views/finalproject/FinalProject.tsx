@@ -38,7 +38,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {warning&&<div className="fp-save-warning" role="status">{warning}</div>}
     <div className="fp-content" key={`${preview}-${activity}`}>
     {activity==="overview"&&<><div className="fp-stage-grid memory-experience-grid">{[
-      {n:"01",title:"Backrooms Run",copy:"Run the corridors. Make each gate condition TRUE.",icon:Footprints,color:"memory-card-purple",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Best run: ${active.best} gates · Best score: ${active.backroom.bestXp} XP`},
+      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${active.backroom.levels.filter(stars=>stars>0).length}/${active.backroom.levels.length} · Endless best: ${active.best} gates`},
       {n:"02",title:"IF / ELSE Lab",copy:"Follow a decision. Build and test your C# code.",icon:GitBranch,color:"",activity:"lab" as Activity,enabled:true,done:two,unlock:"",detail:`${Object.values(active.flowPaths).filter(v=>v.length===2).length}/3 flows · ${active.built.length}/10 builds · ${Object.keys(active.answers).length}/20 quiz`},
       {n:"03",title:"Shadow Feed",copy:"Operation White Hat. Audit the rules behind the feed.",icon:ShieldCheck,color:"memory-card-red",activity:"shadow" as Activity,enabled:two||preview,done:three,unlock:"IF / ELSE LAB",detail:`${active.repaired.length}/4 policies repaired · ${three?"Report ready":"Audit pending"}`},
     ].map(s=><button
