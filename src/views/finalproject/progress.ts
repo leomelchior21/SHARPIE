@@ -2,6 +2,7 @@ import { challenges, flows, questions } from "./content";
 import { comparisonOperators, skillKeys, type ComparisonOperator } from "./backroom/backroomEngine";
 import { coachMoments, levelCount, normalizeStars, type CoachMoment } from "./backroom/backroomLevels";
 import type { SkillRecord } from "./backroom/types";
+import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 export const activities = ["overview","matrix","transition","lab","flow","builder","quiz-intro","quiz","shadow","report"] as const;
 export type Activity = typeof activities[number];
 export type Progress = {
@@ -77,6 +78,16 @@ export function saveProgress(student:string,p:Progress):boolean {
   try {localStorage.setItem(storageKey(student),JSON.stringify(p));return true;} catch{return false;}
 }
 export const xp = (p:Progress) => Object.values(p.awards).reduce((a,b)=>a+b,0);
+// What the teacher dashboard sees: counts per activity, missed quiz questions and the reflection.
+export const syncSummary = (p:Progress): FinalProjectSyncState => ({
+  xp:xp(p), tapes:[...p.backroom.levels], endlessBest:p.best,
+  flows:[0,1,2].filter(i=>p.flowPaths[i]?.length===2).length,
+  quizAnswered:questions.filter(q=>p.answers[q.id]!==undefined).length,
+  quizRight:questions.filter(q=>p.answers[q.id]===q.answer).length,
+  quizMissed:questions.flatMap((q,i)=>p.answers[q.id]!==undefined&&p.answers[q.id]!==q.answer?[i+1]:[]),
+  built:[...p.built].sort((a,b)=>a-b).map(i=>i+1), policies:p.repaired.length,
+  reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
+});
 export const levelXp = 20;
 // Older saves finished stage 1 with three gates in the original game.
 export const stageOneDone = (p:Progress) => p.best>=3 || (p.backroom.levels.length===levelCount && p.backroom.levels.every(stars=>stars>0));

@@ -28,11 +28,25 @@ interface Props {
   label: string
 }
 
+const Masked = ({ width }: { width: number }) => <span className="br-mask" style={{ width: `${width}ch` }} aria-hidden="true" />
+
 export function CodePanel({ gate, values, editable, truth, trueSide, label }: Props) {
   const flag = gateBool(gate)
   const energy = gateUsesEnergy(gate)
   const fork = gate.kind === 'fork'
-  return <section className={`br-code ${fork ? 'is-fork' : 'is-set'} is-${truth}`} aria-label={`C# gate code. ${label}`}>
+  // In the corridor the next gate keeps its values and condition hidden: they load at the gate.
+  if (truth === 'next') return <section className={`br-code ${fork ? 'is-fork' : 'is-set'} is-next`} aria-label={`C# gate code. ${label}. The code loads at the gate.`}>
+    <header className="br-code-head">
+      <span>{label}</span>
+      <b>LOADS AT THE GATE</b>
+    </header>
+    <pre>
+      {energy && <code className="br-code-line"><CodeTokens code="int energy = " /><Masked width={2} /><span className="br-t-p">;</span></code>}
+      {flag && <code className="br-code-line"><CodeTokens code={`bool ${flag} = `} /><Masked width={4} /><span className="br-t-p">;</span></code>}
+      <code className="br-code-line br-code-if"><CodeTokens code="if (" /><Masked width={Math.max(6, conditionCode(gate).length)} /><span className="br-t-p">)</span></code>
+    </pre>
+  </section>
+  return <section className={`br-code ${fork ? 'is-fork' : 'is-set'} is-${truth} is-loaded`} aria-label={`C# gate code. ${label}`}>
     <header className="br-code-head">
       <span>{label}</span>
       <b>{fork ? 'GIVEN VALUES' : editable ? 'YOU EDIT THE VALUES' : 'GATE CODE'}</b>
@@ -50,7 +64,7 @@ export function CodePanel({ gate, values, editable, truth, trueSide, label }: Pr
       </code>}
       <code className="br-code-line br-code-if">
         <CodeTokens code={`if (${conditionCode(gate)})`} />
-        {!fork && truth !== 'next' && <span className={`br-truth is-${truth}`} aria-live="polite">{truth === 'unknown' ? '?' : truth.toUpperCase()}</span>}
+        {!fork && <span className={`br-truth is-${truth}`} aria-live="polite">{truth === 'unknown' ? '?' : truth.toUpperCase()}</span>}
       </code>
     </pre>
     {fork && <div className={`br-doors ${trueSide < 0 ? 'true-left' : 'true-right'}`} aria-label={`TRUE door on the ${trueSide < 0 ? 'left' : 'right'}, FALSE door on the ${trueSide < 0 ? 'right' : 'left'}`}>

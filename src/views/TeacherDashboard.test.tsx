@@ -146,4 +146,36 @@ describe("Teacher dashboard", () => {
     expect(badges[2].textContent).toBe("G0");
     expect(badges[2].className).toBe("");
   });
+
+  it("shows the Final project stages, missed questions and reflection", async () => {
+    vi.mocked(fetchClassProgress).mockResolvedValueOnce([
+      {
+        student: { login: "alan", name: "Alan Turing", classCode: "9A", group: "Branco" },
+        completedBosses: [],
+        xp: 0,
+        updatedAt: "2026-10-24T10:00:00Z",
+        codes: {},
+        attempts: {},
+        finalProject: {
+          xp: 640, tapes: [3, 2, 3, 3, 1, 2], endlessBest: 23, flows: 3, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
+          built: [1, 2, 3, 4], policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
+        },
+      },
+    ]);
+    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    await waitFor(() => expect(screen.getByText("Alan Turing")).toBeInTheDocument());
+
+    const badges = screen.getByText("Alan Turing").closest(".teacher-row")!.querySelectorAll(".teacher-final-cell b");
+    expect([...badges].map((badge) => badge.textContent)).toEqual(["B6", "L2", "S2"]);
+    expect(badges[0]).toHaveClass("is-done");
+    expect(badges[1]).toHaveClass("is-progress");
+
+    fireEvent.click(screen.getByText("Alan Turing"));
+    expect(screen.getByText("MODULE 08 · FINAL PROJECT")).toBeInTheDocument();
+    expect(screen.getByText("6 / 6 tapes · 14★ · Deep 23")).toBeInTheDocument();
+    expect(screen.getByText("17 right · 20 / 20 answered")).toBeInTheDocument();
+    expect(screen.getByText("4 / 10 shipped")).toBeInTheDocument();
+    expect(screen.getByText("Q4 · Q13 · Q16")).toBeInTheDocument();
+    expect(screen.getByText("A rule can be followed and still be unfair.")).toBeInTheDocument();
+  });
 });

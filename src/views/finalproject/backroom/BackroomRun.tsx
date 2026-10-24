@@ -1182,9 +1182,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         </div>
 
         <div className="br-console-center">
-          {codeGate && <CodePanel gate={codeGate} values={codeValues} editable={canEdit} truth={codeTruth} trueSide={phase === 'turn' ? game.current.nextTrueSide : trueSide} label={phase === 'turn' ? `NEXT · GATE ${String(gateNumber + 1).padStart(2, '0')}` : `GATE ${String(gateNumber).padStart(2, '0')}`} />}
+          {codeGate && <CodePanel key={`${phase}-${gateNumber}`} gate={codeGate} values={codeValues} editable={canEdit} truth={codeTruth} trueSide={phase === 'turn' ? game.current.nextTrueSide : trueSide} label={phase === 'turn' ? `NEXT · GATE ${String(gateNumber + 1).padStart(2, '0')}` : `GATE ${String(gateNumber).padStart(2, '0')}`} />}
           <div className="br-console-foot">
-            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint === 2 ? 'JUMP THE BARRIER' : hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · READ THE NEXT GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
+            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint === 2 ? 'JUMP THE BARRIER' : hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · THE CODE LOADS AT THE GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
             <button className="br-hint-button" disabled={!inGate || (status !== 'running' && status !== 'coach')} onClick={() => setHintOpen((open) => !open)} aria-expanded={hintOpen}><Lightbulb size={15} /> HINT</button>
           </div>
           {hintOpen && inGate && <p className="br-hint" role="status"><Lightbulb size={15} /> {hint}</p>}

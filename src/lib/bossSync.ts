@@ -3,6 +3,8 @@ import { parseMathlerSyncState } from "./basicOps/survivalLeaderboard";
 import type { MathlerProgressRow, MathlerScoreRow } from "./basicOps/survivalLeaderboard";
 import { bossProgress, bossXp, createBossProgress, sanitizeBossProgress, unlockBossIds } from "./bossProgress";
 import type { BossProgressState } from "./bossProgress";
+import { parseFinalProjectSync } from "./finalProjectSync";
+import type { FinalProjectSyncState } from "./finalProjectSync";
 import { supabase } from "./supabase";
 
 export type SharpieProgressRow = {
@@ -32,6 +34,7 @@ export type ClassProgressRow = {
   attempts: Record<string, number>;
   mathlerSteps?: MathlerProgressRow | null;
   mathlerGame?: MathlerScoreRow | null;
+  finalProject?: FinalProjectSyncState | null;
 };
 
 export function rowToBossProgress(row: SharpieProgressRow): BossProgressState {
@@ -159,6 +162,7 @@ export async function fetchClassProgress(): Promise<ClassProgressRow[]> {
       attempts: progress.attemptsByBoss,
       mathlerSteps,
       mathlerGame,
+      finalProject: parseFinalProjectSync(embedded?.codes?.finalProject),
     };
   });
 }

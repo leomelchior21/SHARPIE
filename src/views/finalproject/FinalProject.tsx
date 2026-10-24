@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Check, Eye, Footprints, GitBranch, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Brand } from "../../components/Brand";
-import { canOpen, enterLab, freshProgress, loadProgress, saveProgress, stageOneDone, stageThreeDone, stageTwoDone, xp, type Activity, type Progress } from "./progress";
+import { canOpen, enterLab, freshProgress, loadProgress, saveProgress, stageOneDone, stageThreeDone, stageTwoDone, syncSummary, xp, type Activity, type Progress } from "./progress";
+import { queueFinalProjectSync } from "../../lib/finalProjectSync";
 import { Code, useExecution } from "./shared";
 import { executeCSharp } from "../../lib/runner";
 import { MatrixRun } from "./MatrixRun";
@@ -21,8 +22,10 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const active=preview?previewProgress:p;
   const update=useCallback((change:(p:Progress)=>Progress)=>{
     if(preview){setPreviewProgress(change);return;}
-    setP(previous=>{const next=change(previous);const saved=saveProgress(studentKey,next);setWarning(saved?"":"This browser cannot save progress right now. Keep this tab open; you can still export your report.");return next;});
-  },[preview,studentKey]);
+    setP(previous=>{const next=change(previous);const saved=saveProgress(studentKey,next);setWarning(saved?"":"This browser cannot save progress right now. Keep this tab open; you can still export your report.");if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(next));return next;});
+  },[preview,studentKey,isTeacher]);
+  // Saves from before the dashboard sync reach the teacher on the next visit.
+  useEffect(()=>{if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(loaded.progress));},[isTeacher,studentKey,loaded]);
   const activity=canOpen(active.activity,active,preview)?active.activity:"overview";
   const go=(next:Activity)=>{if(canOpen(next,active,preview))update(p=>({...p,activity:next}));};
   const openLab=()=>update(enterLab);

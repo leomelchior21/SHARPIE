@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { challenges, flows, missions, printLine, questions, solution } from "./content";
 import { compare, conditionResult, linesToPieces, validateLines, validatePieces } from "./logic";
 import { boundaryCases, substitute, traceProgram } from "./labStories";
-import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageOneDone, stageTwoDone, storageKey, xp } from "./progress";
+import { parseFinalProjectSync } from "../../lib/finalProjectSync";
+import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageOneDone, stageTwoDone, storageKey, syncSummary, xp } from "./progress";
 describe("Final project curriculum and behavioral validation",()=>{
   it("contains exactly the requested activities and answer key",()=>{
     expect(flows).toHaveLength(3);expect(challenges).toHaveLength(10);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
@@ -83,6 +84,14 @@ describe("Final project profile persistence and milestones",()=>{
   it("recovers malformed fields and reports inaccessible or corrupt storage",()=>{
     expect(sanitizeProgress({version:1,best:NaN,activity:"other",built:[0,0,-1,11],flowPaths:{0:null},answers:{q1:8}})).toMatchObject({best:0,activity:"overview",built:[0],answers:{}});
     localStorage.setItem(storageKey("broken"),"{");expect(loadProgress("broken").warning).not.toBe("");expect(localStorage.getItem(storageKey("broken"))).toBe("{");localStorage.removeItem(storageKey("broken"));
+  });
+  it("summarizes progress for the teacher dashboard and survives the round trip",()=>{
+    const p=sanitizeProgress({...freshProgress(),best:12,flowPaths:{0:["true","false"]},built:[2,0],answers:{q1:1,q2:1},repaired:[0],reflection:"Rules need review."});
+    const summary=syncSummary(p);
+    expect(summary).toMatchObject({endlessBest:12,flows:1,quizAnswered:2,quizRight:1,quizMissed:[2],built:[1,3],policies:1,reportDone:false,reflection:"Rules need review.",xp:xp(p)});
+    expect(parseFinalProjectSync(JSON.parse(JSON.stringify(summary)))).toEqual(summary);
+    expect(parseFinalProjectSync({built:[99,-1,"x"],quizRight:500})).toMatchObject({built:[10],quizRight:20,tapes:[0,0,0,0,0,0]});
+    expect(parseFinalProjectSync(null)).toBeNull();
   });
   it("never awards duplicate XP on replays",()=>{
     const p=award(award(freshProgress(),"quiz:q1",10),"quiz:q1",10);expect(xp(p)).toBe(10);

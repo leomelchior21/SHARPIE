@@ -9,6 +9,8 @@ import { fetchClassMathlerProgress, fetchClassMathlerScores } from "../lib/basic
 import type { MathlerProgressRow, MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
+import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TAPES, FINAL_TICKETS } from "../lib/finalProjectSync";
+import type { FinalProjectSyncState } from "../lib/finalProjectSync";
 import { supabase } from "../lib/supabase";
 
 type TeacherDashboardProps = {
@@ -28,6 +30,15 @@ function formatWhen(value: string | null) {
   return Number.isNaN(date.getTime())
     ? "—"
     : date.toLocaleString("en-US", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// Final project: Backrooms tapes, the IF / ELSE Lab stations and Shadow Feed.
+function finalStages(record: FinalProjectSyncState | null | undefined) {
+  const tapes = record ? record.tapes.filter((stars) => stars > 0).length : 0;
+  const lab = record ? [record.flows >= FINAL_FLOWS, record.quizAnswered >= FINAL_QUESTIONS, record.built.length >= FINAL_TICKETS].filter(Boolean).length : 0;
+  const labStarted = !!record && (record.flows > 0 || record.quizAnswered > 0 || record.built.length > 0);
+  const policies = record?.policies ?? 0;
+  return { tapes, lab, labStarted, policies, done: !!record?.reportDone };
 }
 
 function csvCell(value: string) {
@@ -123,7 +134,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
   const selectedSteps = selected ? mathlerStepsByLogin.get(selected.student.login) ?? null : null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "updated_at"];
+    const header = ["name", "login", "class", "group", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_tapes", "final_deep_best", "final_live_flows", "final_quiz_right", "final_quiz_answered", "final_builder", "final_policies", "final_report", "final_xp", "final_reflection", "updated_at"];
     const lines = filtered.map((row) => {
       const mathler = mathlerByLogin.get(row.student.login);
       const steps = mathlerStepsByLogin.get(row.student.login);
@@ -141,6 +152,20 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
         mathler ? String(mathler.best_score) : "",
         `${row.completedBosses.length}/15`,
         String(row.xp),
+        ...(row.finalProject
+          ? [
+              `${finalStages(row.finalProject).tapes}/${FINAL_TAPES}`,
+              String(row.finalProject.endlessBest),
+              `${row.finalProject.flows}/${FINAL_FLOWS}`,
+              String(row.finalProject.quizRight),
+              String(row.finalProject.quizAnswered),
+              `${row.finalProject.built.length}/${FINAL_TICKETS}`,
+              `${row.finalProject.policies}/${FINAL_POLICIES}`,
+              row.finalProject.reportDone ? "yes" : "no",
+              String(row.finalProject.xp),
+              row.finalProject.reflection,
+            ]
+          : Array.from({ length: 10 }, () => "")),
         row.updatedAt ?? "",
       ]
         .map(csvCell)
@@ -167,7 +192,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
           <Brand compact />
           <span className="header-divider" />
           <div>
-            <span>MODULES 04 · 05</span>
+            <span>MODULES 04 · 05 · 08</span>
             <strong id="teacher-title">TEACHER DASHBOARD</strong>
           </div>
         </div>
@@ -256,6 +281,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               <span role="columnheader">GROUP</span>
               <span role="columnheader">MATHLER</span>
               <span role="columnheader">BOSSES</span>
+              <span role="columnheader">FINAL</span>
               <span role="columnheader">XP</span>
             </div>
 
@@ -284,6 +310,8 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
               const targetDone = targetCount >= TARGET_PUZZLES.length;
               const gamePlayed = gameCount > 0;
               const badgeState = (done: boolean, started: boolean) => (done ? "is-done" : started ? "is-progress" : "");
+              const final = row.finalProject;
+              const stages = finalStages(final);
               return (
                 <button
                   key={row.student.login}
@@ -312,6 +340,17 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                     {done === finalBosses.length && <Check size={12} />}
                     {done}/15
                     <i><b style={{ width: `${(done / finalBosses.length) * 100}%` }} /></i>
+                  </span>
+                  <span role="cell" className="teacher-final-cell">
+                    <b className={badgeState(stages.tapes >= FINAL_TAPES, stages.tapes > 0 || (final?.endlessBest ?? 0) > 0)} title={final ? `Backrooms Run: ${stages.tapes}/${FINAL_TAPES} tapes · The Deep best ${final.endlessBest} gates` : "Final project: not opened"}>
+                      B<small>{stages.tapes}</small>
+                    </b>
+                    <b className={badgeState(stages.lab === 3, stages.labStarted)} title={final ? `IF / ELSE Lab: Live Flow ${final.flows}/${FINAL_FLOWS} · Quiz ${final.quizRight}/${FINAL_QUESTIONS} right · Code Builder ${final.built.length}/${FINAL_TICKETS}` : "IF / ELSE Lab: not started"}>
+                      L<small>{stages.lab}</small>
+                    </b>
+                    <b className={badgeState(stages.done, stages.policies > 0)} title={final ? `Shadow Feed: ${stages.policies}/${FINAL_POLICIES} policies${final.reportDone ? " · report complete" : ""}` : "Shadow Feed: not started"}>
+                      S<small>{stages.policies}</small>
+                    </b>
                   </span>
                   <span role="cell" className="teacher-xp">{row.xp} XP</span>
                 </button>
@@ -354,6 +393,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
                     </div>
                   </div>
                 </div>
+                <FinalProjectDetail record={selected.finalProject ?? null} />
                 <div className="teacher-boss-grid">
                   {finalBosses.map((boss) => {
                     const passed = selected.completedBosses.includes(boss.id);
@@ -383,5 +423,50 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
         </div>
       </div>
     </section>
+  );
+}
+
+function FinalProjectDetail({ record }: { record: FinalProjectSyncState | null }) {
+  const stages = finalStages(record);
+  const bar = (share: number) => <i><b style={{ width: `${Math.min(100, share * 100)}%` }} /></i>;
+  return (
+    <div className="teacher-mathler teacher-final">
+      <div className="teacher-mathler-head">
+        <span>MODULE 08 · FINAL PROJECT</span>
+        <small>{record?.updatedAt ? `updated ${formatWhen(record.updatedAt)}` : "not opened"}</small>
+      </div>
+      {record && (
+        <div className="teacher-mathler-steps">
+          <div className={stages.tapes >= FINAL_TAPES ? "is-done" : ""}>
+            <span>01 · BACKROOMS</span>
+            <strong>{stages.tapes} / {FINAL_TAPES} tapes · {record.tapes.reduce((total, stars) => total + stars, 0)}★ · Deep {record.endlessBest}</strong>
+            {bar(stages.tapes / FINAL_TAPES)}
+          </div>
+          <div className={record.flows >= FINAL_FLOWS ? "is-done" : ""}>
+            <span>02 · LIVE FLOW</span>
+            <strong>{record.flows} / {FINAL_FLOWS} tickets</strong>
+            {bar(record.flows / FINAL_FLOWS)}
+          </div>
+          <div className={record.quizAnswered >= FINAL_QUESTIONS ? "is-done" : ""}>
+            <span>02 · QUIZ</span>
+            <strong>{record.quizRight} right · {record.quizAnswered} / {FINAL_QUESTIONS} answered</strong>
+            {bar(record.quizAnswered / FINAL_QUESTIONS)}
+          </div>
+          <div className={record.built.length >= FINAL_TICKETS ? "is-done" : ""}>
+            <span>02 · BUILDER</span>
+            <strong>{record.built.length} / {FINAL_TICKETS} shipped</strong>
+            {bar(record.built.length / FINAL_TICKETS)}
+          </div>
+          <div className={record.reportDone ? "is-done" : ""}>
+            <span>03 · SHADOW FEED</span>
+            <strong>{record.policies} / {FINAL_POLICIES} policies{record.reportDone ? " · REPORT ✓" : ""}</strong>
+            {bar(record.policies / FINAL_POLICIES)}
+          </div>
+        </div>
+      )}
+      {record && record.quizMissed.length > 0 && <p className="teacher-final-missed">Quiz to review: <b>{record.quizMissed.map((n) => `Q${n}`).join(" · ")}</b></p>}
+      {record && record.built.length > 0 && record.built.length < FINAL_TICKETS && <p className="teacher-final-missed">Builder tickets shipped: {record.built.join(", ")}</p>}
+      {record?.reflection.trim() && <p className="teacher-final-reflection"><small>WHITE HAT REFLECTION</small>{record.reflection}</p>}
+    </div>
   );
 }
