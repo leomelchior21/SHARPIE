@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { challenges, flows, missions, questions } from "./content";
 import { compare, conditionResult, validatePieces } from "./logic";
+import { boundaryCases, substitute, traceProgram } from "./labStories";
 import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageOneDone, stageTwoDone, storageKey, xp } from "./progress";
 describe("Final project curriculum and behavioral validation",()=>{
   it("contains exactly the requested activities and answer key",()=>{
@@ -26,6 +27,22 @@ describe("Final project curriculum and behavioral validation",()=>{
     expect(()=>conditionResult("x == true","x",1)).toThrow();
   });
 
+});
+describe("IF / ELSE Lab traces",()=>{
+  it("marks the lines an if / else runs and skips, with the substituted condition",()=>{
+    const trace=traceProgram(questions[12].code);
+    expect(trace.condition).toEqual({code:"30 > 30",result:false});
+    expect(trace.lines).toEqual(["run","plain","run","skip","skip","skip","run","run","run","run"]);
+    expect(traceProgram(questions[0].code).condition).toEqual({code:"10 < 5",result:false});
+    expect(traceProgram(questions[9].code).lines.slice(2)).toEqual(["run","skip","skip","skip"]);
+  });
+  it("tests just below, at and just above the edge",()=>{
+    expect(boundaryCases("grade >= 7",5,0.25,0,10)).toEqual([6.75,7,7.25]);
+    expect(boundaryCases("health == 0",0,1,0,100)).toEqual([0,1]);
+    expect(boundaryCases("sponsored",true,1,0,1)).toEqual([true,false]);
+    expect(substitute("views > 1000","views",900)).toBe("900 > 1000");
+    expect(substitute("sponsored","sponsored",true)).toBe("true");
+  });
 });
 describe("Final project profile persistence and milestones",()=>{
   it("makes Backrooms and IF / ELSE available without a previous run",()=>{

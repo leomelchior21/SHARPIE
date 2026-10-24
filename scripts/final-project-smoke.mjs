@@ -14,7 +14,7 @@ const navigationOnly=!!process.env.SHARPIE_QA_NAVIGATION_ONLY;
 const fixture=`${base}/scripts/final-project-preview.html${navigationOnly?'?student':''}`;
 const browser=spawn(browserPath,['--headless=new','--no-first-run','--no-default-browser-check',`--remote-debugging-port=${port}`,`--user-data-dir=${path.join(root,'node_modules','.cache','final-project-browser')}`,'about:blank'],{windowsHide:true,stdio:'ignore'});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));let socket,id=0;const pending=new Map();const errors=[];
-const send=(method,params={})=>new Promise((resolve,reject)=>{const key=++id;const timer=setTimeout(()=>{pending.delete(key);reject(new Error(`CDP timeout: ${method}`));},15000);pending.set(key,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});socket.send(JSON.stringify({id:key,method,params}));});
+const send=(method,params={})=>new Promise((resolve,reject)=>{const key=++id;const timer=setTimeout(()=>{pending.delete(key);reject(new Error(`CDP timeout: ${method}`));},method==="Page.captureScreenshot"||method==="Page.printToPDF"?60000:15000);pending.set(key,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});socket.send(JSON.stringify({id:key,method,params}));});
 const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;};
 const wait=async(expression,timeout=10000)=>{const start=Date.now();while(Date.now()-start<timeout){if(await evaluate(`Boolean(${expression})`))return;await delay(120);}throw new Error(`Timed out: ${expression}`);};
 const click=async text=>{await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)});if(!b)throw new Error('Button missing: '+${JSON.stringify(text)});if(b.disabled)throw new Error('Button disabled: '+${JSON.stringify(text)});b.click();})()`);await delay(120);};
@@ -38,48 +38,50 @@ try{
   await seed({});assert.equal(await evaluate('document.querySelectorAll(".fp-stage:disabled").length'),1);
   if(!navigationOnly){await pressLabel('Teacher preview');await evaluate('document.querySelectorAll(".fp-stage")[2].click()');await wait('!!document.querySelector(".fp-shadow-layout")');await pressLabel('Exit teacher preview');assert.equal((await saved()).activity,'overview');}
   else assert.equal(await evaluate('document.querySelectorAll(".fp-header button").length'),1);
-  await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".fp-flow-intro")');
+  await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".lab-intro")');
   assert.equal((await saved()).labVisited,true);
-  await click('BACK');await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".fp-lab-options")');
-  assert.deepEqual(await evaluate('[...document.querySelectorAll(".fp-lab-options button")].map(b=>b.textContent)'),['Live Flow','Code Builder','Quiz']);
-  await click('Live Flow');
-  console.log('PASS first visit Live Flow, title-only options on reentry, and immediate stage access');
+  await click('BACK');await wait('!!document.querySelector(".lab-home")');
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))'),['Live Flow','Code Builder','Quiz']);
+  await pressLabel('Live Flow');
+  console.log('PASS first visit Live Flow, lab home with three stations on reentry, and immediate stage access');
   for(let i=0;i<3;i++){
     await click('START LIVE FLOW');await wait('!!document.querySelector(".fp-flow-svg")');
-    if(i===0){await pressLabel('Increase grade');assert.equal(await evaluate('Number(document.querySelector(".fp-stepper output").textContent)'),5.25);}
+    if(i===0){await pressLabel('Increase grade');assert.equal(await evaluate('Number(document.querySelector(".lab-stepper output").textContent)'),5.25);}
     const label=['grade','age','views'][i];
     for(const [j,value] of [[6.75,7],[12,13],[1000,1100]][i].entries()){
-      await range(label,value);await evaluate('document.querySelector(".fp-flow-control .fp-primary").click()');
+      await range(label,value);await click('PREDICT & RUN');await evaluate('document.querySelector(".lab-predict .is-true").click()');
       const branch=(i===0?value>=7:i===1?value<=12:value>1000)?'true':'false';
       await wait('!!document.querySelector(\'[data-segment="'+branch+'-end"]\')');
       assert.equal(await evaluate('document.querySelectorAll(".fp-wire-fill").length'),4);
-      if(j===0)await wait('!document.querySelector(".fp-flow-control .fp-primary").disabled');
-      else await wait(i===2?'!!document.querySelector(".fp-quiz-start")':'!!document.querySelector(".fp-flow-intro")');
+      if(j===0)await wait('[...document.querySelectorAll("button")].some(b=>b.textContent.trim()==="PREDICT & RUN"&&!b.disabled)');
+      else await wait('!!document.querySelector(".lab-done")');
     }
+    await click(i===2?'OPEN THE CODE BUILDER →':'NEXT TICKET →');
   }
   assert.deepEqual((await saved()).flowPaths,{0:['false','true'],1:['true','false'],2:['false','true']});
-  assert.match(await evaluate('document.querySelector(".fp-quiz-start h1").textContent'),/Let.s start/);
-  assert.equal(await evaluate('document.querySelector(".fp-tabs,.fp-bottom-nav")'),null);
-  await click('START QUIZ');await wait('!!document.querySelector(".fp-answers")');
-  console.log('PASS sequential flow branches, bold selected wires, worker output, and automatic quiz introduction');
+  await wait('!!document.querySelector(".lab-tickets")');
+  await click('BACK');await wait('!!document.querySelector(".lab-home")');await pressLabel('Quiz');
+  assert.match(await evaluate('document.querySelector(".lab-quiz-intro h1").textContent'),/Let.s start/);
+  await click('START QUIZ');await wait('!!document.querySelector(".lab-answers")');
+  console.log('PASS predicted flow branches, bold selected wires, worker output, Code Builder next and the quiz from the lab home');
   if(!navigationOnly){
   await seed({...core,activity:'builder'});
   for(let index=0;index<10;index++){
-    await evaluate(`document.querySelectorAll('.fp-levels button')[${index}].click()`);await delay(100);
+    await evaluate(`document.querySelectorAll('.lab-ticket-group button')[${index}].click()`);await delay(100);
     const c=await evaluate(`finalQA.challenges[${index}]`);
     for(let n=0;n<3;n++){
-      await evaluate(`document.querySelectorAll('.fp-slot')[${n}].click()`);await delay(50);
+      await evaluate(`document.querySelectorAll('.lab-slot')[${n}].click()`);await delay(50);
       const piece=n===0?c.condition:`Console.WriteLine(${JSON.stringify(n===1?c.yes:c.no)})`;
-      await evaluate(`(()=>{const b=[...document.querySelectorAll('.fp-pieces button')].find(b=>b.textContent===${JSON.stringify(piece)});if(!b)throw new Error('Missing code piece');b.click();})()`);await delay(50);
+      await evaluate(`(()=>{const b=[...document.querySelectorAll('.lab-pieces button')].find(b=>b.textContent===${JSON.stringify(piece)});if(!b)throw new Error('Missing code piece');b.click();})()`);await delay(50);
     }
-    await click('▶ CHECK CODE + RUN');await wait('document.querySelector(".fp-feedback")?.textContent.includes("Both paths work") && document.querySelector(".fp-next")');
+    await click('RUN TESTS');await wait('!!document.querySelector(".lab-done") && document.querySelectorAll(".lab-spec tr.is-pass").length===document.querySelectorAll(".lab-spec tbody tr").length');
   }
   assert.equal((await saved()).built.length,10);console.log('PASS tap-to-place and real execution of all ten builders');
-  await seed({...core,activity:'quiz'});await evaluate('document.querySelector("input[type=checkbox]").click()');
+  await seed({...core,activity:'quiz'});
   for(let index=0;index<20;index++){
-    const answer=await evaluate(`finalQA.questions[${index}].answer`);await evaluate(`document.querySelectorAll('.fp-answers button')[${answer}].click()`);await delay(60);await click('Next →');
+    const answer=await evaluate(`finalQA.questions[${index}].answer`);await evaluate(`document.querySelectorAll('.lab-answers button')[${answer}].click()`);await delay(60);await click(index===19?'SEE RESULTS':'NEXT');
   }
-  assert.equal((await saved()).mastered.length,20);assert.equal((await saved()).quizIndex,20);await send('Page.reload');await wait('!!document.querySelector(".fp-quiz-review")');console.log('PASS twenty answers, saved quiz results and resume');
+  assert.equal((await saved()).mastered.length,20);assert.equal((await saved()).quizIndex,20);await send('Page.reload');await wait('!!document.querySelector(".lab-review")');console.log('PASS twenty answers, saved quiz results and resume');
   await seed({...core,activity:'shadow'});
   for(let index=0;index<4;index++){
     assert.equal(await evaluate('document.querySelector("fieldset").disabled'),true);
@@ -135,20 +137,22 @@ try{
       }
       if(activity==='flow'){
         const intro=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-flow-intro.png`),Buffer.from(intro.data,'base64'));checks.push(`${size.name}/flow-intro`);
-        await click('START LIVE FLOW');await evaluate('document.querySelector(".fp-flow-control .fp-primary").click()');await wait('!!document.querySelector(\'[data-segment="false-end"]\')');await delay(650);
+        await click('START LIVE FLOW');await click('PREDICT & RUN');await evaluate('document.querySelector(".lab-predict .is-false").click()');await wait('!!document.querySelector(\'[data-segment="false-end"]\')');await delay(650);
       }
       await delay(150);
       const layout=await evaluate(`(()=>{const el=document.querySelector('.fp-content');const wide=[...document.querySelectorAll('.fp-content button')].filter(b=>{const r=b.getBoundingClientRect();return r.width&& (r.left < -1||r.right>innerWidth+1)}).map(b=>b.textContent);return {scroll:el.scrollWidth>el.clientWidth+2,wide,viewport:[innerWidth,innerHeight]};})()`);
       assert.equal(await evaluate('document.querySelector(".fp-header").getBoundingClientRect().height'),44);
-      assert.equal(layout.scroll,false,`${size.name}/${activity} horizontal page overflow`);assert.deepEqual(layout.wide,[],`${size.name}/${activity} clipped buttons`);
+      assert.equal(layout.scroll,false,`${size.name}/${activity} horizontal page overflow`);
+      // The IF / ELSE Lab is designed to fit the screen: no vertical scrolling outside phones.
+      if(size.name!=='phone'&&['lab','flow','builder','quiz-intro','quiz'].includes(activity))assert.equal(await evaluate('(()=>{const el=document.querySelector(".fp-content");return el.scrollHeight<=el.clientHeight+2&&document.scrollingElement.scrollHeight<=innerHeight+2})()'),true,`${size.name}/${activity} scrolls vertically`);assert.deepEqual(layout.wide,[],`${size.name}/${activity} clipped buttons`);
       const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-${activity}.png`),Buffer.from(shot.data,'base64'));checks.push(`${size.name}/${activity}`);
       if(activity==='flow'&&size.name==='ipad-short'){
         for(const flowIndex of [1,2]){
           await seed({...core,activity:'flow',flowIndex});
           await click('START LIVE FLOW');
-          await evaluate('document.querySelector(".fp-flow-control .fp-primary").click()');
+          await click('PREDICT & RUN');await evaluate(`document.querySelector(".lab-predict .is-${flowIndex===1?'true':'false'}").click()`);
           await wait(`!!document.querySelector('[data-segment="${flowIndex===1?'true':'false'}-end"]')`);await delay(650);
-          assert(await evaluate('document.querySelector(".fp-flowchart-panel").getBoundingClientRect().bottom<=innerHeight'),`Flow ${flowIndex+1} output below tablet viewport`);
+          assert(await evaluate('document.querySelector(".lab-col--chart").getBoundingClientRect().bottom<=innerHeight'),`Flow ${flowIndex+1} output below tablet viewport`);
           const extra=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-flow-${flowIndex+1}.png`),Buffer.from(extra.data,'base64'));checks.push(`${size.name}/flow-${flowIndex+1}`);
         }
       }

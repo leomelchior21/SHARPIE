@@ -37,8 +37,11 @@ describe('Backrooms Run', () => {
     return renderer.view!
   }
 
+  // Runs frames in small batches per React update: the simulations need thousands of frames.
   function until(check: () => boolean, limit = 4000) {
-    for (let count = 0; count < limit && !check(); count += 1) tick()
+    for (let count = 0; count < limit && !check(); count += 4) {
+      act(() => { for (let step = 0; step < 4; step += 1) { time += 50; frame(time) } })
+    }
     expect(check()).toBe(true)
   }
 
@@ -193,9 +196,9 @@ describe('Backrooms Run', () => {
     })
     expect(renderer.view!.pace).toBeGreaterThan(first)
     expect(screen.getByLabelText(/^Pace /)).toHaveTextContent('PACE 1.1×')
-  })
+  }, 60000)
 
-  it('restarts a lost tutorial tape straight away without repeating its guides', () => {
+  it('restarts a lost tutorial tape straight away without repeating its guides', { timeout: 60000 }, () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     const { saves } = mount(student())
     fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
@@ -231,5 +234,5 @@ describe('Backrooms Run', () => {
     expect(screen.queryByText(/TRIPPED/)).not.toBeInTheDocument()
     expect(renderer.view!.obstacles.some((item) => item.kind === 'barrier')).toBe(true)
     expect(renderer.view!.jump).toBe(0)
-  })
+  }, 60000)
 })

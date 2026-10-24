@@ -8,10 +8,12 @@ import { MatrixRun } from "./MatrixRun";
 import { LiveFlow } from "./LiveFlow";
 import { CodeBuilder } from "./CodeBuilder";
 import { Quiz } from "./Quiz";
+import { LabHome, QuizIntro } from "./LabHome";
 import { ShadowFeed } from "./ShadowFeed";
 import { AuditReport } from "./AuditReport";
 import "./finalproject.css";
-const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"IF / ELSE LAB",flow:"LIVE FLOW",builder:"CODE BUILDER","quiz-intro":"KNOWLEDGE CHECK",quiz:"KNOWLEDGE CHECK",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
+import "./lab.css";
+const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"IF / ELSE LAB",flow:"LIVE FLOW",builder:"CODE BUILDER","quiz-intro":"CODE REVIEW",quiz:"CODE REVIEW",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
 export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;studentKey:string;isTeacher:boolean;onBack:()=>void}) {
   const [loaded]=useState(()=>loadProgress(studentKey));
   const [p,setP]=useState(loaded.progress);const [preview,setPreview]=useState(false);const [previewProgress,setPreviewProgress]=useState(freshProgress);
@@ -26,19 +28,21 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const openLab=()=>update(enterLab);
   const openFlow=()=>update(p=>({...p,activity:"flow",flowIndex:[0,1,2].every(i=>p.flowPaths[i]?.length===2)?0:p.flowIndex}));
   const one=stageOneDone(active),two=stageTwoDone(active),three=stageThreeDone(active);
+  // Inside the lab, Back returns to the lab's three stations.
+  const inLab=["flow","builder","quiz-intro","quiz"].includes(activity);
   return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""}`}>
     <header className="fp-header">
       <Brand compact/>
       <div className="fp-header-title"><small>FINAL PROJECT {preview&&<span className="fp-preview-marker">· PREVIEW</span>}</small><b>{labels[activity]}</b></div>
       <div className="fp-header-actions"><span className="fp-xp">ϟ {xp(active)} XP</span>
         {isTeacher&&<button className={preview?"preview-on":""} aria-label={preview?"Exit teacher preview":"Teacher preview"} aria-pressed={preview} onClick={()=>setPreview(!preview)}><Eye size={16}/></button>}
-        <button className="fp-back" onClick={()=>activity==="overview"?onBack():go("overview")}><ArrowLeft size={15}/> BACK</button>
+        <button className="fp-back" onClick={()=>activity==="overview"?onBack():go(inLab&&active.labVisited?"lab":"overview")}><ArrowLeft size={15}/> BACK</button>
       </div>
     </header>
     {warning&&<div className="fp-save-warning" role="status">{warning}</div>}
     <div className="fp-content" key={`${preview}-${activity}`}>
     {activity==="overview"&&<><div className="fp-stage-grid memory-experience-grid">{[
-      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${active.backroom.levels.filter(stars=>stars>0).length}/${active.backroom.levels.length} · Endless best: ${active.best} gates`},
+      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple fp-stage--backrooms",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${active.backroom.levels.filter(stars=>stars>0).length}/${active.backroom.levels.length} · Endless best: ${active.best} gates`},
       {n:"02",title:"IF / ELSE Lab",copy:"Follow a decision. Build and test your C# code.",icon:GitBranch,color:"",activity:"lab" as Activity,enabled:true,done:two,unlock:"",detail:`${Object.values(active.flowPaths).filter(v=>v.length===2).length}/3 flows · ${active.built.length}/10 builds · ${Object.keys(active.answers).length}/20 quiz`},
       {n:"03",title:"Shadow Feed",copy:"Operation White Hat. Audit the rules behind the feed.",icon:ShieldCheck,color:"memory-card-red",activity:"shadow" as Activity,enabled:two||preview,done:three,unlock:"IF / ELSE LAB",detail:`${active.repaired.length}/4 policies repaired · ${three?"Report ready":"Audit pending"}`},
     ].map(s=><button
@@ -56,14 +60,10 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     </button>)}</div><div className="fp-overview-bottom"><p>Welcome back, <b>{name}</b>. Your progress is saved in this browser.</p>{three&&<button onClick={()=>go("report")}>OPEN AUDIT REPORT →</button>}</div></>}
     {activity==="matrix"&&<MatrixRun progress={active} update={update} name={name} studentKey={studentKey} isTeacher={isTeacher||preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
-    {activity==="lab"&&<div className="fp-lab-options">
-      <button className="memory-experience-card memory-card-purple is-available" onClick={openFlow}><strong>Live Flow</strong></button>
-      <button className="memory-experience-card is-available" onClick={()=>go("builder")}><strong>Code Builder</strong></button>
-      <button className="memory-experience-card memory-card-red is-available" onClick={()=>go("quiz-intro")}><strong>Quiz</strong></button>
-    </div>}
-    {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("quiz-intro")}/>}
-    {activity==="quiz-intro"&&<div className="fp-quiz-start"><small>KNOWLEDGE CHECK</small><h1>Let’s start.</h1><p>20 questions. One decision at a time.</p><button className="fp-primary" onClick={()=>go("quiz")}>{active.quizIndex>=20?"SEE RESULTS":active.quizIndex>0?"RESUME QUIZ":"START QUIZ"}</button></div>}
-    {activity==="builder"&&<CodeBuilder progress={active} update={update}/>}
+    {activity==="lab"&&<LabHome progress={active} onFlow={openFlow} onBuilder={()=>go("builder")} onQuiz={()=>go("quiz-intro")}/>}
+    {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("builder")}/>}
+    {activity==="quiz-intro"&&<QuizIntro index={active.quizIndex} onStart={()=>go("quiz")}/>}
+    {activity==="builder"&&<CodeBuilder progress={active} update={update} onFinish={()=>go("quiz-intro")}/>}
     {activity==="quiz"&&<Quiz progress={active} update={update}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}

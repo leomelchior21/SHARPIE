@@ -1,30 +1,150 @@
 import { useState } from "react";
+import { Check, Eraser, FlaskConical, Lightbulb, RotateCcw, X } from "lucide-react";
 import { SyntaxLine } from "../../components/SyntaxLine";
-import { challenges, type Input } from "./content";
-import { runProgram, validatePieces } from "./logic";
+import { challenges, type Challenge, type Input } from "./content";
+import { conditionResult, runProgram, validatePieces } from "./logic";
 import { award, type Progress, type Update } from "./progress";
-import { InputControl, Panel, useExecution } from "./shared";
-export function CodeBuilder({progress:p,update}:{progress:Progress;update:Update}) {
-  return <><nav className="fp-levels" aria-label="Code Builder challenges"><span>CHALLENGE<br/><b>{String(p.builderIndex+1).padStart(2,"0")} / 10</b></span>{challenges.map((c,i)=><button key={c.id} aria-label={`Challenge ${i+1}: ${c.title}`} aria-pressed={p.builderIndex===i} className={p.built.includes(i)?"done":""} onClick={()=>update(p=>({...p,builderIndex:i}))}>{i+1}{p.built.includes(i)?" ✓":""}</button>)}</nav><Builder key={p.builderIndex} progress={p} update={update}/></>;
+import { useExecution } from "./shared";
+import { AppPreview } from "./AppPreview";
+import { LabInput, StoryHead, Ticket } from "./LabParts";
+import { boundaryCases } from "./labStories";
+
+const groups = [{ label: "A · STRUCTURE", from: 0, to: 2 }, { label: "B · CONTROL", from: 3, to: 5 }, { label: "C · THE DIGITAL WORLD", from: 6, to: 9 }];
+
+export function CodeBuilder({ progress: p, update, onFinish }: { progress: Progress; update: Update; onFinish: () => void }) {
+  return <section className="lab-builder">
+    <nav className="lab-tickets" aria-label="Code Builder challenges">
+      {groups.map((group) => <div key={group.label} className="lab-ticket-group">
+        <small>{group.label}</small>
+        <div>{challenges.slice(group.from, group.to + 1).map((c, offset) => {
+          const i = group.from + offset;
+          return <button key={c.id} aria-label={`Challenge ${i + 1}: ${c.title}`} aria-pressed={p.builderIndex === i} className={p.built.includes(i) ? "is-done" : ""} onClick={() => update((current) => ({ ...current, builderIndex: i }))}>
+            {p.built.includes(i) ? <Check size={14} /> : i + 1}
+          </button>;
+        })}</div>
+      </div>)}
+      <span className="lab-tickets-count">{p.built.length} / 10 SHIPPED</span>
+    </nav>
+    <Builder key={p.builderIndex} progress={p} update={update} onFinish={onFinish} />
+  </section>;
 }
-function Builder({progress:p,update}:{progress:Progress;update:Update}) {
-  const i=p.builderIndex,s=challenges[i],pieces=p.drafts[s.id]??s.preset;
-  const [slot,setSlot]=useState(pieces.findIndex(v=>!v)<0?1:pieces.findIndex(v=>!v));
-  const [value,setValue]=useState<Input>(s.initial);const [hint,setHint]=useState(0);
-  const [feedback,setFeedback]=useState("");const [output,setOutput]=useState("");const [valid,setValid]=useState(false);
-  const {run,busy,error}=useExecution();
-  const change=(next:string[])=>{update(p=>({...p,drafts:{...p.drafts,[s.id]:next}}));setValid(false);setOutput("");setFeedback("");};
-  const place=(piece:string)=>{const next=[...pieces];next[slot]=piece;change(next);const empty=next.findIndex(v=>!v);if(empty>=0)setSlot(empty);};
-  const check=()=>run(async signal=>{
-    const checked=validatePieces(s,pieces);setFeedback(checked.message);setValid(checked.valid);
-    if(!checked.valid)return;
-    const printed=await runProgram(s,value,pieces,signal);setOutput(printed);
-    update(p=>award({...p,built:[...new Set([...p.built,i])]},`builder:${i}`,30));
+
+// What a set of pieces prints for one input, or null while slots are empty or invalid.
+function printed(s: Challenge, pieces: string[], input: Input): string | null {
+  if (pieces.some((piece) => !piece)) return null;
+  try { return conditionResult(pieces[0], s.variable, input) ? pieces[1] : pieces[2]; } catch { return null; }
+}
+
+function Builder({ progress: p, update, onFinish }: { progress: Progress; update: Update; onFinish: () => void }) {
+  const i = p.builderIndex;
+  const s = challenges[i];
+  const pieces = p.drafts[s.id] ?? s.preset;
+  const firstEmpty = pieces.findIndex((piece) => !piece);
+  const [slot, setSlot] = useState(firstEmpty < 0 ? 1 : firstEmpty);
+  const [value, setValue] = useState<Input>(s.initial);
+  const [hint, setHint] = useState(0);
+  const [tested, setTested] = useState<{ valid: boolean; message: string } | null>(null);
+  const [output, setOutput] = useState("");
+  const { run, busy, error } = useExecution();
+  const cases = boundaryCases(s.condition, s.initial, s.step, s.min, s.max);
+  const expected = (input: Input) => conditionResult(s.condition, s.variable, input) ? s.yes : s.no;
+  const shipped = tested?.valid && !!output;
+  const last = i === challenges.length - 1;
+
+  const change = (next: string[]) => {
+    update((current) => ({ ...current, drafts: { ...current.drafts, [s.id]: next } }));
+    setTested(null);
+    setOutput("");
+  };
+  const place = (piece: string) => {
+    const next = [...pieces];
+    next[slot] = piece;
+    change(next);
+    const empty = next.findIndex((item) => !item);
+    if (empty >= 0) setSlot(empty);
+  };
+  const test = () => run(async (signal) => {
+    const checked = validatePieces(s, pieces);
+    setTested(checked);
+    if (!checked.valid) return;
+    setOutput(await runProgram(s, value, pieces, signal));
+    update((current) => award({ ...current, built: [...new Set([...current.built, i])] }, `builder:${i}`, 30));
   });
-  const outputs=[s.yes,s.no,...(i===9?["HIDE"]:[])];
-  const slotButton=(n:number)=><button className={`fp-slot ${slot===n?"selected":""}`} disabled={busy} aria-label={`Select ${["condition","IF output","ELSE output"][n]} slot`} aria-pressed={slot===n} onClick={()=>setSlot(n)}>{pieces[n]?<SyntaxLine code={n===0?pieces[n]:`Console.WriteLine(${JSON.stringify(pieces[n])})`}/>:<span>{i<3?["? condition","? IF action","? ELSE action"][n]:"?"}</span>}</button>;
-  return <div className="fp-builder-layout"><Panel title={`YOUR MISSION / ${s.phase}`} className="fp-mission"><h1>{s.title}<em>.</em></h1><p>{s.description}</p><div className={`fp-illustration scene-${s.id}`} aria-hidden="true"><span>SHARPIE / {s.id==="movie"?"PICTURES":"DECISION LAB"}</span><b>{s.symbol}</b><small>{s.variable.toUpperCase()} = {String(value)}</small></div>{i<4&&<div className="fp-two-paths"><span><b>IF</b> {s.yes}</span><span><b>ELSE</b> {s.no}</span></div>}<p className="fp-note">{s.note}</p><button className="fp-help" disabled={hint>=3} onClick={()=>setHint(h=>h+1)}>◇ {hint>=3?"All hints shown":"Need a hint?"}</button>{hint>0&&<p className="fp-hint" role="status">{s.hints[hint-1]}</p>}</Panel>
-    <Panel title="BUILD YOUR CODE · TAP A SLOT, THEN A PIECE" className="fp-assembly"><div className="fp-build-code"><div><SyntaxLine code={`${typeof value==="boolean"?"bool":"int"} ${s.variable} = ${value};`}/></div><div><span className="fp-keyword">if</span> ( {slotButton(0)} )</div><div>{"{"}</div><div className="indented">{slotButton(1)} ;</div><div>{"}"}</div><div className="fp-keyword">else</div><div>{"{"}</div><div className="indented">{slotButton(2)} ;</div><div>{"}"}</div></div><div className="fp-piece-tray"><div className="fp-panel-label">{slot===0?"CONDITION PIECES":"OUTPUT PIECES"}</div><div className="fp-pieces">{(slot===0?s.conditions:outputs).map(piece=><button key={piece} disabled={busy} onClick={()=>place(piece)}><SyntaxLine code={slot===0?piece:`Console.WriteLine(${JSON.stringify(piece)})`}/></button>)}</div></div><div className="fp-inline-actions"><button disabled={busy} onClick={()=>change(pieces.map((v,n)=>n===slot?"":v))}>Remove selected</button><button disabled={busy} onClick={()=>{change([...s.preset]);setSlot(s.preset.findIndex(v=>!v)<0?1:s.preset.findIndex(v=>!v));}}>Reset code</button></div></Panel>
-    <Panel title="TEST YOUR CODE"><InputControl scenario={s} value={value} disabled={busy} onChange={v=>{setValue(v);setOutput("");}}/><button className="fp-primary" disabled={busy} onClick={check}>{busy?"RUNNING…":"▶ CHECK CODE + RUN"}</button><div className={`fp-feedback ${valid?"success":""}`} role="status">{error||feedback||"Place the pieces. C# supplies the braces and semicolons."}</div><div className="fp-output"><small>OUTPUT</small><strong>{output?`> ${output}`:"Waiting for a valid program…"}</strong></div>{valid&&output&&<button className="fp-next" onClick={()=>update(p=>({...p,builderIndex:Math.min(9,i+1),activity:i===9?"lab":"builder"}))}>{i===9?"BACK TO THE LAB":"NEXT CHALLENGE →"}</button>}</Panel>
+
+  const outputs = [s.yes, s.no, ...(i === 9 ? ["HIDE"] : [])];
+  const slotNames = ["condition", "IF output", "ELSE output"];
+  const slotButton = (n: number) => <button className={`lab-slot ${slot === n ? "is-selected" : ""} ${pieces[n] ? "is-filled" : ""}`} disabled={busy} aria-label={`Select ${slotNames[n]} slot`} aria-pressed={slot === n} onClick={() => setSlot(n)}>
+    {pieces[n] ? <SyntaxLine code={n === 0 ? pieces[n] : `Console.WriteLine(${JSON.stringify(pieces[n])})`} /> : <span>{["? condition", "? IF output", "? ELSE output"][n]}</span>}
+  </button>;
+  const live = printed(s, pieces, value);
+
+  return <div className="lab-builder-grid">
+    <div className="lab-col lab-col--brief">
+      <StoryHead id={s.id} kicker={`TICKET ${String(i + 1).padStart(2, "0")} · ${s.phase.toUpperCase()}`} title={s.title} />
+      <Ticket id={s.id} />
+      <div className="lab-panel lab-spec">
+        <div className="lab-panel-label">SPEC · THE TESTS YOUR CODE MUST PASS</div>
+        <table>
+          <thead><tr><th>{s.variable}</th><th>expected</th><th>your code</th></tr></thead>
+          <tbody>{cases.map((input) => {
+            const want = expected(input);
+            const got = printed(s, pieces, input);
+            const status = !tested || got === null ? "pending" : got === want ? "pass" : "fail";
+            return <tr key={String(input)} className={`is-${status}`}>
+              <td><code>{String(input)}</code></td>
+              <td>“{want}”</td>
+              <td>{status === "pending" ? <span className="lab-muted">?</span> : <>{status === "pass" ? <Check size={14} /> : <X size={14} />} “{got}”</>}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      <div className="lab-hints">
+        <button disabled={hint >= s.hints.length} onClick={() => setHint((level) => level + 1)}><Lightbulb size={14} /> {hint >= s.hints.length ? "All hints shown" : `Hint ${hint + 1} of ${s.hints.length}`}</button>
+        {hint > 0 && <p role="status">{s.hints[hint - 1]}</p>}
+      </div>
+    </div>
+
+    <div className="lab-panel lab-col--assembly">
+      <div className="lab-panel-label">BUILD THE RULE · TAP A SLOT, THEN A PIECE</div>
+      <div className="lab-assembly">
+        <div><SyntaxLine code={`${typeof value === "boolean" ? "bool" : "int"} ${s.variable} = ${value};`} /></div>
+        <div className="lab-gap" />
+        <div><span className="lab-kw">if</span> ( {slotButton(0)} )</div>
+        <div>{"{"}</div>
+        <div className="lab-indent">{slotButton(1)} ;</div>
+        <div>{"}"}</div>
+        <div className="lab-kw">else</div>
+        <div>{"{"}</div>
+        <div className="lab-indent">{slotButton(2)} ;</div>
+        <div>{"}"}</div>
+      </div>
+      <div className="lab-tray">
+        <small>{slot === 0 ? "CONDITION PIECES" : `OUTPUT PIECES · FOR THE ${slot === 1 ? "IF" : "ELSE"} SLOT`}</small>
+        <div className="lab-pieces">{(slot === 0 ? s.conditions : outputs).map((piece) => <button key={piece} disabled={busy} aria-pressed={pieces[slot] === piece} onClick={() => place(piece)}>
+          <SyntaxLine code={slot === 0 ? piece : `Console.WriteLine(${JSON.stringify(piece)})`} />
+        </button>)}</div>
+        <div className="lab-tray-actions">
+          <button disabled={busy || !pieces[slot]} onClick={() => change(pieces.map((piece, n) => n === slot ? "" : piece))}><Eraser size={14} /> Clear slot</button>
+          <button disabled={busy} onClick={() => { change([...s.preset]); setSlot(s.preset.findIndex((piece) => !piece) < 0 ? 1 : s.preset.findIndex((piece) => !piece)); }}><RotateCcw size={14} /> Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div className="lab-col lab-col--test">
+      <AppPreview id={s.id} variable={s.variable} value={value} output={output || live} label={output ? "C# OUTPUT" : "YOUR CODE · LIVE"} />
+      <div className="lab-panel lab-controls">
+        <LabInput scenario={s} value={value} disabled={busy} onChange={(next) => { setValue(next); setOutput(""); }} />
+        {shipped ? <div className="lab-done" role="status">
+          <strong><Check size={16} /> Shipped. Every test passes.</strong>
+          <p>{s.note}</p>
+          <button className="fp-primary" onClick={() => last ? onFinish() : update((current) => ({ ...current, builderIndex: i + 1 }))}>{last ? "CODE REVIEW →" : "NEXT TICKET →"}</button>
+        </div> : <>
+          <button className="fp-primary lab-run" disabled={busy} onClick={test}><FlaskConical size={16} /> {busy ? "RUNNING…" : "RUN TESTS"}</button>
+          <p className={`lab-verdict ${tested ? (tested.valid ? "is-right" : "is-wrong") : ""}`} role="status">
+            {error || tested?.message || "Fill the three slots, then run the tests. C# adds the braces and semicolons."}
+          </p>
+        </>}
+      </div>
+    </div>
   </div>;
 }
