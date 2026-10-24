@@ -6,7 +6,7 @@ import { award, type Progress, type Update } from "./progress";
 import { useExecution, waitStep } from "./shared";
 import { FlowDiagram } from "./FlowDiagram";
 import { AppPreview } from "./AppPreview";
-import { LabCode, LabInput, StoryHead, Ticket } from "./LabParts";
+import { Coach, LabCode, LabInput, StoryHead, Ticket } from "./LabParts";
 import { substitute, traceProgram } from "./labStories";
 
 export function LiveFlow({ progress: p, update, onComplete }: { progress: Progress; update: Update; onComplete: () => void }) {
@@ -66,24 +66,37 @@ function Flow({ index, progress: p, update, replay, onComplete }: { index: numbe
         <span className="is-false">FALSE → “{s.no}”</span>
       </div>
     </Ticket>
-    <p className="lab-intro-goal">Run the program, watch it decide, and find an input for <b>each</b> path. Before every run you predict which path it will take.</p>
-    <button className="fp-primary lab-cta" onClick={() => setStarted(true)}>START LIVE FLOW</button>
+    <ol className="lab-intro-goal">
+      <li><b>1</b>Pick a {s.variable}.</li>
+      <li><b>2</b>Guess: TRUE or FALSE?</li>
+      <li><b>3</b>Watch the code decide.</li>
+    </ol>
+    <p className="lab-intro-win">Win the ticket: make <b>both paths</b> run.</p>
+    <button className="fp-primary lab-cta is-cue" onClick={() => setStarted(true)}>START LIVE FLOW</button>
     </div>
     <AppPreview id={s.id} variable={s.variable} value={value} output={null} label="CLIENT APP" />
   </section>;
 
   const activeLine = phase === 2 ? 0 : phase === 3 ? 2 : phase === 4 ? (result ? 3 : 7) : phase === 5 ? (result ? 4 : 8) : -1;
   const states = phase >= 4 ? traceProgram(code).lines : undefined;
-  const steps = [
-    { at: 2, code: code.split("\n")[0], note: "stores the input" },
-    { at: 3, code: substitute(s.condition, s.variable, value), note: phase >= 4 ? `is ${result}` : "is checked…" },
-    { at: 4, code: result ? "if { … }" : "else { … }", note: result ? "the IF block runs, ELSE is skipped" : "the IF block is skipped, ELSE runs" },
-    { at: 5, code: `Console.WriteLine("${result ? s.yes : s.no}")`, note: "prints the message" },
-  ];
   const otherPath = seen.length === 1 ? (seen[0] === "true" ? "FALSE" : "TRUE") : null;
+  // After a run the next move is a new input; before one, it is the run button.
+  const cueInput = !busy && !predicting && !done && verdict !== null;
+  const cueRun = !busy && !predicting && !done && verdict === null;
+  const finished = done && !busy;
+  const guess = verdict && (verdict.predicted === verdict.result
+    ? `✓ You predicted ${String(verdict.result).toUpperCase()}. Correct.`
+    : `✗ You predicted ${String(verdict.predicted).toUpperCase()}, but ${substitute(s.condition, s.variable, value)} is ${verdict.result}.`);
+  const coach = <Coach steps={["SET INPUT", "PREDICT", "WATCH"]} step={finished ? 3 : busy ? 2 : predicting ? 1 : 0} tone={error ? "wrong" : verdict ? (verdict.predicted === verdict.result ? (finished ? "done" : "right") : "wrong") : finished ? "done" : undefined}>
+    {error || (busy ? "Watch the token. Which path does the program take?"
+      : predicting ? `${s.variable} is ${String(value)}. Will it print “${s.yes}” or “${s.no}”?`
+      : finished ? `${guess ? `${guess} ` : ""}Both paths found! Tap ${last ? "TAKE THE QUIZ" : "NEXT TICKET"}.`
+      : guess ? `${guess}${otherPath ? ` Now change ${s.variable} to find the ${otherPath} path.` : ""}`
+      : otherPath ? `Change ${s.variable} so the ${otherPath} path runs, then tap PREDICT & RUN.` : `Pick a ${s.variable}, then tap PREDICT & RUN.`)}
+  </Coach>;
 
   return <section className="lab-flow">
-    <StoryHead id={s.id} kicker={`LIVE FLOW · TICKET ${index + 1} / ${flows.length}`} title={s.title}>
+    <StoryHead id={s.id} kicker={`LIVE FLOW · TICKET ${index + 1} / ${flows.length}`} title={s.title} coach={coach}>
       <div className="lab-paths" aria-label={`${seen.length} of 2 paths explored`}>
         {(["true", "false"] as const).map((path) => <span key={path} className={`lab-path is-${path} ${seen.includes(path) ? "is-done" : ""}`}>
           {seen.includes(path) ? <Check size={14} /> : <CircleDashed size={14} />} {path.toUpperCase()} PATH
@@ -95,25 +108,18 @@ function Flow({ index, progress: p, update, replay, onComplete }: { index: numbe
       <div className="lab-col lab-col--app">
         <AppPreview id={s.id} variable={s.variable} value={value} output={phase >= 5 ? output : null} />
         <div className="lab-panel lab-controls">
-          <LabInput scenario={s} value={value} disabled={busy} onChange={(next) => setValue(Number(next))} />
-          {done && !busy ? <div className="lab-done" role="status">
+          <div className={cueInput ? "lab-cue-box is-cue" : "lab-cue-box"}><LabInput scenario={s} value={value} disabled={busy} onChange={(next) => setValue(Number(next))} /></div>
+          {finished ? <div className="lab-done" role="status">
             <strong><Sparkles size={16} /> Both paths explored</strong>
             <p>{s.note}</p>
-            <button className="fp-primary" onClick={next}>{last ? "OPEN THE CODE BUILDER →" : "NEXT TICKET →"}</button>
-          </div> : predicting ? <div className="lab-predict" role="group" aria-label="Predict the path">
-            <small>PREDICT FIRST · WHICH PATH WILL RUN?</small>
+            <button className="fp-primary is-cue" onClick={next}>{last ? "TAKE THE QUIZ →" : "NEXT TICKET →"}</button>
+          </div> : predicting ? <div className="lab-predict is-cue" role="group" aria-label="Predict the path">
+            <small>YOUR GUESS · WHICH PATH WILL RUN?</small>
             <div>
               <button className="is-true" onClick={() => start(true)}><b>TRUE</b><span>“{s.yes}”</span></button>
               <button className="is-false" onClick={() => start(false)}><b>FALSE</b><span>“{s.no}”</span></button>
             </div>
-          </div> : <button className="fp-primary lab-run" disabled={busy} onClick={() => setPredicting(true)}><Play size={16} fill="currentColor" /> {busy ? "RUNNING…" : "PREDICT & RUN"}</button>}
-          <p className={`lab-verdict ${verdict ? (verdict.predicted === verdict.result ? "is-right" : "is-wrong") : ""}`} role="status">
-            {error || (verdict
-              ? verdict.predicted === verdict.result
-                ? `✓ You predicted ${String(verdict.result).toUpperCase()}. Correct.${otherPath ? ` Now find a value for the ${otherPath} path.` : ""}`
-                : `✗ You predicted ${String(verdict.predicted).toUpperCase()}, but ${substitute(s.condition, s.variable, value)} is ${verdict.result}.${otherPath ? ` Now find a value for the ${otherPath} path.` : ""}`
-              : otherPath ? `Change the input so the ${otherPath} path runs.` : "Pick an input, predict the path, run.")}
-          </p>
+          </div> : <button className={`fp-primary lab-run ${cueRun ? "is-cue" : ""}`} disabled={busy} onClick={() => setPredicting(true)}><Play size={16} fill="currentColor" /> {busy ? "RUNNING…" : "PREDICT & RUN"}</button>}
         </div>
       </div>
 
@@ -126,12 +132,6 @@ function Flow({ index, progress: p, update, replay, onComplete }: { index: numbe
         <div className="lab-panel">
           <div className="lab-panel-label">CODE · C#</div>
           <LabCode code={code} states={states} active={activeLine} />
-        </div>
-        <div className="lab-panel lab-trace">
-          <div className="lab-panel-label">STEP BY STEP</div>
-          <ol>{steps.map((step) => <li key={step.at} className={phase >= step.at ? "is-shown" : ""}>
-            <code>{step.code}</code><span>{step.note}</span>
-          </li>)}</ol>
         </div>
       </div>
     </div>

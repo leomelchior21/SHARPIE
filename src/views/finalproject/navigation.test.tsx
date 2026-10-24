@@ -29,17 +29,17 @@ describe("Student Final project navigation",()=>{
     expect(container.querySelectorAll(".fp-header button")).toHaveLength(1);
     back();
     expect(screen.getByRole("heading",{name:"Every client needs a rule with two paths."})).toBeInTheDocument();
-    expect([...container.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))).toEqual(["Live Flow","Code Builder","Quiz"]);
+    expect([...container.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))).toEqual(["Live Flow","Quiz","Code Builder"]);
     fireEvent.click(screen.getByRole("button",{name:"Quiz"}));
-    expect(screen.getByRole("heading",{name:"Let’s start."})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Read it. Say what it prints."})).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button",{name:"START QUIZ"}));expect(container.querySelector(".lab-answers")).not.toBeNull();
     back();back();
     expect(screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/})).toBeInTheDocument();
   });
 
-  it("asks for a prediction before each run and moves on to the Code Builder after three stories",async()=>{
+  it("asks for a prediction before each run and moves on to the quiz after three stories",async()=>{
     vi.useFakeTimers();const {container}=mount();fireEvent.click(screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/}));
-    for(const [index,[label,values,next]] of ([["grade",[6.75,7],"NEXT TICKET →"],["age",[12,13],"NEXT TICKET →"],["views",[1000,1100],"OPEN THE CODE BUILDER →"]] as const).entries()){
+    for(const [index,[label,values,next]] of ([["grade",[6.75,7],"NEXT TICKET →"],["age",[12,13],"NEXT TICKET →"],["views",[1000,1100],"TAKE THE QUIZ →"]] as const).entries()){
       fireEvent.click(screen.getByRole("button",{name:"START LIVE FLOW"}));
       for(const value of values){
         fireEvent.change(screen.getByRole("slider",{name:label}),{target:{value}});
@@ -57,23 +57,55 @@ describe("Student Final project navigation",()=>{
       if(index<2)expect(container.querySelector(".lab-intro")).not.toBeNull();
     }
     expect(saved().flowPaths).toEqual({0:["false","true"],1:["true","false"],2:["false","true"]});
-    expect(screen.getByRole("navigation",{name:"Code Builder challenges"})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Read it. Say what it prints."})).toBeInTheDocument();
   });
 
   it("checks the spec at the boundary and ships a correct rule",async()=>{
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:2,drafts:{heat:["temperature >= 30","Turn on the fan","Fan stays off"]}});
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:2,drafts:{heat:["decl","if (temperature >= 30)",'Console.WriteLine("Turn on the fan");',"else",'Console.WriteLine("Fan stays off");']}});
     const {container}=mount();
     fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
     await act(async()=>{await new Promise(r=>setTimeout(r,0));});
     expect(container.querySelector(".lab-spec tr.is-fail")?.textContent).toContain("30");
     expect(screen.getByText(/With temperature = 30, your code prints "Turn on the fan"/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:"Select condition slot"}));
-    fireEvent.click([...container.querySelectorAll<HTMLButtonElement>(".lab-pieces button")].find(b=>b.textContent==="temperature > 30")!);
+    // A wrong line goes back to the bank; the next tap fills the gap it left.
+    fireEvent.click(screen.getByRole("button",{name:/^Line 2: if \(temperature >= 30\)/}));
+    expect(screen.getByRole("button",{name:"Line 2: empty"})).toBeInTheDocument();
+    fireEvent.click(container.querySelector<HTMLButtonElement>('.lab-pieces [data-line="if (temperature > 30)"]')!);
     fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
     await act(async()=>{await new Promise(r=>setTimeout(r,0));});
     expect(screen.getByText(/Shipped. Every test passes./)).toBeInTheDocument();
     expect(container.querySelectorAll(".lab-spec tr.is-pass")).toHaveLength(3);
     expect(saved().built).toEqual([2]);
+  });
+
+  it("builds a whole program from a bank in order, and asks for a prediction first on ticket 4",async()=>{
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:0});
+    const {container}=mount();
+    const tap=(line:string)=>fireEvent.click(container.querySelector<HTMLButtonElement>(`.lab-pieces [data-line='${line}']`)!);
+    expect(screen.getByRole("button",{name:/RUN TESTS/})).toBeDisabled();
+    for(const line of ["decl","if (age <= 12)",'Console.WriteLine("You get a child discount!");',"else",'Console.WriteLine("Regular ticket price applies");'])tap(line);
+    expect(container.querySelector("[data-slot='0']")?.textContent).toBe("int age = 12;");
+    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
+    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
+    expect(saved().built).toEqual([0]);
+    fireEvent.click(screen.getByRole("button",{name:"Challenge 4: Low battery"}));
+    expect(container.querySelector(".lab-pieces")).toBeNull();
+    fireEvent.click(within(screen.getByRole("group",{name:"Predict the output"})).getByRole("button",{name:/Low battery/}));
+    expect(container.querySelector(".lab-pieces")).not.toBeNull();
+  });
+
+  it("runs a broken program before its lines can be repaired",async()=>{
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:6});
+    const {container}=mount();
+    expect(screen.getByRole("button",{name:/^Line 2: if \(views >= 1000\)/})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
+    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
+    expect(screen.getByText(/With views = 1000, your code prints "BOOST"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:/^Line 2: if \(views >= 1000\)/}));
+    fireEvent.click(container.querySelector<HTMLButtonElement>('.lab-pieces [data-line="if (views > 1000)"]')!);
+    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
+    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
+    expect(screen.getByText(/Shipped. Every test passes./)).toBeInTheDocument();
   });
 
   it("shows the lines that ran after an answer, waits on a mistake and moves on after a right answer",async()=>{
@@ -92,6 +124,26 @@ describe("Student Final project navigation",()=>{
     await act(async()=>{await vi.advanceTimersByTimeAsync(2300);});
     expect(screen.getByText(/QUESTION 15 \/ 20/)).toBeInTheDocument();
     expect(saved().mastered).toEqual(["q14"]);
+  });
+
+  it("pauses between rounds of five and offers the Code Builder after the last answer",async()=>{
+    vi.useFakeTimers();
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:4,answers:{q1:1,q2:0,q3:2,q4:3}});
+    mount();
+    fireEvent.click(screen.getByRole("button",{name:"B False"}));
+    await act(async()=>{await vi.advanceTimersByTimeAsync(2300);});
+    expect(screen.getByRole("heading",{name:"Perfect round!"})).toBeInTheDocument();
+    expect(saved().quizIndex).toBe(5);
+    fireEvent.click(screen.getByRole("button",{name:/ROUND 2: TRUE OR FALSE/}));
+    expect(screen.getByText(/QUESTION 6 \/ 20/)).toBeInTheDocument();
+    cleanup();
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:20,answers:{q1:1}});
+    mount();fireEvent.click(screen.getByRole("button",{name:/RESUME QUIZ/}));
+    expect(screen.getByText(/QUESTION 2 \/ 20/)).toBeInTheDocument();
+    cleanup();
+    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:20,answers:Object.fromEntries(Array.from({length:20},(_,i)=>[`q${i+1}`,0]))});
+    mount();fireEvent.click(screen.getByRole("button",{name:/CODE BUILDER/}));
+    expect(screen.getByRole("navigation",{name:"Code Builder challenges"})).toBeInTheDocument();
   });
 
   it("resumes the quiz from its introduction without losing saved answers",()=>{

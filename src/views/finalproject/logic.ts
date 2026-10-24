@@ -1,4 +1,4 @@
-import type { Challenge, Input, Operator } from "./content";
+import type { Challenge, Input, Line, Operator } from "./content";
 import { program } from "./content";
 import { executeCSharp } from "../../lib/runner";
 export function compare(value: number, op: Operator, threshold: number): boolean {
@@ -28,6 +28,27 @@ export function validatePieces(s: Challenge, pieces: string[]): { valid: boolean
     }
     return {valid:true,message:"Both paths work, including the boundary."};
   } catch (error) { return {valid:false,message:(error as Error).message}; }
+}
+const printed = /^Console\.WriteLine\(("(?:[^"\\]|\\.)*")\);$/;
+const ifTest = /^if \((.+)\)$/;
+// Each of the five program lines has one job; say which line is out of place.
+const roles: { ok: (line: Line) => boolean; message: string }[] = [
+  { ok: (line) => line === "decl", message: "Line 1 must create the variable that the if tests." },
+  { ok: (line) => ifTest.test(line), message: "Line 2 must be the test: an if ( … ) line." },
+  { ok: (line) => printed.test(line), message: "Line 3 runs when the test is TRUE. It must print a message." },
+  { ok: (line) => line === "else", message: "Line 4 must be else: it starts the FALSE path." },
+  { ok: (line) => printed.test(line), message: "Line 5 runs when the test is FALSE. It must print a message." },
+];
+export const structureProblem = (lines: Line[]) => roles.find((role, i) => !role.ok(lines[i] ?? ""))?.message ?? null;
+// [condition, IF message, ELSE message], or null while the program is incomplete or out of order.
+export function linesToPieces(lines: Line[]): string[] | null {
+  if (lines.length !== 5 || structureProblem(lines)) return null;
+  return [ifTest.exec(lines[1])![1], JSON.parse(printed.exec(lines[2])![1]), JSON.parse(printed.exec(lines[4])![1])];
+}
+export function validateLines(s: Challenge, lines: Line[]): { valid: boolean; message: string } {
+  if (lines.some((line) => !line)) return { valid: false, message: "Fill every line of the program before running." };
+  const problem = structureProblem(lines);
+  return problem ? { valid: false, message: problem } : validatePieces(s, linesToPieces(lines)!);
 }
 export async function runProgram(s: Parameters<typeof program>[0], input: Input, pieces: string[], signal?: AbortSignal) {
   const result = await executeCSharp(program(s,input,pieces), signal);

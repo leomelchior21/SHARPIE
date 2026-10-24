@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { challenges, flows, missions, questions } from "./content";
-import { compare, conditionResult, validatePieces } from "./logic";
+import { challenges, flows, missions, printLine, questions, solution } from "./content";
+import { compare, conditionResult, linesToPieces, validateLines, validatePieces } from "./logic";
 import { boundaryCases, substitute, traceProgram } from "./labStories";
 import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageOneDone, stageTwoDone, storageKey, xp } from "./progress";
 describe("Final project curriculum and behavioral validation",()=>{
@@ -16,9 +16,21 @@ describe("Final project curriculum and behavioral validation",()=>{
   });
   it("rejects solutions that pass the current input but fail a boundary or other branch",()=>{
     const heat=challenges[2];expect(validatePieces(heat,["temperature >= 30",heat.yes,heat.no])).toEqual({valid:false,message:expect.stringContaining("temperature = 30")});
-    expect(validatePieces(challenges[7],challenges[7].preset).valid).toBe(false);
+    expect(validatePieces(challenges[7],linesToPieces(challenges[7].level.preset)!).valid).toBe(false);
     expect(validatePieces(challenges[0],["age <= 12",challenges[0].yes,challenges[0].yes]).valid).toBe(false);
     expect(validatePieces(challenges[0],["", "", ""]).valid).toBe(false);
+  });
+  it("builds programs from five lines and names the line that is out of place",()=>{
+    for(const c of challenges){
+      expect(validateLines(c,solution(c)).valid,c.title).toBe(true);
+      // Every bank holds what the student needs, and given lines are already in place.
+      solution(c).forEach((line,n)=>expect(c.level.given.includes(n)?c.level.preset[n]:c.level.bank,c.title).toContain(line));
+    }
+    const movie=challenges[0],lines=solution(movie);
+    expect(validateLines(movie,[lines[1],lines[0],...lines.slice(2)]).message).toBe("Line 1 must create the variable that the if tests.");
+    expect(validateLines(movie,[...lines.slice(0,3),printLine(movie.no),"else"]).message).toMatch(/Line 4 must be else/);
+    expect(validateLines(movie,[...lines.slice(0,4),""]).message).toMatch(/Fill every line/);
+    expect(validateLines(challenges[6],challenges[6].level.preset)).toEqual({valid:false,message:expect.stringContaining("views = 1000")});
   });
   it("supports each comparison, typed booleans, and refuses arbitrary expressions",()=>{
     expect(compare(60,">",60)).toBe(false);expect(compare(60,">=",60)).toBe(true);
@@ -64,7 +76,7 @@ describe("Final project profile persistence and milestones",()=>{
     expect(p.answers).toEqual({});
   });
   it("saves current activity, drafts, answers and reflection separately per student",()=>{
-    const p={...freshProgress(),labVisited:true,activity:"builder" as const,builderIndex:4,drafts:{secret:["secret == 42","Door unlocked","Access denied"]},answers:{q1:1},reflection:"A correct instruction can implement an unfair rule."};
+    const p={...freshProgress(),labVisited:true,activity:"builder" as const,builderIndex:4,drafts:{secret:["decl","if (secret == 42)",printLine("Door unlocked"),"else",printLine("Access denied")]},answers:{q1:1},reflection:"A correct instruction can implement an unfair rule."};
     saveProgress("ana",p);expect(loadProgress("ana").progress).toMatchObject(p);expect(loadProgress("bea").progress).toEqual(freshProgress());
     localStorage.removeItem(storageKey("ana"));
   });

@@ -45,7 +45,7 @@ export function sanitizeProgress(raw: unknown): Progress {
   for (let i=0;i<3;i++) p.flowPaths[i]=Array.isArray(s.flowPaths?.[i]) ? [...new Set(s.flowPaths[i].filter(v=>v==="true"||v==="false"))] : [];
   for (const c of challenges) {
     const draft=s.drafts?.[c.id];
-    if (Array.isArray(draft)&&draft.length===3&&draft.every(v=>typeof v==="string"&&v.length<160)) p.drafts[c.id]=draft;
+    if (Array.isArray(draft)&&draft.length===5&&draft.every(v=>typeof v==="string"&&v.length<160)) p.drafts[c.id]=draft;
   }
   for (let i=0;i<4;i++) { const patch=s.patches?.[i]; if(Array.isArray(patch)&&patch.length===2&&patch.every(v=>typeof v==="string"&&v.length<40))p.patches[i]=patch; }
   for (const q of questions) {

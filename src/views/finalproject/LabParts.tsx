@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Check } from "lucide-react";
 import { SyntaxLine } from "../../components/SyntaxLine";
 import type { Input } from "./content";
 import { boundaryCases, storyFor, type LineState } from "./labStories";
@@ -13,24 +14,40 @@ export function LabCode({ code, states, active = -1, label = "C#" }: { code: str
   </pre>;
 }
 
-export function StoryHead({ id, kicker, title, children }: { id: string; kicker: string; title: string; children?: ReactNode }) {
+export function StoryHead({ id, kicker, title, coach, children }: { id: string; kicker: string; title: string; coach?: ReactNode; children?: ReactNode }) {
   const story = storyFor(id);
   return <header className="lab-head" style={{ "--client": story.hue } as CSSProperties}>
     <span className="lab-avatar" aria-hidden="true">{story.initials}</span>
     <div className="lab-head-copy">
       <small>{kicker}</small>
       <h1>{title}</h1>
-      <p><b>{story.client}</b> · {story.role}, {story.org}</p>
     </div>
+    {coach}
     {children && <div className="lab-head-side">{children}</div>}
   </header>;
+}
+
+// The one thing to do right now, in big type, with the steps of the task around it.
+export function Coach({ steps, step, tone, children }: { steps: string[]; step: number; tone?: "right" | "wrong" | "done"; children: ReactNode }) {
+  return <div className={`lab-coach ${tone ? `is-${tone}` : ""}`}>
+    <ol aria-label="Steps">{steps.map((label, index) => <li key={label} className={index < step ? "is-done" : index === step ? "is-now" : ""}>
+      {index < step ? <Check size={11} strokeWidth={3} /> : <b>{index + 1}</b>}{label}
+    </li>)}</ol>
+    <p key={typeof children === "string" ? children : undefined} className="lab-verdict" role="status">{children}</p>
+  </div>;
+}
+
+// Numbers and the words around them ("7 or more", "exactly 30") are what a ticket is really about.
+const keyPhrase = /((?:(?:more than|less than|above|below|under|over|exactly|exact code)\s+)?\b\d+(?:\.\d+)?(?:\s+(?:or more|or less|and under|and over|percent|degrees|views))*)/gi;
+function marked(text: string) {
+  return text.split(keyPhrase).map((part, index) => index % 2 ? <mark key={index}>{part}</mark> : part);
 }
 
 export function Ticket({ id, children }: { id: string; children?: ReactNode }) {
   const story = storyFor(id);
   return <blockquote className="lab-ticket" style={{ "--client": story.hue } as CSSProperties}>
     <small>TICKET FROM {story.org.toUpperCase()}</small>
-    <p>“{story.ticket}”</p>
+    <p>“{marked(story.ticket)}”</p>
     {children}
   </blockquote>;
 }

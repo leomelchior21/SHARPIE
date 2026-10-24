@@ -9,23 +9,63 @@ export const flows: Scenario[] = [
   { id: "movie", title: "Movie night", variable: "age", initial: 12, min: 0, max: 20, step: 1, condition: "age <= 12", yes: "Child discount", no: "Regular ticket", description: "Choose an age. Does a 12-year-old get the child discount? Test both ticket outcomes.", note: "12 is included. Compare ages 11, 12 and 13.", symbol: "▥" },
   { id: "viral", title: "The viral post", variable: "views", initial: 900, min: 0, max: 2000, step: 100, condition: "views > 1000", yes: "BOOST", no: "NORMAL", description: "A fictional feed chooses visibility from a view count. Try 900, 1000 and 1100.", note: "This simplified fictional algorithm is for learning. Views do not prove accuracy; real platforms use many signals.", symbol: "↗" },
 ];
-export type Challenge = Scenario & { conditions: string[]; preset: [string, string, string]; phase: string; hints: string[] };
-const challenge = (id: string, title: string, variable: string, initial: Input, max: number, condition: string, yes: string, no: string, description: string, conditions: string[], phase: string, preset: [string,string,string] = ["","", ""], note = "Test both paths, including the boundary."): Challenge => ({
-  id, title, variable, initial, min: 0, max, step: variable === "views" ? 100 : 1, condition, yes, no, description, conditions, phase, preset, note,
-  symbol: ({ movie: "▥", delivery: "↗", heat: "°C", battery: "▰", secret: "42", health: "♥", viral: "↗", sponsored: "AD", evidence: "?", hidden: "◉" } as Record<string,string>)[id],
-  hints: [description, `Look at the ${id === "hidden" || id === "sponsored" ? "output on each path" : "comparison inside the parentheses"}.`, typeof initial === "boolean" ? "Try true and false. Which message should each input choose?" : `Test just below, exactly at, and just above ${condition.split(" ").pop()}. Which message does the mission ask for?`],
-});
+// A program line in the Code Builder: "decl" is the variable line (it shows the current input),
+// anything else is the C# line itself. Every program has the same five lines:
+// variable, if test, IF action, else, ELSE action. C# adds the braces.
+export type Line = string;
+export const ifLine = (condition: string): Line => `if (${condition})`;
+export const printLine = (message: string): Line => `Console.WriteLine(${JSON.stringify(message)});`;
+// Support fades ticket by ticket: labels, order, distractors, prediction, one line, debugging.
+export type BuilderLevel = {
+  skill: string;
+  support: number;
+  preset: Line[];
+  given: number[];
+  repair: number[];
+  bank: Line[];
+  ordered: boolean;
+  labels: boolean;
+  predict: boolean;
+};
+type LevelSpec = { skill: string; support: number; given?: number[]; repair?: number[]; broken?: Record<number, Line>; extras?: Line[]; bank?: Line[]; ordered?: boolean; labels?: boolean; predict?: boolean };
+export type Challenge = Scenario & { phase: string; hints: string[]; level: BuilderLevel };
+export const solution = (c: Pick<Scenario, "condition" | "yes" | "no">): Line[] => ["decl", ifLine(c.condition), printLine(c.yes), "else", printLine(c.no)];
+const challenge = (id: string, title: string, variable: string, initial: Input, max: number, condition: string, yes: string, no: string, description: string, phase: string, spec: LevelSpec, note = "Test both paths, including the boundary."): Challenge => {
+  const lines = solution({ condition, yes, no });
+  const given = spec.given ?? [];
+  const repair = spec.repair ?? [];
+  const preset = lines.map((line, i) => spec.broken?.[i] ?? (given.includes(i) || repair.includes(i) ? line : ""));
+  const open = lines.filter((_, i) => !given.includes(i));
+  return {
+    id, title, variable, initial, min: 0, max, step: variable === "views" ? 100 : 1, condition, yes, no, description, phase, note,
+    level: { skill: spec.skill, support: spec.support, preset, given, repair, bank: spec.bank ?? [...new Set([...open, ...Object.values(spec.broken ?? {}), ...(spec.extras ?? [])])], ordered: spec.ordered ?? false, labels: spec.labels ?? false, predict: spec.predict ?? false },
+    symbol: ({ movie: "▥", delivery: "↗", heat: "°C", battery: "▰", secret: "42", health: "♥", viral: "↗", sponsored: "AD", evidence: "?", hidden: "◉" } as Record<string,string>)[id],
+    hints: [description, `Look at the ${id === "hidden" || id === "sponsored" ? "output on each path" : "comparison inside the parentheses"}.`, typeof initial === "boolean" ? "Try true and false. Which message should each input choose?" : `Test just below, exactly at, and just above ${condition.split(" ").pop()}. Which message does the mission ask for?`],
+  };
+};
+const all = [0, 1, 2, 3, 4];
+const except = (...slots: number[]) => all.filter((slot) => !slots.includes(slot));
 export const challenges: Challenge[] = [
-  challenge("movie", "Movie night", "age", 12, 20, "age <= 12", "You get a child discount!", "Regular ticket price applies", "Age 12 or under gets a child discount. Everyone else pays the regular ticket price.", ["age <= 12"], "A · Understand the structure"),
-  challenge("delivery", "Free delivery", "total", 100, 150, "total >= 100", "Free delivery", "Delivery fee", "Orders of 100 or more get free delivery. Smaller orders pay a delivery fee.", ["total >= 100"], "A · Understand the structure", ["total >= 100", "", ""]),
-  challenge("heat", "Too hot?", "temperature", 30, 45, "temperature > 30", "Turn on the fan", "Fan stays off", "Turn on the fan only above 30 degrees. At 30, leave it off.", ["temperature >= 30", "temperature > 30", "temperature < 30"], "A · Understand the structure", ["", "", ""], "30 is equal to 30, not greater than 30."),
-  challenge("battery", "Low battery", "battery", 20, 100, "battery < 20", "Low battery", "Battery OK", "Below 20 means low battery. At 20 or more, the battery is OK.", ["battery <= 20", "battery > 20", "battery < 20", "battery >= 20"], "B · Control the decision"),
-  challenge("secret", "Secret door", "secret", 42, 60, "secret == 42", "Door unlocked", "Access denied", "Only the exact secret number 42 unlocks the door.", ["secret != 42", "secret == 42", "secret >= 42"], "B · Control the decision"),
-  challenge("health", "Game over", "health", 0, 100, "health == 0", "Game over", "Keep playing", "Zero health ends the game. Any positive health keeps it going.", ["health > 0", "health == 0", "health != 0"], "B · Control the decision"),
-  challenge("viral", "Going viral", "views", 1000, 2000, "views > 1000", "BOOST", "NORMAL", "Boost posts above 1000 views. Otherwise keep normal visibility.", ["views >= 1000", "views > 1000", "views <= 1000"], "C · The digital world", ["", "", ""], "Visibility is not credibility. This is a simplified fictional feed."),
-  challenge("sponsored", "Sponsored content", "sponsored", true, 1, "sponsored", "Sponsored", "Organic", "The advertising labels are swapped. Repair both outputs so paid content is disclosed.", ["sponsored", "sponsored == true", "sponsored == false"], "C · The digital world", ["sponsored", "Organic", "Sponsored"], "A favorable post is not necessarily sponsored. Here the input explicitly tells us it is paid content."),
-  challenge("evidence", "Needs verification", "hasEvidence", false, 1, "hasEvidence == false", "Needs review", "Evidence provided", "When evidence is absent, request review. When evidence exists, say it was provided.", ["hasEvidence", "hasEvidence == false", "hasEvidence == true"], "C · The digital world", ["", "Needs review", "Evidence provided"], "Evidence can be evaluated. Its presence alone does not prove a claim is true."),
-  challenge("hidden", "Hidden report", "mentionsInvestigation", true, 1, "mentionsInvestigation", "SHOW + REVIEW", "SHOW", "A rule hides an environmental investigation because of its topic. Replace HIDE with SHOW + REVIEW.", ["mentionsInvestigation"], "C · The digital world", ["mentionsInvestigation", "HIDE", "SHOW"], "The syntax works. The policy is the problem. Next, audit the fictional ECHO system."),
+  challenge("movie", "Movie night", "age", 12, 20, "age <= 12", "You get a child discount!", "Regular ticket price applies", "Age 12 or under gets a child discount. Everyone else pays the regular ticket price.", "A · Understand the structure",
+    { skill: "Observe the structure", support: 10, ordered: true, labels: true }),
+  challenge("delivery", "Free delivery", "total", 100, 150, "total >= 100", "Free delivery", "Delivery fee", "Orders of 100 or more get free delivery. Smaller orders pay a delivery fee.", "A · Understand the structure",
+    { skill: "Order the structure", support: 9 }),
+  challenge("heat", "Too hot?", "temperature", 30, 45, "temperature > 30", "Turn on the fan", "Fan stays off", "Turn on the fan only above 30 degrees. At 30, leave it off.", "A · Understand the structure",
+    { skill: "Pick the right pieces", support: 8, extras: [ifLine("temperature >= 30"), ifLine("temperature < 30")] }, "30 is equal to 30, not greater than 30."),
+  challenge("battery", "Low battery", "battery", 20, 100, "battery < 20", "Low battery", "Battery OK", "Below 20 means low battery. At 20 or more, the battery is OK.", "B · Control the decision",
+    { skill: "Predict, then build", support: 7, predict: true, extras: [ifLine("battery <= 20")] }),
+  challenge("secret", "Secret door", "secret", 42, 60, "secret == 42", "Door unlocked", "Access denied", "Only the exact secret number 42 unlocks the door.", "B · Control the decision",
+    { skill: "Choose the operator", support: 6, given: except(1), bank: ["<", "<=", "==", "!=", ">=", ">"].map((op) => ifLine(`secret ${op} 42`)) }, "== compares. A single = would store a value instead."),
+  challenge("health", "Game over", "health", 0, 100, "health == 0", "Game over", "Keep playing", "Zero health ends the game. Any positive health keeps it going.", "B · Control the decision",
+    { skill: "Complete the structure", support: 5, given: except(3), extras: ["health = 0;", ifLine("health > 0")] }, "else has no condition: it runs whenever the if test is false."),
+  challenge("viral", "Going viral", "views", 1000, 2000, "views > 1000", "BOOST", "NORMAL", "Boost posts above 1000 views. Otherwise keep normal visibility.", "C · The digital world",
+    { skill: "Debug the condition", support: 4, repair: [1], given: except(1), broken: { 1: ifLine("views >= 1000") }, extras: [ifLine("views <= 1000")] }, "Visibility is not credibility. This is a simplified fictional feed."),
+  challenge("sponsored", "Sponsored content", "sponsored", true, 1, "sponsored", "Sponsored", "Organic", "The advertising labels are swapped. Repair both outputs so paid content is disclosed.", "C · The digital world",
+    { skill: "Debug the outputs", support: 3, repair: [2, 4], given: except(2, 4), broken: { 2: printLine("Organic"), 4: printLine("Sponsored") } }, "A favorable post is not necessarily sponsored. Here the input explicitly tells us it is paid content."),
+  challenge("evidence", "Needs verification", "hasEvidence", false, 1, "hasEvidence == false", "Needs review", "Evidence provided", "When evidence is absent, request review. When evidence exists, say it was provided.", "C · The digital world",
+    { skill: "Build with less help", support: 2, given: [0, 3], extras: [ifLine("hasEvidence == true")] }, "Evidence can be evaluated. Its presence alone does not prove a claim is true."),
+  challenge("hidden", "Hidden report", "mentionsInvestigation", true, 1, "mentionsInvestigation", "SHOW + REVIEW", "SHOW", "A rule hides an environmental investigation because of its topic. Replace HIDE with SHOW + REVIEW.", "C · The digital world",
+    { skill: "Find the unfair line", support: 1, repair: [1, 2, 4], given: [0, 3], broken: { 2: printLine("HIDE") }, extras: [ifLine("mentionsInvestigation == false")] }, "The syntax works. The policy is the problem. Next, audit the fictional ECHO system."),
 ];
 export function program(s: Pick<Scenario, "variable" | "initial" | "condition" | "yes" | "no"> & Partial<Pick<Scenario,"step">>, input: Input = s.initial, pieces = [s.condition, s.yes, s.no]) {
   const type=typeof input === "boolean" ? "bool" : (s.step??1)<1 || !Number.isInteger(input) ? "double" : "int";
@@ -55,6 +95,14 @@ export const questions: Question[] = [
   q(18,"Boolean",conditional("sponsored",true,"sponsored","Sponsored","Organic"),["Sponsored","Organic","Both","Error"],0,"sponsored is true. Only the IF output runs."),
   q(19,"Boolean",conditional("hasEvidence",false,"hasEvidence","Evidence provided","Needs review"),["Evidence provided","Nothing prints","False","Needs review"],3,"The false condition selects Needs review. Unverified does not mean false."),
   q(20,"Policy",conditional("mentionsInvestigation",true,"mentionsInvestigation","HIDE","SHOW"),["It automatically hides posts because of their topic.","C# cannot use boolean variables.","Every investigation post is necessarily false.","IF statements always print both outcomes."],0,"This rule suppresses a topic without checking the claims. Correct syntax does not guarantee a fair policy.","What is suspicious about this algorithm?"),
+];
+// The quiz plays as four short rounds of five questions.
+export const roundSize = 5;
+export const rounds = [
+  { name: "Warm-up", focus: "Comparisons" },
+  { name: "True or false", focus: "bool and if" },
+  { name: "Two paths", focus: "if / else" },
+  { name: "On the edge", focus: "Boundaries and the feed" },
 ];
 export type Mission = { id: string; title: string; system: string; variable: string; broken: [string,string]; repaired: [string,string]; choices: string[]; message: string; author: string; post: string; lesson: string; result: string };
 export const missions: Mission[] = [

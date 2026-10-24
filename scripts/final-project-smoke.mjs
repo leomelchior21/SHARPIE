@@ -41,7 +41,7 @@ try{
   await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".lab-intro")');
   assert.equal((await saved()).labVisited,true);
   await click('BACK');await wait('!!document.querySelector(".lab-home")');
-  assert.deepEqual(await evaluate('[...document.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))'),['Live Flow','Code Builder','Quiz']);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))'),['Live Flow','Quiz','Code Builder']);
   await pressLabel('Live Flow');
   console.log('PASS first visit Live Flow, lab home with three stations on reentry, and immediate stage access');
   for(let i=0;i<3;i++){
@@ -56,30 +56,35 @@ try{
       if(j===0)await wait('[...document.querySelectorAll("button")].some(b=>b.textContent.trim()==="PREDICT & RUN"&&!b.disabled)');
       else await wait('!!document.querySelector(".lab-done")');
     }
-    await click(i===2?'OPEN THE CODE BUILDER →':'NEXT TICKET →');
+    await click(i===2?'TAKE THE QUIZ →':'NEXT TICKET →');
   }
   assert.deepEqual((await saved()).flowPaths,{0:['false','true'],1:['true','false'],2:['false','true']});
-  await wait('!!document.querySelector(".lab-tickets")');
+  await wait('!!document.querySelector(".lab-quiz-intro")');
   await click('BACK');await wait('!!document.querySelector(".lab-home")');await pressLabel('Quiz');
-  assert.match(await evaluate('document.querySelector(".lab-quiz-intro h1").textContent'),/Let.s start/);
+  assert.match(await evaluate('document.querySelector(".lab-quiz-intro h1").textContent'),/Read it/);
   await click('START QUIZ');await wait('!!document.querySelector(".lab-answers")');
-  console.log('PASS predicted flow branches, bold selected wires, worker output, Code Builder next and the quiz from the lab home');
+  console.log('PASS predicted flow branches, bold selected wires, worker output, the quiz next and from the lab home');
   if(!navigationOnly){
   await seed({...core,activity:'builder'});
   for(let index=0;index<10;index++){
     await evaluate(`document.querySelectorAll('.lab-ticket-group button')[${index}].click()`);await delay(100);
     const c=await evaluate(`finalQA.challenges[${index}]`);
-    for(let n=0;n<3;n++){
-      await evaluate(`document.querySelectorAll('.lab-slot')[${n}].click()`);await delay(50);
-      const piece=n===0?c.condition:`Console.WriteLine(${JSON.stringify(n===1?c.yes:c.no)})`;
-      await evaluate(`(()=>{const b=[...document.querySelectorAll('.lab-pieces button')].find(b=>b.textContent===${JSON.stringify(piece)});if(!b)throw new Error('Missing code piece');b.click();})()`);await delay(50);
+    if(c.level.predict){await evaluate(`document.querySelector('[aria-label="Predict the output"] button').click()`);await delay(50);}
+    if(c.level.repair.length){await click('RUN TESTS');await wait('!!document.querySelector(".lab-coach.is-wrong")');}
+    const lines=['decl',`if (${c.condition})`,`Console.WriteLine(${JSON.stringify(c.yes)});`,'else',`Console.WriteLine(${JSON.stringify(c.no)});`];
+    const open=[0,1,2,3,4].filter(n=>!c.level.given.includes(n));
+    for(const n of open){await evaluate(`(()=>{const s=document.querySelector('[data-slot="${n}"]');if(s.classList.contains('is-filled'))s.click();})()`);await delay(50);}
+    for(const n of open){
+      await evaluate(`document.querySelector('[data-slot="${n}"]').click()`);await delay(50);
+      await evaluate(`(()=>{const b=[...document.querySelectorAll('.lab-pieces button')].find(b=>b.dataset.line===${JSON.stringify(lines[n])});if(!b||b.disabled)throw new Error('Missing code piece');b.click();})()`);await delay(50);
     }
     await click('RUN TESTS');await wait('!!document.querySelector(".lab-done") && document.querySelectorAll(".lab-spec tr.is-pass").length===document.querySelectorAll(".lab-spec tbody tr").length');
   }
-  assert.equal((await saved()).built.length,10);console.log('PASS tap-to-place and real execution of all ten builders');
+  assert.equal((await saved()).built.length,10);console.log('PASS building all ten programs from the code bank, with prediction and debugging, and real execution');
   await seed({...core,activity:'quiz'});
   for(let index=0;index<20;index++){
     const answer=await evaluate(`finalQA.questions[${index}].answer`);await evaluate(`document.querySelectorAll('.lab-answers button')[${answer}].click()`);await delay(60);await click(index===19?'SEE RESULTS':'NEXT');
+    if(index%5===4&&index<19){await wait('!!document.querySelector(".lab-checkpoint")');await evaluate('document.querySelector(".lab-checkpoint .fp-primary").click()');await delay(60);}
   }
   assert.equal((await saved()).mastered.length,20);assert.equal((await saved()).quizIndex,20);await send('Page.reload');await wait('!!document.querySelector(".lab-review")');console.log('PASS twenty answers, saved quiz results and resume');
   await seed({...core,activity:'shadow'});
@@ -138,6 +143,11 @@ try{
       if(activity==='flow'){
         const intro=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-flow-intro.png`),Buffer.from(intro.data,'base64'));checks.push(`${size.name}/flow-intro`);
         await click('START LIVE FLOW');await click('PREDICT & RUN');await evaluate('document.querySelector(".lab-predict .is-false").click()');await wait('!!document.querySelector(\'[data-segment="false-end"]\')');await delay(650);
+      }
+      if(activity==='quiz'){
+        // Answers deal in after a pause; the layout checks then run on the taller feedback state.
+        await delay(1300);const question=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-quiz-question.png`),Buffer.from(question.data,'base64'));checks.push(`${size.name}/quiz-question`);
+        await evaluate('(()=>{const q=finalQA.questions[0];document.querySelectorAll(".lab-answer")[(q.answer+1)%4].click();})()');await delay(600);
       }
       await delay(150);
       const layout=await evaluate(`(()=>{const el=document.querySelector('.fp-content');const wide=[...document.querySelectorAll('.fp-content button')].filter(b=>{const r=b.getBoundingClientRect();return r.width&& (r.left < -1||r.right>innerWidth+1)}).map(b=>b.textContent);return {scroll:el.scrollWidth>el.clientWidth+2,wide,viewport:[innerWidth,innerHeight]};})()`);

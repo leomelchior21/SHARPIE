@@ -13,7 +13,7 @@ import { ShadowFeed } from "./ShadowFeed";
 import { AuditReport } from "./AuditReport";
 import "./finalproject.css";
 import "./lab.css";
-const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"IF / ELSE LAB",flow:"LIVE FLOW",builder:"CODE BUILDER","quiz-intro":"CODE REVIEW",quiz:"CODE REVIEW",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
+const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"IF / ELSE LAB",flow:"LIVE FLOW",builder:"CODE BUILDER","quiz-intro":"QUIZ",quiz:"QUIZ",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
 export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;studentKey:string;isTeacher:boolean;onBack:()=>void}) {
   const [loaded]=useState(()=>loadProgress(studentKey));
   const [p,setP]=useState(loaded.progress);const [preview,setPreview]=useState(false);const [previewProgress,setPreviewProgress]=useState(freshProgress);
@@ -61,10 +61,10 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {activity==="matrix"&&<MatrixRun progress={active} update={update} name={name} studentKey={studentKey} isTeacher={isTeacher||preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
     {activity==="lab"&&<LabHome progress={active} onFlow={openFlow} onBuilder={()=>go("builder")} onQuiz={()=>go("quiz-intro")}/>}
-    {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("builder")}/>}
-    {activity==="quiz-intro"&&<QuizIntro index={active.quizIndex} onStart={()=>go("quiz")}/>}
-    {activity==="builder"&&<CodeBuilder progress={active} update={update} onFinish={()=>go("quiz-intro")}/>}
-    {activity==="quiz"&&<Quiz progress={active} update={update}/>}
+    {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("quiz-intro")}/>}
+    {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")}/>}
+    {activity==="builder"&&<CodeBuilder progress={active} update={update} onFinish={()=>go("lab")}/>}
+    {activity==="quiz"&&<Quiz progress={active} update={update} onBuilder={()=>go("builder")}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}
     </div></section>;
