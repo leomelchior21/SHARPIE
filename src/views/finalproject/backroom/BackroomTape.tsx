@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { SkipForward } from 'lucide-react'
-import { supportsWebGL, tapeTimeline, type TapeCue, type TapeKind, type TapeLabel } from './tapeTimeline'
+import { supportsWebGL, tapeLoading, tapeTimeline, type TapeCue, type TapeKind, type TapeLabel } from './tapeTimeline'
 
 interface Props {
   kind: TapeKind
@@ -21,13 +21,31 @@ export function TapeDeck({ kind, label, shelf, slot, reduced, onCue, onDone }: P
   const callbacks = useRef({ onCue, onDone })
   callbacks.current = { onCue, onDone }
   const finished = useRef(false)
+  // Seconds into the loading screen, or null before it starts.
+  const [booting, setBooting] = useState<number | null>(null)
 
   useEffect(() => {
     const cue = (next: TapeCue) => { setStage(next); callbacks.current.onCue(next) }
-    const finish = () => { if (!finished.current) { finished.current = true; callbacks.current.onDone() } }
+    const done = () => { if (!finished.current) { finished.current = true; callbacks.current.onDone() } }
     let disposed = false
     let handle: { dispose(): void } | null = null
     const timers: number[] = []
+    // A new tape loads before the briefing: the 3D deck closes and the level builds step by step.
+    let loadingStarted = false
+    const finish = () => {
+      if (finished.current || loadingStarted) return
+      if (kind !== 'insert' || reduced) { done(); return }
+      loadingStarted = true
+      handle?.dispose()
+      handle = null
+      const started = performance.now()
+      // Browser checks film at a slower pace; students always get real time.
+      const pace = (window as unknown as { __tapeDeckPace?: number }).__tapeDeckPace ?? 1
+      setBooting(0)
+      const tick = window.setInterval(() => setBooting(((performance.now() - started) / 1000) * pace), 80)
+      timers.push(tick)
+      timers.push(window.setTimeout(() => { window.clearInterval(tick); done() }, (tapeLoading.end / pace) * 1000))
+    }
     const flat = () => {
       setMode('flat')
       const { cues, end } = tapeTimeline[kind]
@@ -53,7 +71,7 @@ export function TapeDeck({ kind, label, shelf, slot, reduced, onCue, onDone }: P
     return () => {
       disposed = true
       handle?.dispose()
-      timers.forEach((id) => window.clearTimeout(id))
+      timers.forEach((id) => { window.clearTimeout(id); window.clearInterval(id) })
     }
     // The sequence runs once per mount; the parent remounts it for every tape.
   }, [])
@@ -90,6 +108,29 @@ export function TapeDeck({ kind, label, shelf, slot, reduced, onCue, onDone }: P
     </div> : null}
     {stage === 'static' && <div className="br-deck-static" aria-hidden="true" />}
 
+    {booting !== null && <TapeLoading label={label} elapsed={booting} />}
+
     <button className="br-deck-skip" onClick={skip}>SKIP <SkipForward size={14} /></button>
+  </div>
+}
+
+// VHS loading screen: spinning reels, a block bar, the level being built, and one thing to remember.
+function TapeLoading({ label, elapsed }: { label: TapeLabel; elapsed: number }) {
+  const share = Math.min(1, elapsed / (tapeLoading.end - 0.25))
+  // The bar stutters like a tape motor: quick, a pause, quick again.
+  const percent = Math.min(100, Math.round(100 * (share < 0.45 ? share * 1.3 : share < 0.6 ? 0.585 : 0.585 + (share - 0.6) * 1.04)))
+  const steps = tapeLoading.steps
+  return <div className="br-boot" role="status" aria-label={`Loading tape ${label.number}: ${percent}%`}>
+    <div className="br-boot-reels" aria-hidden="true"><i /><span /><i /></div>
+    <strong>LOADING TAPE {label.number}</strong>
+    <small>{label.title}</small>
+    <div className="br-boot-bar" aria-hidden="true">{Array.from({ length: 20 }, (_, index) => <i key={index} className={index < Math.round(percent / 5) ? 'is-on' : ''} />)}</div>
+    <b className="br-boot-percent">{percent}%</b>
+    <ol className="br-boot-steps">{steps.map(([at, text], index) => {
+      const next = steps[index + 1]?.[0] ?? tapeLoading.end - 0.25
+      const state = elapsed >= next ? 'is-done' : elapsed >= at ? 'is-now' : ''
+      return <li key={text} className={state}>{state === 'is-done' ? '✓' : state === 'is-now' ? '▸' : '·'} {text}</li>
+    })}</ol>
+    {label.tip && <p className="br-boot-tip">REMEMBER <code>{label.tip}</code></p>}
   </div>
 }

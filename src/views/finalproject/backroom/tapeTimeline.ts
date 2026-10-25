@@ -10,6 +10,8 @@ export interface TapeLabel {
   deep: boolean
   // Still on the shelf behind a blank label.
   locked?: boolean
+  // One line to remember while the tape loads, e.g. "50 >= 50 → TRUE".
+  tip?: string
 }
 
 // Seconds from the start of the sequence.
@@ -23,6 +25,12 @@ export const tapeTimeline: Record<TapeKind, { cues: Array<[number, TapeCue]>; en
     cues: [[0, 'rewind'], [0.95, 'play']],
     end: 1.35,
   },
+}
+
+// After the PLAY screen the tape loads: the level is built step by step before the briefing.
+export const tapeLoading = {
+  steps: [[0, 'READING THE TAPE'], [0.6, 'BUILDING THE CORRIDOR'], [1.25, 'CHARGING THE BATTERIES'], [1.9, 'OPENING LEVEL 0']] as Array<[number, string]>,
+  end: 2.6,
 }
 
 export function supportsWebGL(): boolean {

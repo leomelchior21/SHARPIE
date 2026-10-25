@@ -95,36 +95,36 @@ export const backroomLevels: BackroomLevel[] = [
   },
   {
     id: 5,
-    title: 'TRUE OR FALSE',
-    focus: 'bool',
-    lead: 'A bool holds only true or false. if (hasKey) runs when hasKey is true. == false flips what you need.',
-    examples: [{ code: 'false == false', result: true }, { code: 'false == true', result: false }],
+    title: 'NO LIGHT',
+    focus: 'all  ?',
+    lead: 'From here no light says TRUE or FALSE. Read the condition, set energy and trust your reading. Watch the edges: >= and <= include the number itself.',
+    examples: [{ code: '50 >= 50', result: true }, { code: '50 > 50', result: false }],
     speed: baseRunSpeed,
-    coach: ['bool'],
+    coach: [],
     gates: [
-      set(5, 1, [flag('hasKey')], 50, false),
-      set(5, 2, [flag('lightsOn', 'false')], 50, true),
-      fork(5, 3, [flag('doorLocked')], 50, true),
-      fork(5, 4, [flag('hasMap', 'true')], 50, false),
-      set(5, 5, [flag('isSafe', 'false')], 50, true, false),
-      fork(5, 6, [flag('lightsOn', 'false')], 50, false),
+      set(5, 1, [cmp('>=', 60)], 52, false, false),
+      set(5, 2, [cmp('<', 35)], 41, false, false),
+      set(5, 3, [cmp('==', 45)], 39, false, false),
+      set(5, 4, [cmp('<=', 20)], 27, false, false),
+      set(5, 5, [cmp('!=', 70)], 70, false, false),
+      set(5, 6, [cmp('>', 85)], 80, false, false),
     ],
   },
   {
     id: 6,
-    title: 'DOUBLE LOCK',
-    focus: '&&',
-    lead: '&& joins two conditions. The gate opens only when BOTH sides are TRUE.',
-    examples: [{ code: 'true && true', result: true }, { code: 'true && false', result: false }],
-    speed: baseRunSpeed,
-    coach: ['and'],
+    title: 'FINAL CUT',
+    focus: 'doors + edges',
+    lead: 'Everything together: gates you set and door pairs you choose, many right on the edge. No light helps you; only your reading does.',
+    examples: [{ code: '30 <= 30', result: true }, { code: '75 != 75', result: false }],
+    speed: baseRunSpeed * 1.05,
+    coach: [],
     gates: [
-      set(6, 1, [cmp('>', 40), flag('hasKey')], 20, false),
-      fork(6, 2, [cmp('>', 40), flag('hasKey')], 70, false),
-      fork(6, 3, [cmp('>=', 50), flag('lightsOn')], 50, true),
-      set(6, 4, [cmp('<=', 30), flag('hasMap', 'true')], 55, false, false),
-      fork(6, 5, [cmp('!=', 10), flag('hasKey')], 10, true),
-      fork(6, 6, [cmp('>', 80), flag('doorLocked', 'false')], 90, false),
+      fork(6, 1, [cmp('>=', 40)], 40),
+      set(6, 2, [cmp('>', 65)], 60, false, false),
+      fork(6, 3, [cmp('<', 25)], 25),
+      fork(6, 4, [cmp('!=', 55)], 56),
+      set(6, 5, [cmp('<=', 15)], 22, false, false),
+      fork(6, 6, [cmp('==', 90)], 91),
     ],
   },
 ]
@@ -147,6 +147,12 @@ export function secondJumpChance(levelIndex: number | null, gateNumber: number):
 export function holeShare(levelIndex: number | null, gateNumber: number): number {
   if (levelIndex === null) return gateNumber >= 6 ? 0.45 : 0
   return levelIndex >= 2 ? 0.45 : 0
+}
+
+// Saws come out of the walls from tape 02, and after a few gates in The Deep.
+export function sawShare(levelIndex: number | null, gateNumber: number): number {
+  if (levelIndex === null) return gateNumber >= 4 ? 0.35 : 0
+  return levelIndex >= 1 ? 0.35 : 0
 }
 
 // Spare batteries turn up only when the camcorder is missing charge, and always when it is dead.

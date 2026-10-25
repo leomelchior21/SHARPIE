@@ -1,4 +1,4 @@
-import { corridorCenterAt, holeHalfLength, type CorridorBend, type CorridorObstacle, type CorridorPickup, type GateKind } from './backroomEngine'
+import { corridorCenterAt, holeHalfLength, sawEmerge, sawOut, sawReach, type CorridorBend, type CorridorObstacle, type CorridorPickup, type GateKind } from './backroomEngine'
 
 export type GateSignal = 'true' | 'false' | 'unknown'
 
@@ -600,6 +600,27 @@ function drawHole(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomVie
   ctx.fill()
 }
 
+// A saw: a steel half-disc out of one wall.
+function drawSaw(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, z: number, side: -1 | 1) {
+  const distance = z - view.depth
+  if (distance <= 0.2 || distance > 18) return
+  const out = Math.min(1, Math.max(0, (sawEmerge - distance) / (sawEmerge - sawOut)))
+  if (out <= 0) return
+  const center = centerAt(view, z)
+  const wallX = screenX(p, distance, center + side * p.half)
+  const tipX = screenX(p, distance, center - side * sawReach * out + side * p.half * (1 - out))
+  const radius = Math.abs(tipX - wallX)
+  const y = wallY(p, distance, 0.5)
+  ctx.fillStyle = '#9aa3aa'
+  ctx.beginPath()
+  ctx.arc(wallX, y, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#3b4247'
+  ctx.beginPath()
+  ctx.arc(wallX, y, radius * 0.25, 0, Math.PI * 2)
+  ctx.fill()
+}
+
 function drawPickups(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
   for (const pickup of view.pickups ?? []) {
     const distance = pickup.z - view.depth
@@ -618,13 +639,14 @@ function drawPickups(ctx: CanvasRenderingContext2D, p: Projector, view: Backroom
 function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
   for (const obstacle of view.obstacles) if (obstacle.kind === 'hole') drawHole(ctx, p, view, obstacle.z)
   for (const obstacle of view.obstacles) if (obstacle.kind === 'barrier') drawBarrier(ctx, p, view, obstacle.z)
+  for (const obstacle of view.obstacles) if (obstacle.kind === 'saw') drawSaw(ctx, p, view, obstacle.z, obstacle.side)
   drawPickups(ctx, p, view)
   if (view.phase !== 'turn') return
   const lastBend = view.bends[view.bends.length - 1]
   if (!lastBend || view.depth < lastBend.endZ - 4) return
   for (const obstacle of view.obstacles) {
     const distance = obstacle.z - view.depth
-    if (obstacle.kind === 'barrier' || obstacle.kind === 'hole' || distance <= 0.2 || distance > 18) continue
+    if (obstacle.kind === 'barrier' || obstacle.kind === 'hole' || obstacle.kind === 'saw' || distance <= 0.2 || distance > 18) continue
     const unit = p.focal * 0.83 / perspectiveDistance(distance)
     const x = screenX(p, distance, obstacle.x)
     const floor = p.horizon + unit * p.eye

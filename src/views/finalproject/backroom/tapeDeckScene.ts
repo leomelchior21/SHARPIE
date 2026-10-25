@@ -464,6 +464,7 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
   let next = 0
   let finished = false
   let frame = 0
+  let disposed = false
   const { cues, end } = tapeTimeline.insert
   const loop = (now: number) => {
     frame = requestAnimationFrame(loop)
@@ -472,6 +473,8 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
     last = now
     while (next < cues.length && t >= cues[next][0]) onCue(cues[next++][1])
     if (t >= end && !finished) { finished = true; onDone() }
+    // Finishing hands over to the loading screen, which disposes this scene: draw nothing more.
+    if (disposed) return
 
     const open = t < 2.35 ? easeOut(span(t, 1.15, 1.6)) : 1 - easeInOut(span(t, 2.35, 2.6))
     hinge.rotation.x = open * 1.42
@@ -508,6 +511,7 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
 
   return {
     dispose() {
+      disposed = true
       cancelAnimationFrame(frame)
       observer?.disconnect()
       scene.traverse((object) => {

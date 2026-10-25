@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { corridorCenterAt, holeHalfLength, mulberry32, type CorridorObstacle } from './backroomEngine'
+import { corridorCenterAt, holeHalfLength, mulberry32, sawEmerge, sawOut, sawReach, type CorridorObstacle } from './backroomEngine'
 import type { BackroomRendererHandle, BackroomView, GateSignal } from './backroomRenderer'
 
 // World units match the game: the corridor is 1.54 wide; one unit is roughly 2.4 m.
@@ -546,6 +546,36 @@ function box(width: number, height: number, depth: number, material: THREE.Mater
   return mesh
 }
 
+// A saw blade: brushed steel, a ring of hooked teeth, a dark hub and vent holes.
+function sawCanvas(): HTMLCanvasElement {
+  const [canvas, ctx] = makeCanvas(256, 256)
+  ctx.clearRect(0, 0, 256, 256)
+  const teeth = 36
+  ctx.beginPath()
+  for (let index = 0; index <= teeth; index += 1) {
+    const angle = (index / teeth) * Math.PI * 2
+    const next = ((index + 0.6) / teeth) * Math.PI * 2
+    ctx.lineTo(128 + Math.cos(angle) * 112, 128 + Math.sin(angle) * 112)
+    ctx.lineTo(128 + Math.cos(next) * 127, 128 + Math.sin(next) * 127)
+  }
+  ctx.closePath()
+  const steel = ctx.createRadialGradient(128, 128, 10, 128, 128, 128)
+  steel.addColorStop(0, '#d9dde0')
+  steel.addColorStop(0.7, '#9aa2a8')
+  steel.addColorStop(1, '#60686e')
+  ctx.fillStyle = steel
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'
+  for (let ring = 30; ring < 105; ring += 6) { ctx.beginPath(); ctx.arc(128, 128, ring, 0, Math.PI * 2); ctx.stroke() }
+  ctx.fillStyle = '#2b3034'
+  ctx.beginPath(); ctx.arc(128, 128, 22, 0, Math.PI * 2); ctx.fill()
+  for (let hole = 0; hole < 4; hole += 1) {
+    const angle = (hole / 4) * Math.PI * 2
+    ctx.beginPath(); ctx.arc(128 + Math.cos(angle) * 60, 128 + Math.sin(angle) * 60, 9, 0, Math.PI * 2); ctx.fill()
+  }
+  return canvas
+}
+
 // The edge of a hole: torn carpet fibres around pure black.
 function holeCanvas(random: () => number): HTMLCanvasElement {
   const [canvas, ctx] = makeCanvas(256, 128)
@@ -802,8 +832,34 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
   })
   hole.add(opening, ...shaftWalls, ...holeLamps)
 
-  // A corridor can hold two jumps, so barriers and holes come in pairs.
-  const obstaclePools: Record<CorridorObstacle['kind'], THREE.Group[]> = { chair: [chair], trash: [bin], barrier: [barrier, barrier.clone()], hole: [hole, hole.clone()] }
+  // A giant saw: a toothed steel disc spinning out of a slot in the wall, throwing sparks.
+  const SAW_RADIUS = HALF + sawReach
+  const bladeMaterial = track(new THREE.MeshStandardMaterial({ map: texture(sawCanvas(), true), alphaTest: 0.5, metalness: 0.85, roughness: 0.28, side: THREE.DoubleSide }))
+  const slotMaterial = track(new THREE.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 1 }))
+  const sparkMaterial = track(new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 1.6, 0.4), toneMapped: false }))
+  const makeSaw = () => {
+    const group = new THREE.Group()
+    // The disc faces the runner, so its teeth and its reach across the corridor read at a glance.
+    const spinner = new THREE.Group()
+    const blade = new THREE.Mesh(track(new THREE.CircleGeometry(SAW_RADIUS, 72)), bladeMaterial)
+    spinner.add(blade)
+    group.add(spinner)
+    const slot = box(0.03, 1.15, 0.08, slotMaterial, 0, 0.58, 0)
+    group.add(slot)
+    const sparks = Array.from({ length: 6 }, () => {
+      const spark = new THREE.Mesh(track(new THREE.SphereGeometry(0.012, 6, 4)), sparkMaterial)
+      group.add(spark)
+      return spark
+    })
+    const glow = new THREE.PointLight(0xff8a3a, 0, 2.2, 2)
+    group.add(glow)
+    return { group, spinner, blade, slot, sparks, glow }
+  }
+  const sawRigs = [makeSaw(), makeSaw()]
+  const sawGroups = sawRigs.map((rig) => rig.group)
+
+  // A corridor can hold two hazards, so barriers, holes and saws come in pairs.
+  const obstaclePools: Record<CorridorObstacle['kind'], THREE.Group[]> = { chair: [chair], trash: [bin], barrier: [barrier, barrier.clone()], hole: [hole, hole.clone()], saw: sawGroups }
   for (const pool of Object.values(obstaclePools)) scene.add(...pool)
 
   // Spare batteries: a white pack with four green charge LEDs, glowing on the carpet.
@@ -1064,6 +1120,23 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
       used[obstacle.kind] = (used[obstacle.kind] ?? 0) + 1
       mesh.visible = true
       mesh.position.set(obstacle.kind === 'barrier' || obstacle.kind === 'hole' ? center(view, obstacle.z) : obstacle.x, 0, w(obstacle.z))
+      if (obstacle.kind === 'saw') {
+        // The blade slides out of the wall as the runner closes in.
+        const rig = sawRigs[sawGroups.indexOf(mesh)]
+        const out = Math.min(1, Math.max(0, (sawEmerge - distance) / (sawEmerge - sawOut)))
+        const wallX = center(view, obstacle.z) + obstacle.side * HALF
+        mesh.position.x = wallX
+        rig.slot.position.x = 0
+        rig.spinner.position.set(obstacle.side * SAW_RADIUS * (1 - out), 0.5, 0)
+        rig.blade.rotation.z = view.reduced ? 0 : -view.time * 26 * obstacle.side
+        rig.glow.intensity = out > 0 ? 1.6 + (view.reduced ? 0 : Math.random() * 1.4) : 0
+        rig.glow.position.set(-obstacle.side * 0.05, 0.12, 0)
+        rig.sparks.forEach((spark, index) => {
+          spark.visible = out > 0.2
+          const t = (view.time * 3 + index / rig.sparks.length) % 1
+          spark.position.set(-obstacle.side * (0.05 + t * 0.35), 0.06 + t * 0.25 - t * t * 0.35, (index % 2 ? 1 : -1) * t * 0.25)
+        })
+      }
     }
     barrierLampMaterial.color.setRGB(3, 1.6, 0.3).multiplyScalar(view.reduced || Math.sin(view.time * 7) > 0 ? 1 : 0.2)
     holeLampMaterial.color.setRGB(3, 0.25, 0.2).multiplyScalar(view.reduced || Math.sin(view.time * 4) > -0.3 ? 1 : 0.25)

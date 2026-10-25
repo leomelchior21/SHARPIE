@@ -216,7 +216,8 @@ export interface CorridorObstacle {
   x: number
   side: -1 | 1
   // A barrier or a hole spans the whole corridor and can only be jumped.
-  kind: 'chair' | 'trash' | 'barrier' | 'hole'
+  // A saw comes out of the wall on `side` and covers that half: dodge to the other side.
+  kind: 'chair' | 'trash' | 'barrier' | 'hole' | 'saw'
 }
 
 // A spare camcorder battery lying on the carpet.
@@ -226,7 +227,13 @@ export interface CorridorPickup {
 }
 
 export type JumpHazard = 'barrier' | 'hole'
+export type CorridorHazard = JumpHazard | 'saw-left' | 'saw-right'
 export const holeHalfLength = 0.26
+// A saw's blade reaches this far past the middle of the corridor.
+export const sawReach = 0.08
+// The blade starts coming out of the wall this far ahead, and is fully out at sawOut.
+export const sawEmerge = 7
+export const sawOut = 4.5
 
 const bendLength = 8
 const bendSpacing = 12
@@ -234,7 +241,7 @@ const gateClearance = 26
 export const gateApproach = 16
 const turnShift = 1.15
 
-export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[], jumps: boolean | JumpHazard | Array<JumpHazard | null> = false, battery = false): CorridorPlan {
+export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[], jumps: boolean | CorridorHazard | Array<CorridorHazard | null> = false, battery = false): CorridorPlan {
   let center = gateCenter
   const bends = tiles.filter((tile) => tile.kind === 'curve').map((tile, index) => {
     const dir = tile.dir as -1 | 1
@@ -258,7 +265,10 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
   const slots = bends.length >= 3 ? [bends[0].endZ + 2, bends[1].endZ + 2] : bends.length === 2 ? [bends[0].endZ + 2, bends[1].endZ + 8.5] : []
   wanted.forEach((kind, index) => {
     const z = slots[index]
-    if (kind && z !== undefined) obstacles.push({ z, x: corridorCenterAt(gateCenter, bends, z), side: 1, kind })
+    if (!kind || z === undefined) return
+    const x = corridorCenterAt(gateCenter, bends, z)
+    if (kind === 'saw-left' || kind === 'saw-right') obstacles.push({ z, x, side: kind === 'saw-left' ? -1 : 1, kind: 'saw' })
+    else obstacles.push({ z, x, side: 1, kind })
   })
   obstacles.sort((a, b) => a.z - b.z)
   // A battery waits on the last straight, on the side away from the chair or bin.
@@ -267,6 +277,8 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
 }
 
 export function hitsObstacle(previousDepth: number, depth: number, playerX: number, obstacle: CorridorObstacle, airborne = false): boolean {
+  // A saw cannot be jumped: only the far half of the corridor is safe.
+  if (obstacle.kind === 'saw') return previousDepth <= obstacle.z + 0.2 && depth >= obstacle.z - 0.2 && obstacle.side * (playerX - obstacle.x) > -sawReach
   if (airborne) return false
   // Anyone on the ground over the hole falls: the whole crossing must be in the air.
   if (obstacle.kind === 'hole') return previousDepth <= obstacle.z + holeHalfLength && depth >= obstacle.z - holeHalfLength
@@ -361,11 +373,10 @@ function forkEnergy(random: () => number, threshold: number): number {
 
 type EndlessShape = 'set-compare' | 'fork-compare' | 'set-bool' | 'fork-bool' | 'set-and' | 'fork-and'
 
+// The Deep sticks to comparisons: gates to set and door pairs to choose.
 function shapesFor(gateNumber: number): EndlessShape[] {
   if (gateNumber <= 3) return ['set-compare']
-  if (gateNumber <= 8) return ['set-compare', 'fork-compare', 'fork-compare']
-  if (gateNumber <= 16) return ['set-compare', 'fork-compare', 'fork-compare', 'set-bool', 'fork-bool']
-  return ['set-compare', 'fork-compare', 'fork-compare', 'set-bool', 'fork-bool', 'set-and', 'fork-and', 'fork-and']
+  return ['set-compare', 'fork-compare', 'fork-compare']
 }
 
 function boolClause(random: () => number): Extract<Clause, { type: 'bool' }> {

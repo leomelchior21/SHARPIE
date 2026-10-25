@@ -47,7 +47,11 @@ describe('Backrooms Run', () => {
     }
     let aim = corridorCenterAt(view.gateCenter, view.bends, view.depth + 0.9)
     const battery = view.pickups?.find((item) => item.z - view.depth > -0.3 && item.z - view.depth < 3)
-    if (pilot.dodgeBatteries && battery) aim += battery.x > aim ? -0.32 : 0.32
+    // Saws cover the half of the corridor they come out of: move across early.
+    const saw = view.obstacles.find((item) => item.kind === 'saw' && item.z - view.depth > -0.3 && item.z - view.depth < 5)
+    if (saw) aim = saw.x - saw.side * 0.38
+    // Batteries lie away from the chair, so the pilot passes them on the wall side.
+    if (pilot.dodgeBatteries && battery) aim = battery.x + (battery.x >= aim ? 0.36 : -0.36)
     const gap = aim - view.playerX
     const want: -1 | 0 | 1 = Math.abs(gap) < 0.04 ? 0 : gap > 0 ? 1 : -1
     // Keys stay down at least 200 ms: a quicker release is a tap, which nudges sideways.
@@ -251,7 +255,7 @@ describe('Backrooms Run', () => {
     cleanup()
     mount({ ...createBackroomProgress('Teacher', 'teacher', true) })
     expect(screen.getByRole('button', { name: /THE DEEP/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /DOUBLE LOCK/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /FINAL CUT/ })).toBeEnabled()
   })
 
   it('pauses with Escape and resumes without losing the run', () => {

@@ -268,6 +268,12 @@ export class BackroomAudio {
     this.burst(0.9, 1400, 6, 0.02, 'bandpass', 0.1)
   }
 
+  // A giant saw spinning up out of the wall.
+  saw(): void {
+    this.tone(700, 0.9, 'sawtooth', 0.02, 0, 1500)
+    this.burst(0.9, 3200, 1.5, 0.04, 'bandpass')
+  }
+
   // Over the edge of a hole: wind rushing past and a falling tone.
   fall(): void {
     this.burst(1.1, 500, 0.5, 0.08, 'lowpass')

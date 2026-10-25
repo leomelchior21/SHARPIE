@@ -109,14 +109,13 @@ describe('endless gates', () => {
     }
   })
 
-  it('introduces forks, bools and && gradually', () => {
+  it('mixes set gates and door pairs in The Deep, with comparisons only', () => {
     const random = mulberry32(3)
     const early = Array.from({ length: 3 }, (_, index) => generateEndlessGate(index + 1, random))
     expect(early.every((item) => item.kind === 'set' && item.clauses.length === 1 && item.clauses[0].type === 'compare')).toBe(true)
     const late = Array.from({ length: 200 }, (_, index) => generateEndlessGate(20 + index, random))
     expect(late.some((item) => item.kind === 'fork')).toBe(true)
-    expect(late.some((item) => item.clauses.some((clause) => clause.type === 'bool'))).toBe(true)
-    expect(late.some((item) => item.clauses.length === 2)).toBe(true)
+    expect(late.every((item) => item.clauses.length === 1 && item.clauses[0].type === 'compare')).toBe(true)
   })
 
   it('never repeats the previous comparator', () => {
@@ -230,5 +229,14 @@ describe('jumping', () => {
     expect(picksUp(battery.z - 0.1, battery.z + 0.1, battery.x, battery)).toBe(true)
     expect(picksUp(battery.z - 0.1, battery.z + 0.1, battery.x + 0.5, battery)).toBe(false)
     expect(planCorridor(9, 0, planCourse(() => 0.99)).pickups).toEqual([])
+  })
+
+  it('puts saws on one wall: the near half is deadly, jumping does not help, the far half is safe', () => {
+    const plan = planCorridor(9, 0, planCourse(() => 0.99), ['saw-left', null])
+    const saw = plan.obstacles.find((item) => item.kind === 'saw')!
+    expect(saw.side).toBe(-1)
+    expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x - 0.3, saw)).toBe(true)
+    expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x, saw, true)).toBe(true)
+    expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x + 0.3, saw)).toBe(false)
   })
 })

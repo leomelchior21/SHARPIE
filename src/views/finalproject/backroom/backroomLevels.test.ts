@@ -3,12 +3,12 @@ import { comparisonOperators, energyRange, evaluateGate, gateSkills } from './ba
 import { backroomLevels, endlessUnlocked, levelUnlocked, nextLevelIndex, normalizeStars, starsFor } from './backroomLevels'
 
 describe('Backrooms tapes', () => {
-  it('teach every comparison, bool and && across six tapes', () => {
+  it('teach every comparison across six tapes, and nothing but comparisons', () => {
     expect(backroomLevels).toHaveLength(6)
     const skills = new Set(backroomLevels.flatMap((level) => level.gates.flatMap(gateSkills)))
     for (const operator of comparisonOperators) expect(skills).toContain(operator)
-    expect(skills).toContain('bool')
-    expect(skills).toContain('&&')
+    expect(skills.has('bool')).toBe(false)
+    expect(skills.has('&&')).toBe(false)
   })
 
   it('starts every editable gate FALSE and keeps it reachable', () => {

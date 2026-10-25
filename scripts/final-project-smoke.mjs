@@ -32,8 +32,10 @@ const startTutorial=async()=>{
   await evaluate(`window.__tapeDeckPace=${deckFilmed?1:0.25};document.querySelector(".br-primary--hero").click()`);await wait('!!document.querySelector(".br-deck")',5000);
   if(!deckFilmed){deckFilmed=true;await wait('document.querySelector(".br-deck")?.classList.contains("is-3d")',15000);let elapsed=0;
     // Filmed at quarter speed so each shot lands on its moment.
-    for(const [at,name] of [[700,'tape-shelf'],[1750,'tape-fly'],[3000,'tape-loaded'],[4150,'tape-lens'],[4500,'tape-play']].map(([at,name])=>[at*4,name])){await delay(at-elapsed);elapsed=at;const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));}}
-  await wait('!!document.querySelector(".br-overlay--briefing")',15000);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
+    for(const [at,name] of [[700,'tape-shelf'],[1750,'tape-fly'],[3000,'tape-loaded'],[4150,'tape-lens'],[4500,'tape-play']].map(([at,name])=>[at*4,name])){await delay(at-elapsed);elapsed=at;const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));}
+    await wait('!!document.querySelector(".br-boot")',20000);await delay(1300);const boot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,'tape-loading.png'),Buffer.from(boot.data,'base64'));}
+  // Software WebGL renders the 3D deck slowly; real GPUs take about 7.5 s.
+  await wait('!!document.querySelector(".br-overlay--briefing")',40000);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
 const pressLabel=async label=>{await evaluate(`[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);await delay(120);};
 try{
   let target;for(let i=0;i<70;i++){try{const list=await(await fetch(`http://127.0.0.1:${port}/json`)).json();target=list.find(t=>t.type==='page');if(target)break;}catch{}await delay(150);}
@@ -145,18 +147,18 @@ try{
     const step=()=>{if(!q.pilot)return;requestAnimationFrame(step);const v=q.view;
       if(v)for(const o of v.obstacles)if(o.kind==='hole'){if(v.depth>o.z+0.4&&seen.has(o.z)&&document.querySelector('.br-screen--running')){seen.delete(o.z);q.holes+=1}else if(v.depth<o.z)seen.add(o.z)}
       if(!v||!q.centerAt||!document.querySelector('.br-screen--running')){if(held){fire('keyup',held<0?'ArrowLeft':'ArrowRight');held=0}return}
-      const gap=q.centerAt(v.depth+0.9)-v.playerX;const want=Math.abs(gap)<0.04?0:gap>0?1:-1;const now=performance.now();
+      const saw=v.obstacles.find(o=>o.kind==='saw'&&o.z-v.depth>-0.3&&o.z-v.depth<5);const gap=(saw?saw.x-saw.side*0.38:q.centerAt(v.depth+0.9))-v.playerX;const want=Math.abs(gap)<0.04?0:gap>0?1:-1;const now=performance.now();
       if(want!==held&&(held===0||now-since>=200)){if(held)fire('keyup',held<0?'ArrowLeft':'ArrowRight');if(want)fire('keydown',want<0?'ArrowLeft':'ArrowRight');held=want;since=now}
       const hz=v.obstacles.find(o=>(o.kind==='barrier'||o.kind==='hole')&&o.z-v.depth>0&&o.z-v.depth<0.75);if(hz&&v.jump===0)fire('keydown',' ')};step()})()`);
   const filmed=new Set();
   const key=async(type,name)=>send('Input.dispatchKeyEvent',{type,key:name,code:name});
   for(const started=Date.now();Date.now()-started<180000;){
-    const s=await evaluate(`(()=>{const v=window.__backroomQA.view;if(!v)return null;return {hole:v.obstacles.some(o=>o.kind==='hole'&&o.z-v.depth>3&&o.z-v.depth<5),pack:(v.pickups||[]).some(p=>p.z-v.depth>1.6&&p.z-v.depth<3.2),running:!!document.querySelector('.br-screen--running'),mistake:!!document.querySelector('.br-overlay--mistake'),off:!!document.querySelector('.is-camera-off'),over:!!document.querySelector('.br-overlay--gameOver,.br-overlay--levelClear')}})()`);
+    const s=await evaluate(`(()=>{const v=window.__backroomQA.view;if(!v)return null;return {saw:v.obstacles.some(o=>o.kind==='saw'&&o.z-v.depth>3.6&&o.z-v.depth<4.6),hole:v.obstacles.some(o=>o.kind==='hole'&&o.z-v.depth>3&&o.z-v.depth<5),pack:(v.pickups||[]).some(p=>p.z-v.depth>1.6&&p.z-v.depth<3.2),running:!!document.querySelector('.br-screen--running'),mistake:!!document.querySelector('.br-overlay--mistake'),off:!!document.querySelector('.is-camera-off'),over:!!document.querySelector('.br-overlay--gameOver,.br-overlay--levelClear')}})()`);
     if(!s){await delay(60);continue;}
     if(s.over)break;
     if(s.mistake){await evaluate('document.querySelector(".br-overlay--mistake .br-primary").click()');await delay(80);continue;}
     // Screenshots are slow under software WebGL: pause, hide the pause card, shoot, resume.
-    for(const [flag,name] of [[s.hole,'tape-hole'],[s.pack,'battery-pickup'],[s.off,'camera-off']]){if(flag&&!filmed.has(name)&&s.running){filmed.add(name);await key('keyDown','Escape');await evaluate(`(()=>{const st=document.createElement('style');st.id='qa-still';st.textContent='.br-overlay--paused{display:none!important}';document.head.append(st)})()`);await delay(150);const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));await evaluate('document.getElementById("qa-still")?.remove()');await key('keyDown','Escape');}}
+    for(const [flag,name] of [[s.saw,'tape-saw'],[s.hole,'tape-hole'],[s.pack,'battery-pickup'],[s.off,'camera-off']]){if(flag&&!filmed.has(name)&&s.running){filmed.add(name);await key('keyDown','Escape');await evaluate(`(()=>{const st=document.createElement('style');st.id='qa-still';st.textContent='.br-overlay--paused{display:none!important}';document.head.append(st)})()`);await delay(150);const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));await evaluate('document.getElementById("qa-still")?.remove()');await key('keyDown','Escape');}}
     await delay(60);
   }
   await evaluate('window.__backroomQA.pilot=false');

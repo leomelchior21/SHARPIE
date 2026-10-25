@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   baseRunSpeed, championGates, clearHeight, comparisonOperators, conditionCode, corridorCenterAt, correctForkSide, energyRange, evaluateGate, explainGate,
   forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, jumpOffset, jumpSeconds, mulberry32, picksUp,
-  planCorridor, planCourse, speedForGate, speedForLevelGate, type BackroomGate, type ComparisonOperator, type CorridorObstacle, type CorridorPickup, type GateExplanation, type GateValues,
+  planCorridor, planCourse, sawEmerge, speedForGate, speedForLevelGate, type BackroomGate, type ComparisonOperator, type CorridorHazard, type CorridorObstacle, type CorridorPickup, type GateExplanation, type GateValues, type JumpHazard,
 } from './backroomEngine'
-import { backroomLevels, barrierChance, batteryChance, endlessUnlocked, holeShare, secondJumpChance, levelUnlocked, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
+import { backroomLevels, barrierChance, batteryChance, endlessUnlocked, holeShare, sawShare, secondJumpChance, levelUnlocked, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
 import { BackroomAudio, loadAudioPreference, saveAudioPreference } from './backroomAudio'
 import { createBackroomRenderer, type BackroomEntity, type BackroomView, type GateSignal } from './backroomRenderer'
 import { advanceBackroomLighting, createBackroomLighting } from './backroomLighting'
@@ -97,6 +97,7 @@ const crashCopy: Record<Crash, { title: string; body: string }> = {
   trash: { title: 'YOU HIT A BIN', body: 'Anything on the floor ends the run. Steer around it before you reach it.' },
   barrier: { title: 'YOU HIT THE BARRIER', body: 'Barriers block the whole corridor. Press SPACE (or JUMP) just before it.' },
   hole: { title: 'YOU FELL', body: 'Holes go down forever. Jump just before the edge and stay in the air all the way across.' },
+  saw: { title: 'THE SAW GOT YOU', body: 'Saws come out of one wall and cover that half. Move to the other side as soon as one appears; jumping does not help.' },
 }
 
 function createGameState() {
@@ -150,6 +151,8 @@ function createGameState() {
     fall: 0,
     // The camcorder's video light, from the batteries left.
     cameraLight: 1,
+    // Saws already heard coming out of the wall.
+    sawsHeard: [] as number[],
   }
 }
 
@@ -326,14 +329,20 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     g.gateZ = g.nextGateZ
     g.gateCenter = g.nextGateCenter
     const levelIndex = r.mode.type === 'level' ? r.mode.index : null
-    // Jumps: up to two per corridor, barriers or holes. The rolls are always drawn so seeds stay stable.
-    const rolls = [r.random(), r.random(), r.random(), r.random(), r.random()]
-    // Tapes always mix both: holes and barriers alternate. The Deep rolls for it.
+    // Hazards: up to two per corridor (saws, barriers, holes). The rolls are always drawn so seeds stay stable.
+    const rolls = [r.random(), r.random(), r.random(), r.random(), r.random(), r.random(), r.random()]
     const holes = holeShare(levelIndex, r.gateNumber)
-    const kind = (roll: number, slot: number) => (holes <= 0 ? 'barrier' : levelIndex !== null ? ((r.gateNumber + slot) % 2 === 0 ? 'hole' : 'barrier') : roll < holes ? 'hole' : 'barrier') as 'hole' | 'barrier'
+    const saws = sawShare(levelIndex, r.gateNumber)
+    // Tapes cycle through every hazard they allow, so each one shows up; The Deep rolls for it.
+    const cycle = [...(saws > 0 ? ['saw'] : []), 'barrier', ...(holes > 0 ? ['hole'] : [])]
+    const kind = (roll: number, sideRoll: number, slot: number): CorridorHazard => {
+      const pick = levelIndex !== null ? cycle[(r.gateNumber + slot) % cycle.length]
+        : roll < saws ? 'saw' : (roll - saws) / (1 - saws) < holes ? 'hole' : 'barrier'
+      return pick === 'saw' ? (sideRoll < 0.5 ? 'saw-left' : 'saw-right') : pick as JumpHazard
+    }
     const jumps = [
-      rolls[0] < barrierChance(levelIndex, r.gateNumber) ? kind(rolls[1], 0) : null,
-      rolls[2] < secondJumpChance(levelIndex, r.gateNumber) ? kind(rolls[3], 1) : null,
+      rolls[0] < barrierChance(levelIndex, r.gateNumber) ? kind(rolls[1], rolls[5], 0) : null,
+      rolls[2] < secondJumpChance(levelIndex, r.gateNumber) ? kind(rolls[3], rolls[6], 1) : null,
     ]
     Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse(), jumps, rolls[4] < batteryChance(r.lives)))
     g.values = { ...nextGate.start }
@@ -423,8 +432,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     steerRef.current = { left: false, right: false }
     const tapeLevel = next.type === 'level' ? backroomLevels[next.index] : null
     const label: TapeLabel = tapeLevel
-      ? { number: String(tapeLevel.id).padStart(2, '0'), title: tapeLevel.title, focus: tapeLevel.focus, stars: normalizeStars(progressRef.current.levelStars)[next.type === 'level' ? next.index : 0], deep: false }
-      : { number: '∞', title: 'THE DEEP', focus: 'ENDLESS · EVERY GATE', stars: 0, deep: true }
+      ? { number: String(tapeLevel.id).padStart(2, '0'), title: tapeLevel.title, focus: tapeLevel.focus, stars: normalizeStars(progressRef.current.levelStars)[next.type === 'level' ? next.index : 0], deep: false, tip: `${tapeLevel.examples[0].code} → ${tapeLevel.examples[0].result ? 'TRUE' : 'FALSE'}` }
+      : { number: '∞', title: 'THE DEEP', focus: 'ENDLESS · EVERY GATE', stars: 0, deep: true, tip: '70 >= 70 → TRUE' }
     const starsNow = normalizeStars(progressRef.current.levelStars)
     const unlockAll = progressRef.current.unlockAll ?? progressRef.current.isTeacher
     const shelf: TapeLabel[] = [
@@ -881,7 +890,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       if (hint !== turnHintRef.current) { turnHintRef.current = hint; setTurnHint(hint) }
       const lastBendEnd = g.bends[g.bends.length - 1]?.endZ ?? 0
       const next = g.phase === 'turn'
-        ? g.obstacles.filter((item) => item.z - g.depth > -0.4 && item.z - g.depth <= 8 && (item.kind === 'barrier' || item.kind === 'hole' || g.depth >= lastBendEnd - 1)).sort((a, b) => a.z - b.z)[0]
+        ? g.obstacles.filter((item) => item.z - g.depth > -0.4 && item.z - g.depth <= 8 && (item.kind === 'barrier' || item.kind === 'hole' || item.kind === 'saw' || g.depth >= lastBendEnd - 1)).sort((a, b) => a.z - b.z)[0]
         : undefined
       const hazard: Hazard = !next ? 0 : next.kind === 'barrier' || next.kind === 'hole' ? 2 : -next.side as -1 | 1
       if (hazard !== hazardHintRef.current) { hazardHintRef.current = hazard; setHazardHint(hazard) }
@@ -901,6 +910,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       }
       const hit = g.obstacles.find((item) => hitsObstacle(previousDepth, g.depth, g.playerX, item, airborne))
       if (hit) { events.current.crash(hit.kind); return }
+      // A saw whines as it starts coming out of the wall.
+      const saw = g.obstacles.find((item) => item.kind === 'saw' && item.z - g.depth <= sawEmerge && item.z - g.depth > 0 && !g.sawsHeard.includes(item.z))
+      if (saw) { g.sawsHeard = [...g.sawsHeard, saw.z]; audio.current?.saw() }
       const pickup = g.pickups.find((item) => picksUp(previousDepth, g.depth, g.playerX, item))
       if (pickup) events.current.collectBattery(pickup)
 
@@ -1390,7 +1402,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
           <button className="br-primary" onClick={launch}><Play size={18} fill="currentColor" /> {level && level.id === 1 && stars[0] === 0 ? 'START TUTORIAL' : 'PRESS PLAY'}</button>
           <button className="br-secondary" onClick={toMenu}>TAPES</button>
         </div>
-        <p className="br-keys-note">← → steer · ↑ ↓ energy · T toggle bool · SPACE jump · ESC pause</p>
+        <p className="br-keys-note">← → steer · ↑ ↓ energy · SPACE jump · ESC pause</p>
       </div>
     </div>}
 

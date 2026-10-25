@@ -27,6 +27,13 @@ describe('Backrooms tape change', () => {
     expect(screen.getByText('▶ PLAY')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(1000) })
     expect(cues).toEqual(['pull', 'eject', 'insert', 'seat', 'clack', 'motor', 'zoom', 'play', 'static'])
+    // Then the tape loads: the level is built step by step before the briefing.
+    expect(done).not.toHaveBeenCalled()
+    expect(screen.getByText('LOADING TAPE 03')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(1400) })
+    expect(screen.getByText(/✓ READING THE TAPE/)).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: /Loading tape 03: [1-9]\d*%/ })).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(1400) })
     expect(done).toHaveBeenCalledTimes(1)
   })
 

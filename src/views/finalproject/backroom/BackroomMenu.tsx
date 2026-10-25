@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { ArrowLeft, Infinity as InfinityIcon, LockKeyhole, Play, Star, Trophy, Volume2, VolumeX } from 'lucide-react'
-import { skillKeys, type SkillKey } from './backroomEngine'
+import { comparisonOperators, type SkillKey } from './backroomEngine'
+
+// The tapes teach comparisons; older saves may also hold bool and && records, which stay hidden.
+const skillKeys: SkillKey[] = [...comparisonOperators]
 import { backroomLevels, endlessUnlocked, levelUnlocked, nextLevelIndex, normalizeStars } from './backroomLevels'
 import type { BackroomScore } from './backroomScores'
 import type { BackroomProgress } from './types'
