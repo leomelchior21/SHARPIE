@@ -32,7 +32,7 @@ const startTutorial=async()=>{
   await evaluate(`window.__tapeDeckPace=${deckFilmed?1:0.25};document.querySelector(".br-primary--hero").click()`);await wait('!!document.querySelector(".br-deck")',5000);
   if(!deckFilmed){deckFilmed=true;await wait('document.querySelector(".br-deck")?.classList.contains("is-3d")',15000);let elapsed=0;
     // Filmed at quarter speed so each shot lands on its moment.
-    for(const [at,name] of [[1000,'tape-door'],[2300,'tape-loaded'],[3150,'tape-lens'],[3800,'tape-play']].map(([at,name])=>[at*4,name])){await delay(at-elapsed);elapsed=at;const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));}}
+    for(const [at,name] of [[700,'tape-shelf'],[1750,'tape-fly'],[3000,'tape-loaded'],[4150,'tape-lens'],[4500,'tape-play']].map(([at,name])=>[at*4,name])){await delay(at-elapsed);elapsed=at;const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));}}
   await wait('!!document.querySelector(".br-overlay--briefing")',15000);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
 const pressLabel=async label=>{await evaluate(`[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);await delay(120);};
 try{
@@ -119,14 +119,51 @@ try{
   await seed({activity:'matrix'});await startTutorial();
   assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/MAKE IT TRUE/);
   await energyTo(61);await wait('!document.querySelector(".br-coach")',5000);
-  await wait('JSON.parse(localStorage.getItem(finalQA.storageKey("final-qa")))?.backroom?.gates>=1',15000);
-  await wait('!!document.querySelector(".br-coach")',20000);assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/FOLLOW THE CORRIDOR/);
-  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
-  await wait('!!document.querySelector(".br-toast.is-bad")',15000);await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
-  assert.match(await evaluate('document.querySelector(".br-toast").textContent'),/WALL SCRAPE/);assert.equal(await evaluate('!!document.querySelector(".br-overlay--gameOver")'),false);
   await pressLabel('Pause run');assert.match(await evaluate('document.querySelector(".br-overlay").textContent'),/PAUSE/);await click('KEEP RUNNING');
-  await wait('!!document.querySelector(".br-overlay--mistake")',30000);assert.match(await evaluate('document.querySelector(".br-overlay--mistake").textContent'),/THE GATE STAYED SHUT[\s\S]*70 < 30/);
-  console.log('PASS Backrooms tutorial guide, gate opening, wall scrape without game over, pause and resume, closed-gate explanation');
+  await wait('JSON.parse(localStorage.getItem(finalQA.storageKey("final-qa")))?.backroom?.gates>=1',15000);
+  await wait('!!document.querySelector(".br-coach")',20000);assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/FOLLOW THE CORRIDOR[\s\S]*Touch a wall/);
+  // Walls end the run on the spot.
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
+  await wait('!!document.querySelector(".br-overlay--gameOver")',15000);await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
+  assert.match(await evaluate('document.querySelector(".br-overlay--gameOver").textContent'),/YOU TOUCHED THE WALL[\s\S]*SIGNAL LOST/);
+  // A retry rewinds, opens the door again and skips the guides already seen.
+  await click('RETRY TAPE');await wait('!!document.querySelector(".br-screen--entering")',8000);
+  await wait('!!document.querySelector(".br-overlay--mistake")',30000);assert.match(await evaluate('document.querySelector(".br-overlay--mistake").textContent'),/THE GATE STAYED SHUT[\s\S]*20 > 50/);
+  console.log('PASS Backrooms tutorial guide, pause and resume, wall crash, rewind, entry door, closed-gate explanation');
+
+  // Tape 03 with a steering pilot: jumps over holes and barriers, films the dark corridor,
+  // the camera going off and a spare battery bringing it back.
+  await seed({activity:'matrix',backroom:{bestXp:0,gates:0,operators:[],levels:[1,1,0,0,0,0],skills:{},coach:['energy','steer','jump','fork','bool','and']}});
+  await evaluate('window.__backroomQA={}');
+  await wait('!!document.querySelector(".br-tape")',15000);await evaluate('document.querySelectorAll(".br-tape")[2].click()');
+  await wait('!!document.querySelector(".br-deck-skip")',5000);await evaluate('document.querySelector(".br-deck-skip").click()');
+  await wait('!!document.querySelector(".br-overlay--briefing")',5000);await evaluate('document.querySelector(".br-overlay--briefing .br-primary").click()');
+  await delay(500);const door=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,'entry-door.png'),Buffer.from(door.data,'base64'));
+  // The pilot runs inside the page on every frame, like a steady player: steer toward the
+  // corridor ahead, hold keys at least 200 ms, jump barriers and holes; it counts holes crossed.
+  await evaluate(`(()=>{const q=window.__backroomQA;let held=0,since=0;q.holes=0;const seen=new Set();const fire=(t,k)=>window.dispatchEvent(new KeyboardEvent(t,{key:k,bubbles:true}));q.pilot=true;
+    const step=()=>{if(!q.pilot)return;requestAnimationFrame(step);const v=q.view;
+      if(v)for(const o of v.obstacles)if(o.kind==='hole'){if(v.depth>o.z+0.4&&seen.has(o.z)&&document.querySelector('.br-screen--running')){seen.delete(o.z);q.holes+=1}else if(v.depth<o.z)seen.add(o.z)}
+      if(!v||!q.centerAt||!document.querySelector('.br-screen--running')){if(held){fire('keyup',held<0?'ArrowLeft':'ArrowRight');held=0}return}
+      const gap=q.centerAt(v.depth+0.9)-v.playerX;const want=Math.abs(gap)<0.04?0:gap>0?1:-1;const now=performance.now();
+      if(want!==held&&(held===0||now-since>=200)){if(held)fire('keyup',held<0?'ArrowLeft':'ArrowRight');if(want)fire('keydown',want<0?'ArrowLeft':'ArrowRight');held=want;since=now}
+      const hz=v.obstacles.find(o=>(o.kind==='barrier'||o.kind==='hole')&&o.z-v.depth>0&&o.z-v.depth<0.75);if(hz&&v.jump===0)fire('keydown',' ')};step()})()`);
+  const filmed=new Set();
+  const key=async(type,name)=>send('Input.dispatchKeyEvent',{type,key:name,code:name});
+  for(const started=Date.now();Date.now()-started<180000;){
+    const s=await evaluate(`(()=>{const v=window.__backroomQA.view;if(!v)return null;return {hole:v.obstacles.some(o=>o.kind==='hole'&&o.z-v.depth>3&&o.z-v.depth<5),pack:(v.pickups||[]).some(p=>p.z-v.depth>1.6&&p.z-v.depth<3.2),running:!!document.querySelector('.br-screen--running'),mistake:!!document.querySelector('.br-overlay--mistake'),off:!!document.querySelector('.is-camera-off'),over:!!document.querySelector('.br-overlay--gameOver,.br-overlay--levelClear')}})()`);
+    if(!s){await delay(60);continue;}
+    if(s.over)break;
+    if(s.mistake){await evaluate('document.querySelector(".br-overlay--mistake .br-primary").click()');await delay(80);continue;}
+    // Screenshots are slow under software WebGL: pause, hide the pause card, shoot, resume.
+    for(const [flag,name] of [[s.hole,'tape-hole'],[s.pack,'battery-pickup'],[s.off,'camera-off']]){if(flag&&!filmed.has(name)&&s.running){filmed.add(name);await key('keyDown','Escape');await evaluate(`(()=>{const st=document.createElement('style');st.id='qa-still';st.textContent='.br-overlay--paused{display:none!important}';document.head.append(st)})()`);await delay(150);const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));await evaluate('document.getElementById("qa-still")?.remove()');await key('keyDown','Escape');}}
+    await delay(60);
+  }
+  await evaluate('window.__backroomQA.pilot=false');
+  const holesCleared=await evaluate('window.__backroomQA.holes');
+  const outcome=await evaluate('document.querySelector(".br-overlay--gameOver,.br-overlay--levelClear")?.textContent||"still running"');
+  assert(holesCleared>=1,`no hole cleared (${outcome.slice(0,80)})`);assert.doesNotMatch(outcome,/YOU FELL|YOU HIT|TOUCHED THE WALL/);
+  console.log(`PASS piloted tape 03: ${holesCleared} holes jumped, ${[...filmed].join(', ')} filmed, ${/CLEARED/.test(outcome)?'tape cleared':'signal lost in the dark'}`);
   }
   const checks=[];
   for(const size of [{name:'desktop',width:1366,height:900},{name:'ipad',width:1024,height:768},{name:'ipad-short',width:1024,height:694},{name:'phone',width:390,height:844}]){

@@ -5,13 +5,16 @@ import { supportsWebGL, tapeTimeline, type TapeCue, type TapeKind, type TapeLabe
 interface Props {
   kind: TapeKind
   label: TapeLabel
+  // Every tape on the shelf, and the slot of the one being played.
+  shelf: TapeLabel[]
+  slot: number
   reduced: boolean
   onCue: (cue: TapeCue) => void
   onDone: () => void
 }
 
 // The tape change: a 3D camcorder takes the tape before a run; a retry rewinds it.
-export function TapeDeck({ kind, label, reduced, onCue, onDone }: Props) {
+export function TapeDeck({ kind, label, shelf, slot, reduced, onCue, onDone }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [stage, setStage] = useState<TapeCue | 'start'>('start')
   const [mode, setMode] = useState<'loading' | '3d' | 'flat'>(kind === 'insert' ? 'loading' : 'flat')
@@ -42,7 +45,7 @@ export function TapeDeck({ kind, label, reduced, onCue, onDone }: Props) {
       import('./tapeDeckScene')
         .then((module) => {
           if (disposed) return
-          handle = canvasRef.current ? module.createTapeDeckScene(canvasRef.current, label, cue, finish, () => { drawing = true; setMode('3d') }) : null
+          handle = canvasRef.current ? module.createTapeDeckScene(canvasRef.current, label, shelf, slot, cue, finish, () => { drawing = true; setMode('3d') }) : null
           if (!handle) { drawing = true; flat() }
         })
         .catch(() => { if (!disposed) flat() })
@@ -56,7 +59,7 @@ export function TapeDeck({ kind, label, reduced, onCue, onDone }: Props) {
   }, [])
 
   const skip = () => { if (!finished.current) { finished.current = true; callbacks.current.onDone() } }
-  const status = stage === 'eject' ? '⏏ EJECT' : stage === 'insert' || stage === 'seat' || stage === 'clack' ? 'TAPE IN' : stage === 'motor' || stage === 'zoom' ? 'LOADING' : ''
+  const status = stage === 'pull' ? 'TAPE OFF THE SHELF' : stage === 'eject' ? '⏏ EJECT' : stage === 'insert' || stage === 'seat' || stage === 'clack' ? 'TAPE IN' : stage === 'motor' || stage === 'zoom' ? 'LOADING' : ''
 
   return <div className={`br-deck br-deck--${kind} is-${mode} stage-${stage}`} role="dialog" aria-label={`Loading tape ${label.number}`}>
     {kind === 'insert' && <canvas ref={canvasRef} className="br-deck-canvas" aria-hidden="true" />}

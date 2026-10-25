@@ -260,6 +260,20 @@ export class BackroomAudio {
     this.burst(0.3, 4200, 0.3, 0.06, 'highpass')
   }
 
+  // The door into Level 0: the latch, then a long hinge creak.
+  entryDoor(): void {
+    this.tone(1600, 0.03, 'square', 0.02)
+    this.burst(0.08, 900, 2, 0.05, 'bandpass')
+    this.tone(180, 0.9, 'sawtooth', 0.012, 0.1, 120)
+    this.burst(0.9, 1400, 6, 0.02, 'bandpass', 0.1)
+  }
+
+  // Over the edge of a hole: wind rushing past and a falling tone.
+  fall(): void {
+    this.burst(1.1, 500, 0.5, 0.08, 'lowpass')
+    this.tone(420, 1.1, 'sine', 0.05, 0, 60)
+  }
+
   tapeRewind(): void {
     this.tone(320, 0.9, 'sawtooth', 0.016, 0, 980)
     this.burst(0.9, 2600, 1, 0.03, 'bandpass')

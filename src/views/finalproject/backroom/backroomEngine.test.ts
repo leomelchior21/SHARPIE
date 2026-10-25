@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baseRunSpeed, championGates, comparisonOperators, conditionCode, correctForkSide, corridorCenterAt, energyRange, evaluateCondition, evaluateGate,
   explainGate, falseStart, forkSide, gateSkills, gateXp, generateEndlessGate, hitsObstacle, mulberry32, operatorWords, planCorridor, planCourse,
-  speedForGate, speedForLevelGate, jumpOffset, jumpSeconds, jumpHeight, type BackroomGate, type Clause,
+  speedForGate, speedForLevelGate, jumpOffset, jumpSeconds, jumpHeight, type BackroomGate, type Clause, picksUp,
 } from './backroomEngine'
 
 function lcg(seed: number): () => number {
@@ -216,5 +216,19 @@ describe('jumping', () => {
   it('speeds tapes up after every gate from their own opening pace', () => {
     expect(speedForLevelGate(1, 1)).toBe(1)
     expect(speedForLevelGate(1, 4)).toBeCloseTo(1 + 3 * 0.11 * 1.2)
+  })
+
+  it('plans up to two jumps per corridor, holes included, and a battery on the last straight', () => {
+    const plan = planCorridor(9, 0, planCourse(() => 0.99), ['hole', 'barrier'], true)
+    expect(plan.obstacles.filter((item) => item.kind === 'hole' || item.kind === 'barrier').map((item) => item.kind)).toEqual(['hole', 'barrier'])
+    expect(plan.pickups).toHaveLength(1)
+    const hole = plan.obstacles.find((item) => item.kind === 'hole')!
+    // On the ground anywhere over the hole is a fall; in the air the whole way is safe.
+    expect(hitsObstacle(hole.z - 0.3, hole.z - 0.2, 0.6, hole)).toBe(true)
+    expect(hitsObstacle(hole.z - 0.3, hole.z + 0.3, 0, hole, true)).toBe(false)
+    const battery = plan.pickups[0]
+    expect(picksUp(battery.z - 0.1, battery.z + 0.1, battery.x, battery)).toBe(true)
+    expect(picksUp(battery.z - 0.1, battery.z + 0.1, battery.x + 0.5, battery)).toBe(false)
+    expect(planCorridor(9, 0, planCourse(() => 0.99)).pickups).toEqual([])
   })
 })

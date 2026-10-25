@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { corridorCenterAt, mulberry32, type CorridorObstacle } from './backroomEngine'
+import { corridorCenterAt, holeHalfLength, mulberry32, type CorridorObstacle } from './backroomEngine'
 import type { BackroomRendererHandle, BackroomView, GateSignal } from './backroomRenderer'
 
 // World units match the game: the corridor is 1.54 wide; one unit is roughly 2.4 m.
@@ -20,6 +20,10 @@ const LIGHT_SPACING = 2.5
 const FIXTURES = Math.ceil((AHEAD + BEHIND) / LIGHT_SPACING) + 2
 const LAMPS = 4
 const DUST = 260
+// The door into Level 0 stands just ahead of where every run starts.
+const ENTRY_Z = 0.9
+const ENTRY_HALF = 0.36
+const ENTRY_TOP = 0.98
 
 type Signal = GateSignal | 'upcoming'
 const signalColors: Record<Signal, number> = { true: 0x3dff86, false: 0xff3b4e, unknown: 0xffb43b, upcoming: 0x6fd6ff }
@@ -481,6 +485,11 @@ function hashTile(index: number, seed: number): number {
   return (value >>> 0) % 1000
 }
 
+// Level 0 is dark now: most troffers are dead and the camcorder light does the work.
+function fixtureLife(view: BackroomView, index: number): number {
+  return hashTile(index, view.seed + 3) % 5 === 0 ? 0.55 : 0.1
+}
+
 function fixtureStrength(view: BackroomView, index: number): number {
   if (view.reduced || !view.lightsActive) return 1
   const character = hashTile(index, view.seed)
@@ -537,6 +546,29 @@ function box(width: number, height: number, depth: number, material: THREE.Mater
   return mesh
 }
 
+// The edge of a hole: torn carpet fibres around pure black.
+function holeCanvas(random: () => number): HTMLCanvasElement {
+  const [canvas, ctx] = makeCanvas(256, 128)
+  ctx.clearRect(0, 0, 256, 128)
+  const gradient = ctx.createLinearGradient(0, 0, 0, 128)
+  gradient.addColorStop(0, '#000')
+  gradient.addColorStop(0.5, '#000')
+  gradient.addColorStop(1, '#000')
+  ctx.fillStyle = gradient
+  ctx.beginPath()
+  ctx.moveTo(0, 18)
+  for (let x = 0; x <= 256; x += 8) ctx.lineTo(x, 10 + random() * 14)
+  ctx.lineTo(256, 118)
+  for (let x = 256; x >= 0; x -= 8) ctx.lineTo(x, 104 + random() * 14)
+  ctx.closePath()
+  ctx.fill()
+  // A torn lip of darker carpet around the opening.
+  ctx.strokeStyle = 'rgba(48,34,16,.85)'
+  ctx.lineWidth = 5
+  ctx.stroke()
+  return canvas
+}
+
 // ---------- Scene ----------
 
 export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRendererHandle | null {
@@ -568,7 +600,7 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
   }
 
   const scene = new THREE.Scene()
-  const fogColor = new THREE.Color(0x1d170b)
+  const fogColor = new THREE.Color(0x0b0905)
   scene.background = fogColor
   scene.fog = new THREE.FogExp2(fogColor, 0.075)
   const camera = new THREE.PerspectiveCamera(70, 1, 0.04, 60)
@@ -611,6 +643,11 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
   infrared.position.set(0, 0, 0)
   infrared.target.position.set(0, -0.15, -1)
   camera.add(infrared, infrared.target)
+  // The camcorder's video light: the main light in Level 0, as bright as the batteries allow.
+  const videoLight = new THREE.SpotLight(0xfff0d4, 11, 16, 0.62, 0.55, 1.4)
+  videoLight.position.set(0.06, 0.05, 0)
+  videoLight.target.position.set(0, -0.12, -1)
+  camera.add(videoLight, videoLight.target)
 
   // Gate.
   const metalMaterial = track(new THREE.MeshStandardMaterial({ map: texture(metalTexture(random), true), color: 0xffffff, metalness: 0.75, roughness: 0.38 }))
@@ -742,8 +779,69 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
     return lamp
   })
   barrier.add(...barrierLamps)
-  scene.add(chair, bin, barrier)
-  const obstacleMeshes: Record<CorridorObstacle['kind'], THREE.Group> = { chair, trash: bin, barrier }
+  // A hole: torn carpet around nothing, a shaft that never ends, and two red warning lights.
+  const hole = new THREE.Group()
+  const holeLength = holeHalfLength * 2
+  const holeMaterial = track(new THREE.MeshBasicMaterial({ map: texture(holeCanvas(random), true), transparent: true, polygonOffset: true, polygonOffsetFactor: -4 }))
+  const opening = new THREE.Mesh(track(new THREE.PlaneGeometry(HALF * 2 + 0.02, holeLength + 0.08)), holeMaterial)
+  opening.rotation.x = -Math.PI / 2
+  opening.position.y = 0.003
+  const shaftMaterial = track(new THREE.MeshStandardMaterial({ color: 0x1a140c, roughness: 1, side: THREE.DoubleSide }))
+  const shaftDepth = 8
+  const shaftWalls = [
+    box(HALF * 2, shaftDepth, 0.01, shaftMaterial, 0, -shaftDepth / 2, holeLength / 2),
+    box(HALF * 2, shaftDepth, 0.01, shaftMaterial, 0, -shaftDepth / 2, -holeLength / 2),
+    box(0.01, shaftDepth, holeLength, shaftMaterial, -HALF, -shaftDepth / 2, 0),
+    box(0.01, shaftDepth, holeLength, shaftMaterial, HALF, -shaftDepth / 2, 0),
+  ]
+  const holeLampMaterial = track(new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.25, 0.2), toneMapped: false }))
+  const holeLamps = [-1, 1].map((side) => {
+    const lamp = new THREE.Mesh(track(new THREE.SphereGeometry(0.03, 12, 10)), holeLampMaterial)
+    lamp.position.set(side * (HALF - 0.06), 0.03, holeLength / 2 + 0.08)
+    return lamp
+  })
+  hole.add(opening, ...shaftWalls, ...holeLamps)
+
+  // A corridor can hold two jumps, so barriers and holes come in pairs.
+  const obstaclePools: Record<CorridorObstacle['kind'], THREE.Group[]> = { chair: [chair], trash: [bin], barrier: [barrier, barrier.clone()], hole: [hole, hole.clone()] }
+  for (const pool of Object.values(obstaclePools)) scene.add(...pool)
+
+  // Spare batteries: a white pack with four green charge LEDs, glowing on the carpet.
+  const packMaterial = track(new THREE.MeshStandardMaterial({ color: 0xe9e7e0, roughness: 0.45, metalness: 0.1, emissive: 0x2a2a26 }))
+  const packLedMaterial = track(new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 3, 1.1), toneMapped: false }))
+  const packs = Array.from({ length: 2 }, () => {
+    const pack = new THREE.Group()
+    pack.add(box(0.17, 0.1, 0.11, packMaterial, 0, 0, 0))
+    for (let led = 0; led < 4; led += 1) pack.add(box(0.018, 0.012, 0.012, packLedMaterial, -0.045 + led * 0.03, 0.03, 0.058))
+    pack.add(box(0.06, 0.02, 0.06, darkMetal, 0, -0.06, 0))
+    const glow = new THREE.PointLight(0x5dff9a, 0.9, 1.6, 2)
+    glow.position.set(0, 0.05, 0.1)
+    pack.add(glow)
+    scene.add(pack)
+    return pack
+  })
+
+  // The door into Level 0: a partition across the corridor with an office door that swings in.
+  const entry = new THREE.Group()
+  const doorPaint = track(new THREE.MeshStandardMaterial({ color: 0xb8a679, roughness: 0.62, metalness: 0.05 }))
+  const sideWidth = HALF - ENTRY_HALF
+  entry.add(
+    box(sideWidth, HEIGHT, 0.08, wallMaterial, -HALF + sideWidth / 2, HEIGHT / 2, 0),
+    box(sideWidth, HEIGHT, 0.08, wallMaterial, HALF - sideWidth / 2, HEIGHT / 2, 0),
+    box(ENTRY_HALF * 2, HEIGHT - ENTRY_TOP, 0.08, wallMaterial, 0, (HEIGHT + ENTRY_TOP) / 2, 0),
+    box(0.035, ENTRY_TOP, 0.1, darkMetal, -ENTRY_HALF, ENTRY_TOP / 2, 0),
+    box(0.035, ENTRY_TOP, 0.1, darkMetal, ENTRY_HALF, ENTRY_TOP / 2, 0),
+    box(ENTRY_HALF * 2 + 0.035, 0.035, 0.1, darkMetal, 0, ENTRY_TOP, 0),
+  )
+  const hingeGroup = new THREE.Group()
+  hingeGroup.position.set(-ENTRY_HALF + 0.02, 0, 0)
+  const leaf = box(ENTRY_HALF * 2 - 0.04, ENTRY_TOP - 0.02, 0.04, doorPaint, ENTRY_HALF - 0.02, (ENTRY_TOP - 0.02) / 2, 0)
+  const handle = box(0.09, 0.018, 0.03, chrome, ENTRY_HALF * 2 - 0.13, 0.47, 0.035)
+  const exitSign = new THREE.Mesh(track(new THREE.PlaneGeometry(0.3, 0.1)), track(new THREE.MeshBasicMaterial({ map: texture(plaqueCanvas('LEVEL 0', 0), true) })))
+  exitSign.position.set(ENTRY_HALF - 0.02, 0.76, 0.022)
+  hingeGroup.add(leaf, handle, exitSign)
+  entry.add(hingeGroup)
+  scene.add(entry)
 
   // The figure: never lit, only ever a silhouette.
   const shadowMaterial = track(new THREE.MeshBasicMaterial({ color: 0x050403, transparent: true, fog: false }))
@@ -858,7 +956,7 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
       matrix.makeTranslation(x, HEIGHT - 0.006, w(z))
       housings.setMatrixAt(index, matrix)
       const strength = fixtureStrength(view, fixture)
-      tint.setRGB(1, 0.95, 0.82).multiplyScalar(0.1 + strength * 1.55)
+      tint.setRGB(1, 0.95, 0.82).multiplyScalar(0.05 + strength * 1.55 * fixtureLife(view, fixture))
       lenses.setColorAt(index, tint)
     }
     lenses.instanceMatrix.needsUpdate = true
@@ -873,11 +971,15 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
       const x = center(view, z)
       lamp.position.set(x, HEIGHT - 0.03, w(z))
       lamp.target.position.set(x, 0, w(z))
-      lamp.intensity = 7.5 * fixtureStrength(view, fixture) * fade
+      lamp.intensity = 7.5 * fixtureStrength(view, fixture) * fixtureLife(view, fixture) * fade
     })
     const room = view.reduced || !view.lightsActive ? 1 : view.roomLight
-    hemisphere.intensity = 0.06 + 0.72 * room
+    const charge = view.cameraLight ?? 1
+    // With the camera dead only the eyes are left: a faint glow near the floor.
+    hemisphere.intensity = 0.02 + 0.12 * room * Math.max(0.15, charge)
     infrared.intensity = view.nightVision * 6
+    videoLight.intensity = 11 * charge
+    videoLight.distance = 3 + 13 * charge
 
     // Gate.
     const showGate = !view.hideGate && (view.phase === 'gate' ? view.gateZ - view.depth > -0.5 : view.depth >= (view.bends[view.bends.length - 1]?.endZ ?? 0) - 6)
@@ -952,15 +1054,38 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
     })
 
     // Obstacles.
-    for (const mesh of Object.values(obstacleMeshes)) mesh.visible = false
+    for (const pool of Object.values(obstaclePools)) pool.forEach((mesh) => { mesh.visible = false })
+    const used: Partial<Record<CorridorObstacle['kind'], number>> = {}
     for (const obstacle of view.obstacles) {
-      const mesh = obstacleMeshes[obstacle.kind]
       const distance = obstacle.z - view.depth
       if (view.hideGate || distance < -1 || distance > AHEAD) continue
+      const mesh = obstaclePools[obstacle.kind][used[obstacle.kind] ?? 0]
+      if (!mesh) continue
+      used[obstacle.kind] = (used[obstacle.kind] ?? 0) + 1
       mesh.visible = true
-      mesh.position.set(obstacle.kind === 'barrier' ? center(view, obstacle.z) : obstacle.x, 0, w(obstacle.z))
+      mesh.position.set(obstacle.kind === 'barrier' || obstacle.kind === 'hole' ? center(view, obstacle.z) : obstacle.x, 0, w(obstacle.z))
     }
     barrierLampMaterial.color.setRGB(3, 1.6, 0.3).multiplyScalar(view.reduced || Math.sin(view.time * 7) > 0 ? 1 : 0.2)
+    holeLampMaterial.color.setRGB(3, 0.25, 0.2).multiplyScalar(view.reduced || Math.sin(view.time * 4) > -0.3 ? 1 : 0.25)
+
+    // Spare batteries bob and turn so they catch the eye in the dark.
+    packs.forEach((pack, index) => {
+      const pickup = view.pickups?.[index]
+      const distance = pickup ? pickup.z - view.depth : -1
+      pack.visible = !!pickup && !view.hideGate && distance > -0.5 && distance < AHEAD
+      if (!pickup || !pack.visible) return
+      pack.position.set(pickup.x, 0.09 + (view.reduced ? 0 : Math.sin(view.time * 3 + index) * 0.025), w(pickup.z))
+      pack.rotation.y = view.reduced ? 0.4 : view.time * 1.4
+    })
+
+    // The entry door, only near the start of a run.
+    const entryOpen = view.entry ?? -1
+    entry.visible = entryOpen >= 0 && view.depth < ENTRY_Z + 3
+    if (entry.visible) {
+      entry.position.set(center(view, ENTRY_Z), 0, w(ENTRY_Z))
+      // The free edge swings away from the camera, into Level 0.
+      hingeGroup.rotation.y = entryOpen * 1.8
+    }
 
     // Figure.
     const entity = view.entity
@@ -988,9 +1113,10 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
     const ahead = center(view, view.depth + 4)
     const bob = view.reduced ? 0 : Math.sin(view.depth * 6.2) * 0.008 * (view.jump > 0 ? 0 : 1)
     const shake = view.reduced ? 0 : view.shake
-    camera.position.set(view.playerX + (Math.random() - 0.5) * shake * 0.03, EYE + view.jump + bob + (Math.random() - 0.5) * shake * 0.03, w(view.depth))
+    const fall = view.fall ?? 0
+    camera.position.set(view.playerX + (Math.random() - 0.5) * shake * 0.03, EYE + view.jump - fall + bob + (Math.random() - 0.5) * shake * 0.03, w(view.depth))
     camera.rotation.y = -Math.atan2(ahead - view.playerX, 4) * 0.35
-    camera.rotation.x = -0.035 - view.jump * 0.08
+    camera.rotation.x = -0.035 - view.jump * 0.08 - Math.min(1.2, fall * 0.45)
     camera.rotation.z = view.reduced ? 0 : -view.steer * 0.035
     const fov = 70 + Math.min(12, Math.max(0, view.pace - 1) * 6)
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * 0.1; camera.updateProjectionMatrix() }

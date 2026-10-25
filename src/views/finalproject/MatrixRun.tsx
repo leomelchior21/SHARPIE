@@ -4,12 +4,13 @@ import { award, levelXp, type Progress, type Update } from './progress';
 
 // The complete PixPy game lives in ./backroom. This adapter only connects its
 // player identity, score records, and navigation to the Sharpie module.
-export function MatrixRun({ progress, update, name, studentKey, isTeacher, onBack, paused = false }: {
+export function MatrixRun({ progress, update, name, studentKey, isTeacher, preview = false, onBack, paused = false }: {
   progress: Progress;
   update: Update;
   name: string;
   studentKey: string;
   isTeacher: boolean;
+  preview?: boolean;
   onBack: () => void;
   paused?: boolean;
 }) {
@@ -17,6 +18,7 @@ export function MatrixRun({ progress, update, name, studentKey, isTeacher, onBac
     username: studentKey,
     name,
     isTeacher,
+    unlockAll: preview,
     backroomRunBest: progress.best,
     backroomRunXp: progress.backroom.bestXp,
     backroomRunGates: progress.backroom.gates,

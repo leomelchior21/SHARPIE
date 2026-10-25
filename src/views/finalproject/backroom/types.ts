@@ -7,6 +7,8 @@ export interface BackroomProgress {
   username: string
   name: string
   isTeacher: boolean
+  // Every tape open at once: the teacher preview. Teachers otherwise follow the tape order too.
+  unlockAll?: boolean
   // Best gate count in one Endless run.
   backroomRunBest: number
   // Best XP earned in one run of any mode.

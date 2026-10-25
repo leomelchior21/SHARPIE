@@ -11,6 +11,8 @@ interface Props {
   scores: BackroomScore[]
   audioOn: boolean
   champion: boolean
+  // The tape a clear just opened: it waits with a NEW sticker.
+  fresh?: number | null
   onToggleAudio: () => void
   onPlayLevel: (index: number) => void
   onPlayEndless: () => void
@@ -27,10 +29,11 @@ export function Stars({ count, size = 16 }: { count: number; size?: number }) {
 
 const skillLabels: Record<SkillKey, string> = { '>': '>', '<': '<', '>=': '>=', '<=': '<=', '==': '==', '!=': '!=', bool: 'bool', '&&': '&&' }
 
-export function BackroomMenu({ progress, scores, audioOn, champion, onToggleAudio, onPlayLevel, onPlayEndless, onBack }: Props) {
+export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null, onToggleAudio, onPlayLevel, onPlayEndless, onBack }: Props) {
   const stars = normalizeStars(progress.levelStars)
   const next = nextLevelIndex(stars)
-  const deepOpen = endlessUnlocked(stars, progress.isTeacher)
+  const unlockAll = progress.unlockAll ?? progress.isTeacher
+  const deepOpen = endlessUnlocked(stars, unlockAll)
   const [tab, setTab] = useState<Tab>('tapes')
   const firstVisit = stars[0] === 0
   const totalStars = stars.reduce((sum, value) => sum + value, 0)
@@ -64,9 +67,10 @@ export function BackroomMenu({ progress, scores, audioOn, champion, onToggleAudi
 
       {tab === 'tapes' && <ol className="br-tapes">
         {backroomLevels.map((level, index) => {
-          const open = levelUnlocked(index, stars, progress.isTeacher)
+          const open = levelUnlocked(index, stars, unlockAll)
           return <li key={level.id}>
-            <button className={`br-tape ${open ? '' : 'is-locked'} ${index === next ? 'is-next' : ''} ${stars[index] > 0 ? 'is-done' : ''}`} disabled={!open} onClick={() => onPlayLevel(index)}>
+            <button className={`br-tape ${open ? '' : 'is-locked'} ${index === next ? 'is-next' : ''} ${stars[index] > 0 ? 'is-done' : ''} ${index === fresh ? 'is-fresh' : ''}`} disabled={!open} onClick={() => onPlayLevel(index)}>
+              {index === fresh && <span className="br-tape-new">NEW</span>}
               <span className="br-tape-number">{String(level.id).padStart(2, '0')}</span>
               <span className="br-tape-copy"><strong>{level.title}</strong><small>{level.gates.length} GATES</small></span>
               <code className="br-tape-focus">{level.focus}</code>
@@ -75,7 +79,8 @@ export function BackroomMenu({ progress, scores, audioOn, champion, onToggleAudi
           </li>
         })}
         <li>
-          <button className={`br-tape br-tape--deep ${deepOpen ? '' : 'is-locked'}`} disabled={!deepOpen} onClick={onPlayEndless}>
+          <button className={`br-tape br-tape--deep ${deepOpen ? '' : 'is-locked'} ${fresh === backroomLevels.length ? 'is-fresh' : ''}`} disabled={!deepOpen} onClick={onPlayEndless}>
+            {fresh === backroomLevels.length && <span className="br-tape-new">NEW</span>}
             <span className="br-tape-number"><InfinityIcon size={20} /></span>
             <span className="br-tape-copy"><strong>THE DEEP</strong><small>{deepOpen ? `ENDLESS · BEST ${progress.backroomRunBest} GATES` : 'CLEAR ALL 6 TAPES TO OPEN'}</small></span>
             <code className="br-tape-focus">ALL</code>

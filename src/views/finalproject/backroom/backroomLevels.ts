@@ -131,10 +131,27 @@ export const backroomLevels: BackroomLevel[] = [
 
 export const levelCount = backroomLevels.length
 
-// Jump barriers start on tape 02, and after a few gates in The Deep.
+// Jumps start on tape 02, and after a few gates in The Deep. Most corridors have one;
+// later tapes often add a second.
 export function barrierChance(levelIndex: number | null, gateNumber: number): number {
-  if (levelIndex === null) return gateNumber >= 3 ? 0.6 : 0
-  return levelIndex >= 1 ? 0.55 : 0
+  if (levelIndex === null) return gateNumber >= 3 ? 0.85 : 0
+  return levelIndex >= 1 ? 0.85 : 0
+}
+
+export function secondJumpChance(levelIndex: number | null, gateNumber: number): number {
+  if (levelIndex === null) return gateNumber >= 5 ? 0.65 : 0
+  return levelIndex >= 2 ? 0.6 : levelIndex === 1 ? 0.35 : 0
+}
+
+// Holes in the floor join the barriers from tape 03, and later in The Deep.
+export function holeShare(levelIndex: number | null, gateNumber: number): number {
+  if (levelIndex === null) return gateNumber >= 6 ? 0.45 : 0
+  return levelIndex >= 2 ? 0.45 : 0
+}
+
+// Spare batteries turn up only when the camcorder is missing charge, and always when it is dead.
+export function batteryChance(batteries: number): number {
+  return batteries <= 0 ? 1 : batteries < maxBatteries ? 0.4 : 0
 }
 
 export function starsFor(mistakes: number): number {
@@ -148,12 +165,13 @@ export function normalizeStars(stars: readonly number[] | undefined): number[] {
   })
 }
 
-export function levelUnlocked(index: number, stars: readonly number[], isTeacher: boolean): boolean {
-  return isTeacher || index === 0 || (stars[index - 1] ?? 0) > 0
+// Tapes open one at a time; unlockAll is the teacher preview.
+export function levelUnlocked(index: number, stars: readonly number[], unlockAll: boolean): boolean {
+  return unlockAll || index === 0 || (stars[index - 1] ?? 0) > 0
 }
 
-export function endlessUnlocked(stars: readonly number[], isTeacher: boolean): boolean {
-  return isTeacher || backroomLevels.every((_, index) => (stars[index] ?? 0) > 0)
+export function endlessUnlocked(stars: readonly number[], unlockAll: boolean): boolean {
+  return unlockAll || backroomLevels.every((_, index) => (stars[index] ?? 0) > 0)
 }
 
 // The next tape to play: the first one not yet cleared, or null when all are done.

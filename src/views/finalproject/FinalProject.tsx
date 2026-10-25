@@ -61,7 +61,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
       <span className="memory-card-status">{s.enabled?s.done?<><Check size={14}/> COMPLETE</>:<><i/> {s.n!=="03"?"AVAILABLE":"UNLOCKED"}</>:<><LockKeyhole size={14}/> UNLOCK: {s.unlock}</>}</span>
       {s.enabled&&<span className="memory-card-enter">ENTER <ArrowUpRight size={18}/></span>}
     </button>)}</div><div className="fp-overview-bottom"><p>Welcome back, <b>{name}</b>. Your progress is saved in this browser.</p>{three&&<button onClick={()=>go("report")}>OPEN AUDIT REPORT →</button>}</div></>}
-    {activity==="matrix"&&<MatrixRun progress={active} update={update} name={name} studentKey={studentKey} isTeacher={isTeacher||preview} onBack={()=>go("overview")}/>}
+    {activity==="matrix"&&<MatrixRun progress={active} update={update} name={name} studentKey={studentKey} isTeacher={isTeacher||preview} preview={preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
     {activity==="lab"&&<LabHome progress={active} onFlow={openFlow} onBuilder={()=>go("builder")} onQuiz={()=>go("quiz-intro")}/>}
     {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("quiz-intro")}/>}

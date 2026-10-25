@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { BackroomRun } from './BackroomRun'
 import type { BackroomView } from './backroomRenderer'
 import { backroomLevels } from './backroomLevels'
+import { corridorCenterAt } from './backroomEngine'
 import { createBackroomProgress, type BackroomProgress } from './types'
 
 const renderer = vi.hoisted(() => ({ view: null as BackroomView | null }))
@@ -17,7 +18,8 @@ describe('Backrooms Run', () => {
     localStorage.clear()
     vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     time = 0
-    vi.spyOn(performance, 'now').mockReturnValue(0)
+    // The page clock follows the simulated frames, so held keys count as holds, not taps.
+    vi.spyOn(performance, 'now').mockImplementation(() => time)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frame = callback; return 1 })
     vi.stubGlobal('cancelAnimationFrame', () => undefined)
     vi.stubGlobal('matchMedia', () => ({ matches: false }))
@@ -29,7 +31,35 @@ describe('Backrooms Run', () => {
     })
   })
 
-  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); pilot = { on: false, jump: false, dodgeBatteries: false }; held = 0 })
+
+  // Walls end the run, so long simulations steer with the corridor like a careful student:
+  // aim a little ahead, optionally jump barriers and holes, optionally walk past batteries.
+  let pilot = { on: false, jump: false, dodgeBatteries: false }
+  let held: -1 | 0 | 1 = 0
+  let heldSince = 0
+  const keyFor = (side: -1 | 1) => (side < 0 ? 'ArrowLeft' : 'ArrowRight')
+  function steer() {
+    const view = renderer.view
+    if (!pilot.on || !view || !document.querySelector('.br-screen--running')) {
+      if (held) { fireEvent.keyUp(document.body, { key: keyFor(held) }); held = 0 }
+      return
+    }
+    let aim = corridorCenterAt(view.gateCenter, view.bends, view.depth + 0.9)
+    const battery = view.pickups?.find((item) => item.z - view.depth > -0.3 && item.z - view.depth < 3)
+    if (pilot.dodgeBatteries && battery) aim += battery.x > aim ? -0.32 : 0.32
+    const gap = aim - view.playerX
+    const want: -1 | 0 | 1 = Math.abs(gap) < 0.04 ? 0 : gap > 0 ? 1 : -1
+    // Keys stay down at least 200 ms: a quicker release is a tap, which nudges sideways.
+    if (want !== held && (held === 0 || time - heldSince >= 200)) {
+      if (held) fireEvent.keyUp(document.body, { key: keyFor(held) })
+      if (want) fireEvent.keyDown(document.body, { key: keyFor(want) })
+      held = want
+      heldSince = time
+    }
+    const hazard = view.obstacles.find((item) => (item.kind === 'barrier' || item.kind === 'hole') && item.z - view.depth > 0 && item.z - view.depth < 0.75)
+    if (pilot.jump && hazard && view.jump === 0) fireEvent.keyDown(document.body, { key: ' ' })
+  }
 
   function tick() {
     time += 50
@@ -39,11 +69,14 @@ describe('Backrooms Run', () => {
 
   // Runs frames in small batches per React update: the simulations need thousands of frames.
   function until(check: () => boolean, limit = 4000) {
-    for (let count = 0; count < limit && !check(); count += 4) {
-      act(() => { for (let step = 0; step < 4; step += 1) { time += 50; frame(time) } })
+    for (let count = 0; count < limit && !check(); count += 2) {
+      act(() => { for (let step = 0; step < 2; step += 1) { time += 50; frame(time); steer() } })
     }
     expect(check()).toBe(true)
   }
+
+  // Every run starts behind the door into Level 0.
+  const running = () => !!document.querySelector('.br-screen--running')
 
   function mount(progress: BackroomProgress) {
     const saves: BackroomProgress[] = []
@@ -65,7 +98,7 @@ describe('Backrooms Run', () => {
     skipTape()
     const briefing = screen.getByRole('dialog', { name: 'Briefing' })
     fireEvent.click(within(briefing).getAllByRole('button')[0])
-    tick()
+    until(running, 200)
   }
 
   function setEnergy(target: number) {
@@ -128,33 +161,68 @@ describe('Backrooms Run', () => {
     expect(card).toHaveTextContent('You took the FALSE door, but the condition is TRUE.')
   })
 
-  it('lets walls slow the run instead of ending it', () => {
+  it('opens the door into Level 0 before the run starts', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    fireEvent.click(screen.getByRole('button', { name: /LIGHTS ON/ }))
+    skipTape()
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getAllByRole('button')[0])
+    expect(document.querySelector('.br-screen--entering')).not.toBeNull()
+    expect(tick().entry).toBeLessThan(0.5)
+    until(running, 200)
+    expect(renderer.view!.entry).toBe(1)
+  })
+
+  it('ends the run the moment the runner touches a wall', () => {
     mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
     playTape('LIGHTS ON')
     setEnergy(60)
     fireEvent.keyDown(document.body, { key: 'ArrowRight' })
-    for (let count = 0; count < 40; count += 1) tick()
-    expect(screen.getByText(/WALL SCRAPE/)).toBeInTheDocument()
-    expect(renderer.view!.playerX).toBeLessThanOrEqual(0.75)
-    expect(screen.queryByRole('dialog', { name: /SIGNAL LOST/ })).not.toBeInTheDocument()
-  })
-
-  it('loses the tape after three wrong answers', () => {
-    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
-    playTape('LIGHTS ON')
-    for (let mistake = 0; mistake < 3; mistake += 1) {
-      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
-      fireEvent.click(screen.getByRole('button', { name: /CONTINUE|SEE RESULTS/ }))
-    }
-    expect(screen.getByRole('dialog', { name: 'Signal lost' })).toHaveTextContent('SIGNAL LOST')
+    until(() => !!screen.queryByRole('dialog', { name: 'Signal lost' }), 400)
+    const card = screen.getByRole('dialog', { name: 'Signal lost' })
+    expect(card).toHaveTextContent('YOU TOUCHED THE WALL')
     expect(screen.getByRole('button', { name: /RETRY TAPE/ })).toBeInTheDocument()
   })
 
+  it('switches the camera off at zero batteries, and a spare battery turns it back on', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    pilot = { on: true, jump: true, dodgeBatteries: true }
+    for (let mistake = 0; mistake < 3; mistake += 1) {
+      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+      if (mistake < 2) fireEvent.click(screen.getByRole('button', { name: /^CONTINUE/ }))
+    }
+    const card = screen.getByRole('dialog', { name: 'THE GATE STAYED SHUT' })
+    expect(card).toHaveTextContent('CAMERA OFF')
+    fireEvent.click(within(card).getByRole('button', { name: /CONTINUE IN THE DARK/ }))
+    expect(screen.getByText('NO BATTERY')).toBeInTheDocument()
+    expect(document.querySelector('.br-screen.is-camera-off')).not.toBeNull()
+    // A spare battery always waits in the next corridor; this time the runner picks it up.
+    pilot = { on: true, jump: true, dodgeBatteries: false }
+    until(() => !document.querySelector('.br-screen.is-camera-off'))
+    expect(screen.getByText(/CAMERA ON/)).toBeInTheDocument()
+    expect(screen.getByLabelText('1 of 3 batteries', { selector: '.br-osd .br-battery' })).toBeInTheDocument()
+  }, 60000)
+
+  it('ends the run when a gate is missed with the camera already off', () => {
+    mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
+    playTape('LIGHTS ON')
+    pilot = { on: true, jump: true, dodgeBatteries: true }
+    for (let mistake = 0; mistake < 4; mistake += 1) {
+      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
+      if (mistake < 3) fireEvent.click(screen.getByRole('button', { name: /^CONTINUE/ }))
+    }
+    expect(screen.getByRole('dialog', { name: 'THE GATE STAYED SHUT' })).toHaveTextContent('NO BATTERY LEFT')
+    fireEvent.click(screen.getByRole('button', { name: /SEE RESULTS/ }))
+    expect(screen.getByRole('dialog', { name: 'Signal lost' })).toHaveTextContent('GATE MISSED IN THE DARK')
+  }, 60000)
+
   it('clears a tape with three stars, saves it and offers the next one', () => {
-    const { saves } = mount(student({ backroomRunBest: 5 }))
+    const { saves, rerender } = mount(student({ backroomRunBest: 5 }))
     fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
     skipTape()
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getAllByRole('button')[0])
+    until(running, 200)
+    pilot = { on: true, jump: true, dodgeBatteries: false }
     const targets = [60, 20, 80, 10]
     backroomLevels[0].gates.forEach((_, index) => {
       until(() => renderer.view!.phase === 'gate' && renderer.view!.gateNumber === index + 1)
@@ -168,8 +236,14 @@ describe('Backrooms Run', () => {
     expect(saved.levelStars[0]).toBe(3)
     expect(saved.backroomRunGates).toBe(4)
     expect(saved.skills['>']).toEqual({ right: 2, wrong: 0 })
-    expect(screen.getByRole('button', { name: /NEXT TAPE/ })).toBeInTheDocument()
-  })
+    // Back on the shelf, the tape this clear opened waits with a NEW sticker; the rest stay locked.
+    rerender()
+    fireEvent.click(screen.getByRole('button', { name: /BACK TO THE SHELF/ }))
+    const edge = screen.getByRole('button', { name: /^NEW ?02/ })
+    expect(edge).toBeEnabled()
+    expect(edge).toHaveTextContent('NEW')
+    expect(screen.getByRole('button', { name: /^03/ })).toBeDisabled()
+  }, 60000)
 
   it('opens The Deep after all six tapes and for teachers', () => {
     mount(student({ levelStars: [1, 2, 3, 1, 1, 1] }))
@@ -195,6 +269,7 @@ describe('Backrooms Run', () => {
   it('speeds up after every gate inside a tape', () => {
     mount(student({ levelStars: [1, 0, 0, 0, 0, 0] }))
     playTape('LIGHTS ON')
+    pilot = { on: true, jump: true, dodgeBatteries: false }
     const first = tick().pace
     expect(screen.getByLabelText(/^Pace /)).toHaveTextContent('PACE 1.0×')
     until(() => {
@@ -216,11 +291,10 @@ describe('Backrooms Run', () => {
     setEnergy(51)
     act(() => { vi.advanceTimersByTime(1200) })
     until(() => !!screen.queryByRole('dialog', { name: 'FOLLOW THE CORRIDOR' }))
+    expect(screen.getByRole('dialog', { name: 'FOLLOW THE CORRIDOR' })).toHaveTextContent('Touch a wall and the run is over.')
     fireEvent.click(screen.getByRole('button', { name: 'GOT IT' }))
-    for (let mistake = 0; mistake < 3; mistake += 1) {
-      until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
-      fireEvent.click(screen.getByRole('button', { name: /CONTINUE|SEE RESULTS/ }))
-    }
+    // Nobody steers: the first bend ends the tape.
+    until(() => !!screen.queryByRole('dialog', { name: 'Signal lost' }))
     expect(saves[saves.length - 1].coachSeen).toEqual(['energy', 'steer'])
     fireEvent.click(screen.getByRole('button', { name: /RETRY TAPE/ }))
     // A retry rewinds the same tape and goes straight back in.
@@ -231,9 +305,10 @@ describe('Backrooms Run', () => {
     expect(screen.queryByRole('dialog', { name: 'MAKE IT TRUE' })).not.toBeInTheDocument()
   })
 
-  it('jumps a barrier with Space instead of tripping over it', () => {
+  it('jumps a barrier with Space instead of crashing into it', () => {
     mount(student({ levelStars: [1, 1, 0, 0, 0, 0] }))
     playTape('THE EDGE')
+    pilot = { on: true, jump: false, dodgeBatteries: false }
     const barrierAhead = () => renderer.view!.obstacles.some((item) => item.kind === 'barrier' && item.z - renderer.view!.depth > 0.3 && item.z - renderer.view!.depth < 1.2)
     until(() => {
       const next = screen.queryByRole('button', { name: /CONTINUE/ })
@@ -243,8 +318,40 @@ describe('Backrooms Run', () => {
     fireEvent.keyDown(document.body, { key: ' ' })
     expect(tick().jump).toBeGreaterThan(0)
     for (let count = 0; count < 20; count += 1) tick()
-    expect(screen.queryByText(/TRIPPED/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Signal lost' })).not.toBeInTheDocument()
     expect(renderer.view!.obstacles.some((item) => item.kind === 'barrier')).toBe(true)
     expect(renderer.view!.jump).toBe(0)
   }, 60000)
+
+  it('falls into a hole that is not jumped, and clears it with a jump', () => {
+    // Tape 03 mixes holes with the barriers.
+    mount(student({ levelStars: [1, 1, 0, 0, 0, 0] }))
+    fireEvent.click(screen.getByRole('button', { name: /^03/ }))
+    skipTape()
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getAllByRole('button')[0])
+    until(running, 200)
+    pilot = { on: true, jump: true, dodgeBatteries: false }
+    const holeAhead = () => renderer.view!.obstacles.some((item) => item.kind === 'hole' && item.z - renderer.view!.depth > 2)
+    until(() => {
+      const next = screen.queryByRole('button', { name: /^CONTINUE/ })
+      if (next) fireEvent.click(next)
+      return holeAhead()
+    }, 12000)
+    const hole = renderer.view!.obstacles.find((item) => item.kind === 'hole' && item.z - renderer.view!.depth > 2)!
+    // The pilot jumps it (gates on the way are simply missed: CONTINUE).
+    until(() => {
+      const next = screen.queryByRole('button', { name: /^CONTINUE/ })
+      if (next) fireEvent.click(next)
+      return renderer.view!.depth > hole.z + 0.5 || !!screen.queryByRole('dialog', { name: 'Signal lost' })
+    })
+    expect(screen.queryByRole('dialog', { name: 'Signal lost' })).not.toBeInTheDocument()
+    // Next hole: no jump, and down it goes.
+    pilot = { on: true, jump: false, dodgeBatteries: false }
+    until(() => {
+      const next = screen.queryByRole('button', { name: /^CONTINUE/ })
+      if (next) fireEvent.click(next)
+      return !!screen.queryByRole('dialog', { name: 'Signal lost' })
+    }, 12000)
+    expect(screen.getByRole('dialog', { name: 'Signal lost' })).toHaveTextContent(/YOU FELL|YOU HIT THE BARRIER/)
+  }, 90000)
 })

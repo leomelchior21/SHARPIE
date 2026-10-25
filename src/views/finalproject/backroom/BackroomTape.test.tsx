@@ -12,32 +12,34 @@ describe('Backrooms tape change', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { cleanup(); vi.useRealTimers() })
 
-  it('ejects, loads and plays the tape, then hands over once', () => {
+  it('takes the tape off the shelf, loads and plays it, then hands over once', () => {
     const cues: TapeCue[] = []
     const done = vi.fn()
-    render(<TapeDeck kind="insert" label={label} reduced={false} onCue={(cue) => cues.push(cue)} onDone={done} />)
+    render(<TapeDeck kind="insert" label={label} shelf={[label]} slot={0} reduced={false} onCue={(cue) => cues.push(cue)} onDone={done} />)
     expect(screen.getByRole('dialog', { name: 'Loading tape 03' })).toHaveTextContent('EXACTLY')
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('TAPE OFF THE SHELF')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(800) })
     expect(screen.getByText('⏏ EJECT')).toBeInTheDocument()
-    act(() => { vi.advanceTimersByTime(2000) })
+    act(() => { vi.advanceTimersByTime(1700) })
     expect(screen.getByText('LOADING')).toBeInTheDocument()
-    act(() => { vi.advanceTimersByTime(1300) })
+    act(() => { vi.advanceTimersByTime(1400) })
     expect(screen.getByText('▶ PLAY')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(1000) })
-    expect(cues).toEqual(['eject', 'insert', 'seat', 'clack', 'motor', 'zoom', 'play', 'static'])
+    expect(cues).toEqual(['pull', 'eject', 'insert', 'seat', 'clack', 'motor', 'zoom', 'play', 'static'])
     expect(done).toHaveBeenCalledTimes(1)
   })
 
   it('can be skipped, and a reduced-motion student only sees PLAY', () => {
     const done = vi.fn()
-    const view = render(<TapeDeck kind="insert" label={label} reduced={false} onCue={() => undefined} onDone={done} />)
+    const view = render(<TapeDeck kind="insert" label={label} shelf={[label]} slot={0} reduced={false} onCue={() => undefined} onDone={done} />)
     fireEvent.click(screen.getByRole('button', { name: /SKIP/ }))
     act(() => { vi.advanceTimersByTime(5000) })
     expect(done).toHaveBeenCalledTimes(1)
     view.unmount()
 
     const quick = vi.fn()
-    render(<TapeDeck kind="insert" label={label} reduced onCue={() => undefined} onDone={quick} />)
+    render(<TapeDeck kind="insert" label={label} shelf={[label]} slot={0} reduced onCue={() => undefined} onDone={quick} />)
     expect(screen.getByText('▶ PLAY')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(700) })
     expect(quick).toHaveBeenCalledTimes(1)

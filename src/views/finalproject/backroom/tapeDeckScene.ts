@@ -128,14 +128,28 @@ function doorPlate() {
   })
 }
 
-function cassetteFace(label: TapeLabel) {
-  return canvasTexture(1024, 640, (ctx) => {
+function cassetteFace(label: TapeLabel, size = 1024, flatReels = false) {
+  return canvasTexture(size, size * 0.625, (ctx) => {
+    ctx.scale(size / 1024, size / 1024)
     // Black plastic with a smoked window cut out, then the paper label.
     ctx.fillStyle = '#121214'
     ctx.fillRect(0, 0, 1024, 640)
     ctx.fillStyle = 'rgba(255,255,255,.035)'
     for (let y = 0; y < 640; y += 4) ctx.fillRect(0, y, 1024, 1)
-    ctx.clearRect(190, 70, 644, 210)
+    if (flatReels) {
+      ctx.fillStyle = '#2a221b'
+      ctx.fillRect(190, 70, 644, 210)
+      for (const [cx, radius] of [[355, 92], [670, 58]]) {
+        ctx.fillStyle = '#2b1c12'
+        ctx.beginPath()
+        ctx.arc(cx, 175, radius, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#e8e2d2'
+        ctx.beginPath()
+        ctx.arc(cx, 175, 30, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    } else ctx.clearRect(190, 70, 644, 210)
     ctx.fillStyle = '#d9c38a'
     ctx.font = `italic 800 64px ${PRINT}`
     ctx.fillText('Hi8', 40, 70)
@@ -147,7 +161,7 @@ function cassetteFace(label: TapeLabel) {
 
     const x = 70
     const y = 320
-    ctx.fillStyle = '#e2d6b4'
+    ctx.fillStyle = label.locked ? '#8f8a7c' : '#e2d6b4'
     roundRect(ctx, x, y, 884, 290, 10)
     ctx.fill()
     ctx.strokeStyle = 'rgba(120,150,190,.45)'
@@ -158,13 +172,25 @@ function cassetteFace(label: TapeLabel) {
       ctx.lineTo(x + 860, line)
       ctx.stroke()
     }
+    if (label.locked) {
+      // A locked tape: no title yet, only its number.
+      ctx.fillStyle = '#5c584d'
+      ctx.fillRect(x, y, 884, 54)
+      ctx.fillStyle = '#e9e4d6'
+      ctx.font = `800 32px ${PRINT}`
+      ctx.fillText(label.deep ? 'THE DEEP' : `TAPE ${label.number}`, x + 24, y + 38)
+      ctx.fillStyle = '#3f3c35'
+      ctx.font = `700 92px ${HAND}`
+      ctx.fillText('? ? ?', x + 28, y + 170)
+      return
+    }
     ctx.fillStyle = label.deep ? '#c4161c' : '#d0161f'
     ctx.fillRect(x, y, 884, 54)
     ctx.fillStyle = '#fff'
     ctx.font = `800 32px ${PRINT}`
     ctx.fillText(label.deep ? 'DO NOT PLAY' : 'LEVEL 0 · FOUND FOOTAGE', x + 24, y + 38)
     ctx.textAlign = 'right'
-    ctx.fillText(`TAPE ${label.number}`, x + 860, y + 38)
+    ctx.fillText(label.deep ? 'ENDLESS' : `TAPE ${label.number}`, x + 860, y + 38)
     ctx.textAlign = 'left'
     ctx.fillStyle = '#1b2a6b'
     ctx.font = `700 92px ${HAND}`
@@ -180,7 +206,7 @@ function cassetteFace(label: TapeLabel) {
   })
 }
 
-export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel, onCue: (cue: TapeCue) => void, onDone: () => void, onReady: () => void): TapeDeckHandle | null {
+export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel, shelfLabels: TapeLabel[], slot: number, onCue: (cue: TapeCue) => void, onDone: () => void, onReady: () => void): TapeDeckHandle | null {
   let renderer: THREE.WebGLRenderer
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
@@ -331,6 +357,43 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
   add(tape, new THREE.BoxGeometry(0.26, 0.4, 0.06), shell, -0.67, 0.17, 0.09)
   add(tape, new THREE.BoxGeometry(0.26, 0.4, 0.06), shell, 0.67, 0.17, 0.09)
 
+  const wood = new THREE.MeshStandardMaterial({ color: 0x5a3b22, roughness: 0.7, metalness: 0.05 })
+  const rack = new THREE.Group()
+  rack.position.set(-6.4, -0.95, -1.6)
+  rack.rotation.y = 0.5
+  scene.add(rack)
+  add(rack, box(4.9, 2.7, 0.12, 0.03), wood, 0, 1.35, -0.06)
+  for (const y of [0.05, 0.98, 1.9]) add(rack, box(4.9, 0.08, 0.6, 0.02), wood, 0, y, 0.25)
+  for (const x of [-2.45, 2.45]) add(rack, box(0.1, 2.7, 0.62, 0.02), wood, x, 1.35, 0.25)
+  const rackLight = new THREE.SpotLight(0xffd9a0, 70, 16, 0.55, 0.6, 2)
+  rackLight.position.set(-4.5, 5, 3.2)
+  rackLight.target.position.set(-6.2, 0.4, -1.4)
+  scene.add(rackLight, rackLight.target)
+  // Slots: four on the top row, three below. The chosen tape is the real 3D cassette.
+  const slotSpots = [[-1.65, 1.0], [-0.55, 1.0], [0.55, 1.0], [1.65, 1.0], [-1.1, 0.08], [0, 0.08], [1.1, 0.08]]
+  const slotLocal = (index: number) => new THREE.Vector3(slotSpots[index][0], slotSpots[index][1] + 0.36, 0.3)
+  const shelfScale = 0.66
+  shelfLabels.forEach((item, index) => {
+    if (index === slot || index >= slotSpots.length) return
+    const copy = new THREE.Group()
+    add(copy, box(1.6, 1.0, 0.18, 0.04), shell, 0, 0, -0.03)
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.0), new THREE.MeshStandardMaterial({ map: keep(cassetteFace(item, 512, true)), roughness: 0.5 }))
+    front.position.z = 0.062
+    copy.add(front)
+    copy.position.copy(slotLocal(index))
+    copy.rotation.x = -0.1
+    copy.scale.setScalar(shelfScale)
+    rack.add(copy)
+  })
+  rack.updateMatrixWorld(true)
+  const shelfSpot = rack.localToWorld(slotLocal(Math.min(slot, slotSpots.length - 1)))
+  const pulledSpot = rack.localToWorld(slotLocal(Math.min(slot, slotSpots.length - 1)).add(new THREE.Vector3(0, 0.15, 0.9)))
+  const bayEntry = new THREE.Vector3(0.55, 0.025, 0.36)
+  const rackQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.5, 0))
+  const flatQuat = new THREE.Quaternion()
+  const rackFocus = rack.localToWorld(new THREE.Vector3(-0.3, 1.0, 0.6))
+  const rackView = rack.localToWorld(new THREE.Vector3(-0.4, 1.6, 8.4))
+
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene, camera))
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.45, 0.94)
@@ -356,17 +419,25 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
   const focus = (t: number) => {
     // Narrow screens back the camera off so the whole camcorder stays in frame.
     const fit = aspect < 1.5 ? 1.5 / aspect : 1
-    if (t < 2.7) {
-      const k = easeInOut(span(t, 0, 2.7))
+    if (t < 2.05) {
+      // The shelf, then a pan across to the camcorder as the tape leaves it.
+      const k = easeInOut(span(t, 0.85, 2.05))
+      const camcorderView = new THREE.Vector3(2.6, 2.5, 9.6)
+      target.copy(rackFocus).lerp(new THREE.Vector3(0.35, -0.05, 0.25), k)
+      const position = rackView.clone().lerp(camcorderView, k)
+      position.sub(target).multiplyScalar(fit).add(target)
+      camera.position.copy(position)
+    } else if (t < 3.4) {
+      const k = easeInOut(span(t, 2.05, 3.4))
       const from = new THREE.Vector3(2.6, 2.5, 9.6)
       const to = new THREE.Vector3(1.0, 1.15, 5.4)
       const position = from.lerp(to, k)
       target.set(0.35 + 0.1 * k, -0.05, 0.25)
       position.sub(target).multiplyScalar(fit).add(target)
       camera.position.copy(position)
-    } else if (t < 3.3) {
+    } else if (t < 4.0) {
       // Orbit around to face the lens.
-      const k = easeInOut(span(t, 2.7, 3.3))
+      const k = easeInOut(span(t, 3.4, 4.0))
       const start = Math.atan2(1.0 - 0.45, 5.4 - 0.25)
       const angle = start + (-1.25 - start) * k
       const radius = (5.2 + (3.6 - 5.2) * k) * (1 + (fit - 1) * (1 - k))
@@ -374,7 +445,7 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
       camera.position.set(target.x + Math.sin(angle) * radius, 1.15 + (0.25 - 1.15) * k, target.z + Math.cos(angle) * radius)
     } else {
       // Dive into the glass.
-      const k = easeIn(span(t, 3.3, 3.75))
+      const k = easeIn(span(t, 4.0, 4.45))
       target.copy(lensFront)
       const angle = -1.25 - 0.3 * k
       const radius = 3.6 + (0.25 - 3.6) * k
@@ -402,20 +473,33 @@ export function createTapeDeckScene(canvas: HTMLCanvasElement, label: TapeLabel,
     while (next < cues.length && t >= cues[next][0]) onCue(cues[next++][1])
     if (t >= end && !finished) { finished = true; onDone() }
 
-    const open = t < 1.65 ? easeOut(span(t, 0.25, 0.75)) : 1 - easeInOut(span(t, 1.65, 1.9))
+    const open = t < 2.35 ? easeOut(span(t, 1.15, 1.6)) : 1 - easeInOut(span(t, 2.35, 2.6))
     hinge.rotation.x = open * 1.42
-    // The tape flies in from the viewer, settles into the bay and clicks home.
-    const fly = easeOut(span(t, 0.75, 1.45))
-    const seat = easeOut(span(t, 1.45, 1.55))
-    tape.position.set(0.55 + (1 - fly) * 0.9, 0.025 + (1 - fly) * -1.5, 0.36 - seat * 0.06 + (1 - fly) * 3.6)
-    tape.rotation.set((1 - fly) * 0.55, (1 - fly) * -0.7, (1 - fly) * 0.32)
-    const spin = t > 2.15 ? (t - 2.15) * 6 : 0
+    // Off the shelf: the tape slides out of its slot toward the viewer...
+    const pull = easeOut(span(t, 0.45, 1.05))
+    // ...arcs across the table, settles into the bay and clicks home.
+    const fly = easeInOut(span(t, 1.15, 2.2))
+    const seat = easeOut(span(t, 2.2, 2.3))
+    if (fly <= 0) {
+      tape.position.copy(shelfSpot).lerp(pulledSpot, pull)
+      tape.quaternion.copy(rackQuat)
+      tape.scale.setScalar(shelfScale + pull * 0.08)
+    } else {
+      const control = pulledSpot.clone().lerp(bayEntry, 0.5).add(new THREE.Vector3(0, 1.5, 1.6))
+      const a = pulledSpot.clone().lerp(control, fly)
+      const b = control.clone().lerp(bayEntry, fly)
+      tape.position.copy(a.lerp(b, fly))
+      tape.position.z -= seat * 0.06
+      tape.quaternion.copy(rackQuat).slerp(flatQuat, fly)
+      tape.scale.setScalar(shelfScale + 0.08 + (1 - shelfScale - 0.08) * fly)
+    }
+    const spin = t > 2.85 ? (t - 2.85) * 6 : 0
     reels.forEach((reel, index) => { reel.rotation.z = -spin * (index ? 1.6 : 1) })
     // The latch jolts the body; the LED turns green with the motor.
-    const jolt = t > 1.9 && t < 2.15 ? Math.sin((t - 1.9) * 60) * 0.012 * (1 - span(t, 1.9, 2.15)) : 0
+    const jolt = t > 2.6 && t < 2.85 ? Math.sin((t - 2.6) * 60) * 0.012 * (1 - span(t, 2.6, 2.85)) : 0
     cam.position.y = jolt
-    led.emissive.setHex(t > 2.15 ? 0x2bff6a : 0xff2a2a)
-    led.emissiveIntensity = t > 2.15 ? 2.6 + Math.sin(t * 9) * 0.8 : 0.6
+    led.emissive.setHex(t > 2.85 ? 0x2bff6a : 0xff2a2a)
+    led.emissiveIntensity = t > 2.85 ? 2.6 + Math.sin(t * 9) * 0.8 : 0.6
     drum.rotation.y = t * 8
     focus(t)
     composer.render()

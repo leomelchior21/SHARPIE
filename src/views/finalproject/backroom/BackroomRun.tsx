@@ -2,12 +2,12 @@ import { ArrowLeft, BatteryFull, ChevronDown, ChevronLeft, ChevronRight, Chevron
 import { useEffect, useRef, useState } from 'react'
 import {
   baseRunSpeed, championGates, clearHeight, comparisonOperators, conditionCode, corridorCenterAt, correctForkSide, energyRange, evaluateGate, explainGate,
-  forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, jumpOffset, jumpSeconds, mulberry32,
-  planCorridor, planCourse, speedForGate, speedForLevelGate, type BackroomGate, type ComparisonOperator, type CorridorObstacle, type GateExplanation, type GateValues,
+  forkLaneOffset, forkSide, gateBool, gateOperators, gateSkills, gateUsesEnergy, gateXp, generateEndlessGate, hitsObstacle, jumpOffset, jumpSeconds, mulberry32, picksUp,
+  planCorridor, planCourse, speedForGate, speedForLevelGate, type BackroomGate, type ComparisonOperator, type CorridorObstacle, type CorridorPickup, type GateExplanation, type GateValues,
 } from './backroomEngine'
-import { backroomLevels, barrierChance, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
+import { backroomLevels, barrierChance, batteryChance, endlessUnlocked, holeShare, secondJumpChance, levelUnlocked, maxBatteries, nextLevelIndex, normalizeStars, starsFor, type CoachMoment } from './backroomLevels'
 import { BackroomAudio, loadAudioPreference, saveAudioPreference } from './backroomAudio'
-import { createBackroomRenderer, type BackroomEntity, type GateSignal } from './backroomRenderer'
+import { createBackroomRenderer, type BackroomEntity, type BackroomView, type GateSignal } from './backroomRenderer'
 import { advanceBackroomLighting, createBackroomLighting } from './backroomLighting'
 import { rememberBackroomScore, type BackroomScore } from './backroomScores'
 import { BackroomMenu, Stars } from './BackroomMenu'
@@ -26,11 +26,13 @@ interface Props {
 }
 
 type Mode = { type: 'level'; index: number } | { type: 'endless' }
-type Status = 'menu' | 'loading' | 'briefing' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
-type Tape = { kind: TapeKind; label: TapeLabel; then: 'briefing' | 'running'; key: number }
+type Status = 'menu' | 'loading' | 'briefing' | 'entering' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
+type Tape = { kind: TapeKind; label: TapeLabel; shelf: TapeLabel[]; slot: number; then: 'briefing' | 'running'; key: number }
 type MistakeReason = 'closed' | 'wrong-door' | 'pillar'
-// Steering hint: dodge left or right, or 2 for a barrier to jump.
+// Steering hint: dodge left or right, or 2 for a barrier or hole to jump.
 type Hazard = 0 | -1 | 1 | 2
+// What ends a run on the spot: walls, anything on the floor and the holes.
+type Crash = 'wall' | CorridorObstacle['kind']
 
 interface Mistake {
   gate: BackroomGate
@@ -40,6 +42,8 @@ interface Mistake {
   chosenSide: -1 | 0 | 1
   trueSide: -1 | 1
   livesLeft: number
+  // A gate missed with the camcorder already dead ends the run.
+  final: boolean
 }
 
 interface RunResult {
@@ -52,6 +56,7 @@ interface RunResult {
   bestCombo: number
   stars: number
   newBest: boolean
+  crash: Crash | null
 }
 
 interface Coach {
@@ -66,7 +71,8 @@ const PASS_CLEARANCE = 1.8
 const STEER_SPEED = 0.72
 const WALL_LIMIT = 0.74
 const SEED_BASE = 20260214
-const RECHARGE_EVERY = 10
+// The entry door takes this long to swing open before the run starts.
+const ENTRY_SECONDS = 1.35
 // Old saves played the original single-gate game; past five gates they know the basics.
 const LEGACY_TUTORIAL_GATES = 5
 
@@ -77,6 +83,22 @@ const timecode = (seconds: number) => {
 
 const sideWord = (side: number) => side < 0 ? 'LEFT' : 'RIGHT'
 
+// The camcorder's video light runs on the batteries: full beam, dimmer, flickering, then dark.
+const cameraLightFor = (lives: number, time: number) => {
+  if (lives >= maxBatteries) return 1
+  if (lives === 2) return 0.74
+  if (lives === 1) return Math.sin(time * 3.1) * Math.sin(time * 7.7) > 0.8 ? 0.12 : 0.46
+  return 0
+}
+
+const crashCopy: Record<Crash, { title: string; body: string }> = {
+  wall: { title: 'YOU TOUCHED THE WALL', body: 'In here the walls take you. Steer early and stay in the middle of the corridor.' },
+  chair: { title: 'YOU HIT A CHAIR', body: 'Anything on the floor ends the run. Steer around it before you reach it.' },
+  trash: { title: 'YOU HIT A BIN', body: 'Anything on the floor ends the run. Steer around it before you reach it.' },
+  barrier: { title: 'YOU HIT THE BARRIER', body: 'Barriers block the whole corridor. Press SPACE (or JUMP) just before it.' },
+  hole: { title: 'YOU FELL', body: 'Holes go down forever. Jump just before the edge and stay in the air all the way across.' },
+}
+
 function createGameState() {
   return {
     depth: 0,
@@ -84,6 +106,7 @@ function createGameState() {
     gateCenter: 0,
     bends: [] as ReturnType<typeof planCorridor>['bends'],
     obstacles: [] as ReturnType<typeof planCorridor>['obstacles'],
+    pickups: [] as CorridorPickup[],
     nextGateZ: START_DISTANCE,
     nextGateCenter: 0,
     activationZ: 0,
@@ -119,6 +142,14 @@ function createGameState() {
     status: 'menu' as Status,
     reduced: false,
     menu: true,
+    // The door into Level 0: 0 shut, 1 open.
+    entry: 0,
+    entryT: 0,
+    // A crash plays out before the run ends: the impact, or the fall.
+    dying: null as { crash: Crash; t: number } | null,
+    fall: 0,
+    // The camcorder's video light, from the batteries left.
+    cameraLight: 1,
   }
 }
 
@@ -152,6 +183,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   // Every run starts by loading its tape; a retry rewinds it instead.
   const [tape, setTape] = useState<Tape | null>(null)
   const tapeRef = useRef<Tape | null>(null)
+  // The tape a clear just opened: it waits on the shelf with a NEW sticker.
+  const [freshTape, setFreshTape] = useState<number | null>(null)
   const [dateStamp] = useState(() => { const now = new Date(); return `${now.toLocaleString('en-US', { month: 'short' }).toUpperCase()}.${now.getDate()} ${now.getFullYear()}` })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -293,7 +326,16 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     g.gateZ = g.nextGateZ
     g.gateCenter = g.nextGateCenter
     const levelIndex = r.mode.type === 'level' ? r.mode.index : null
-    Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse(), r.random() < barrierChance(levelIndex, r.gateNumber)))
+    // Jumps: up to two per corridor, barriers or holes. The rolls are always drawn so seeds stay stable.
+    const rolls = [r.random(), r.random(), r.random(), r.random(), r.random()]
+    // Tapes always mix both: holes and barriers alternate. The Deep rolls for it.
+    const holes = holeShare(levelIndex, r.gateNumber)
+    const kind = (roll: number, slot: number) => (holes <= 0 ? 'barrier' : levelIndex !== null ? ((r.gateNumber + slot) % 2 === 0 ? 'hole' : 'barrier') : roll < holes ? 'hole' : 'barrier') as 'hole' | 'barrier'
+    const jumps = [
+      rolls[0] < barrierChance(levelIndex, r.gateNumber) ? kind(rolls[1], 0) : null,
+      rolls[2] < secondJumpChance(levelIndex, r.gateNumber) ? kind(rolls[3], 1) : null,
+    ]
+    Object.assign(g, planCorridor(g.gateZ, g.gateCenter, planCourse(), jumps, rolls[4] < batteryChance(r.lives)))
     g.values = { ...nextGate.start }
     g.truth = evaluateGate(nextGate, g.values)
     g.trueSide = g.nextTrueSide
@@ -383,7 +425,14 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     const label: TapeLabel = tapeLevel
       ? { number: String(tapeLevel.id).padStart(2, '0'), title: tapeLevel.title, focus: tapeLevel.focus, stars: normalizeStars(progressRef.current.levelStars)[next.type === 'level' ? next.index : 0], deep: false }
       : { number: '∞', title: 'THE DEEP', focus: 'ENDLESS · EVERY GATE', stars: 0, deep: true }
-    const loaded: Tape = { kind: quick ? 'rewind' : 'insert', label, then: quick ? 'running' : 'briefing', key: Date.now() }
+    const starsNow = normalizeStars(progressRef.current.levelStars)
+    const unlockAll = progressRef.current.unlockAll ?? progressRef.current.isTeacher
+    const shelf: TapeLabel[] = [
+      ...backroomLevels.map((item, index) => ({ number: String(item.id).padStart(2, '0'), title: item.title, focus: item.focus, stars: starsNow[index], deep: false, locked: !levelUnlocked(index, starsNow, unlockAll) })),
+      { number: '∞', title: 'THE DEEP', focus: 'ENDLESS · EVERY GATE', stars: 0, deep: true, locked: !endlessUnlocked(starsNow, unlockAll) },
+    ]
+    if (!quick) setFreshTape(null)
+    const loaded: Tape = { kind: quick ? 'rewind' : 'insert', label, shelf, slot: next.type === 'level' ? next.index : backroomLevels.length, then: quick ? 'running' : 'briefing', key: Date.now() }
     tapeRef.current = loaded
     setTape(loaded)
     // Choosing a tape is a tap, so the deck may already make its sounds.
@@ -395,7 +444,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     const sound = audio.current
     if (!sound) return
     const play: Partial<Record<TapeCue, () => void>> = {
-      eject: () => sound.tapeEject(), insert: () => sound.tapeInsert(), seat: () => sound.tapeSeat(), clack: () => sound.tapeClack(),
+      pull: () => sound.tapeInsert(), eject: () => sound.tapeEject(), insert: () => sound.tapeInsert(), seat: () => sound.tapeSeat(), clack: () => sound.tapeClack(),
       motor: () => sound.tapeMotor(), play: () => sound.tapePlay(), static: () => sound.tapeStatic(), rewind: () => sound.tapeRewind(),
     }
     play[cue]?.()
@@ -406,11 +455,25 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     const then = tapeRef.current?.then ?? 'briefing'
     tapeRef.current = null
     setTape(null)
-    if (then === 'running') {
-      enableAudioFromGesture()
-      setGameStatus('running')
-      screenRef.current?.focus()
-    } else setGameStatus('briefing')
+    if (then === 'running') enterLevel()
+    else setGameStatus('briefing')
+  }
+
+  // The door into Level 0 swings open, then the run starts on its own.
+  const enterLevel = () => {
+    enableAudioFromGesture()
+    const g = game.current
+    g.entry = 0
+    g.entryT = 0
+    audio.current?.entryDoor()
+    setGameStatus('entering')
+    screenRef.current?.focus()
+  }
+
+  const startRunning = () => {
+    if (game.current.status !== 'entering') return
+    setGameStatus('running')
+    screenRef.current?.focus()
   }
 
   const enableAudioFromGesture = () => {
@@ -419,11 +482,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     audio.current?.startHum()
   }
 
-  const launch = () => {
-    enableAudioFromGesture()
-    setGameStatus('running')
-    screenRef.current?.focus()
-  }
+  const launch = () => enterLevel()
 
   const toMenu = () => {
     clearTimers()
@@ -437,12 +496,14 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     setGameStatus('menu')
   }
 
-  const finishRun = (cleared: boolean) => {
+  const finishRun = (cleared: boolean, crash: Crash | null = null) => {
     const r = run.current
     const g = game.current
     if (g.status === 'levelClear' || g.status === 'gameOver') return
     const current = r.mode
     const levelStars = current.type === 'level' && cleared ? starsFor(r.mistakes.length) : 0
+    // A first clear opens the next tape on the shelf.
+    if (current.type === 'level' && cleared && (normalizeStars(progressRef.current.levelStars)[current.index] ?? 0) === 0) setFreshTape(current.index + 1)
     const bonus = levelStars * 10
     r.xp += bonus
     setXp(r.xp)
@@ -469,6 +530,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       bestCombo: r.bestCombo,
       stars: levelStars,
       newBest,
+      crash,
     })
     g.glitch = cleared ? 0 : 1
     audio.current?.stopHum()
@@ -513,11 +575,6 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     if (r.combo === 3 || r.combo === 6) audio.current?.combo()
     if (r.mode.type === 'endless') {
       commit((p) => ({ ...p, backroomRunBest: Math.max(p.backroomRunBest, r.gates), backroomRunXp: Math.max(p.backroomRunXp, r.xp) }))
-      if (r.gates % RECHARGE_EVERY === 0 && r.lives < maxBatteries) {
-        r.lives += 1
-        setLives(r.lives)
-        later(() => { showToast('BATTERY FOUND · +1', 'info'); audio.current?.battery() }, 900)
-      }
       if (r.gates === championGates) {
         setShowChampion(true)
         later(() => setShowChampion(false), 10000)
@@ -529,9 +586,12 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     const g = game.current
     const r = run.current
     const target = g.gate!
-    r.lives -= 1
+    // With the camera already dead there is nothing left to lose: the run ends.
+    const final = r.lives <= 0
+    r.lives = Math.max(0, r.lives - 1)
     r.combo = 0
-    const entry: Mistake = { gate: target, values: { ...g.values }, explanation: explainGate(target, g.values), reason, chosenSide, trueSide: g.trueSide, livesLeft: r.lives }
+    if (r.lives === 0 && !final) ensureBattery()
+    const entry: Mistake = { gate: target, values: { ...g.values }, explanation: explainGate(target, g.values), reason, chosenSide, trueSide: g.trueSide, livesLeft: r.lives, final }
     r.mistakes = [...r.mistakes, entry]
     setLives(r.lives)
     setCombo(0)
@@ -548,7 +608,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
   const continueAfterMistake = () => {
     const g = game.current
-    if (run.current.lives <= 0) {
+    if (mistake?.final) {
       finishRun(false)
       return
     }
@@ -611,33 +671,45 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     coachTimer.current = window.setTimeout(closeCoach, 1100)
   }
 
-  const scrape = () => {
+  // Walls, furniture, barriers and holes end the run on the spot.
+  const crash = (kind: Crash) => {
     const g = game.current
-    const r = run.current
-    g.slow = 0.45
-    g.shake = Math.max(g.shake, 0.35)
-    audio.current?.scrape()
-    if (r.combo > 0) {
-      r.combo = 0
-      setCombo(0)
-      showToast('WALL SCRAPE · COMBO LOST', 'bad')
-    } else showToast('WALL SCRAPE · SLOWED', 'bad')
-  }
-
-  const stumble = (obstacle: CorridorObstacle) => {
-    const g = game.current
-    const r = run.current
-    g.obstacles = g.obstacles.filter((item) => item !== obstacle)
-    g.slow = 0.9
-    g.shake = 0.8
-    audio.current?.stumble()
-    r.combo = 0
+    if (g.dying) return
+    g.dying = { crash: kind, t: 0 }
+    g.shake = 1
+    g.glitch = 1
+    steerRef.current = { left: false, right: false }
+    stopEnergyHold()
+    run.current.combo = 0
     setCombo(0)
-    showToast(obstacle.kind === 'barrier' ? 'YOU TRIPPED · JUMP IT NEXT TIME' : 'YOU STUMBLED · COMBO LOST', 'bad')
+    if (kind === 'hole') audio.current?.fall()
+    else audio.current?.slam()
+    audio.current?.mistake()
   }
 
-  const events = useRef({ beginGate, afterGate, resolveGate, openCoach, scrape, stumble, setClock, setNightshot })
-  useEffect(() => { events.current = { beginGate, afterGate, resolveGate, openCoach, scrape, stumble, setClock, setNightshot } })
+  // The camera never dies without a spare battery somewhere ahead.
+  const ensureBattery = () => {
+    const g = game.current
+    const last = g.bends[g.bends.length - 1]
+    if (!last || g.pickups.some((item) => item.z > g.depth)) return
+    const chair = g.obstacles.find((item) => item.kind === 'chair' || item.kind === 'trash')
+    const z = Math.max(last.endZ + 3, g.depth + 6)
+    g.pickups = [...g.pickups, { z, x: corridorCenterAt(g.gateCenter, g.bends, z) - (chair?.side ?? 1) * 0.22 }]
+  }
+
+  const collectBattery = (pickup: CorridorPickup) => {
+    const g = game.current
+    const r = run.current
+    g.pickups = g.pickups.filter((item) => item !== pickup)
+    const wasDead = r.lives <= 0
+    r.lives = Math.min(maxBatteries, r.lives + 1)
+    setLives(r.lives)
+    audio.current?.battery()
+    showToast(wasDead ? 'BATTERY IN · CAMERA ON' : `BATTERY +1 · ${r.lives}/${maxBatteries}`, 'info')
+  }
+
+  const events = useRef({ beginGate, afterGate, resolveGate, openCoach, crash, collectBattery, finishRun, startRunning, setClock, setNightshot })
+  useEffect(() => { events.current = { beginGate, afterGate, resolveGate, openCoach, crash, collectBattery, finishRun, startRunning, setClock, setNightshot } })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -688,9 +760,40 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       atmosphere(dt, true, true)
     }
 
+    const enter = (dt: number) => {
+      g.time += dt
+      g.entryT += dt
+      const k = Math.min(1, g.entryT / 1.05)
+      g.entry = 1 - (1 - k) ** 3
+      // A small step toward the doorway as it opens.
+      g.depth = Math.min(0.35, g.entryT * 0.3)
+      g.cameraLight = cameraLightFor(run.current.lives, g.time)
+      if (g.entryT >= ENTRY_SECONDS) events.current.startRunning()
+    }
+
+    const dying = (dt: number) => {
+      const d = g.dying!
+      d.t += dt
+      g.time += dt
+      if (d.crash === 'hole') {
+        // Over the edge: a little momentum, then straight down into the dark.
+        g.depth += dt * g.speed * 1.6 * Math.max(0, 0.6 - d.t)
+        g.fall = Math.min(4, d.t * d.t * 6)
+        g.cameraLight = Math.max(0, g.cameraLight - dt * 1.2)
+      } else g.shake = Math.max(g.shake, 0.6 - d.t * 0.5)
+      g.glitch = Math.max(g.glitch, d.t > 0.5 ? 1 : 0.5)
+      if (d.t >= 1.05) {
+        const kind = d.crash
+        g.dying = null
+        events.current.finishRun(false, kind)
+      }
+    }
+
     const update = (dt: number) => {
       const r = run.current
+      if (g.dying) { dying(dt); return }
       g.time += dt
+      g.cameraLight = cameraLightFor(r.lives, g.time)
       r.clock += dt
       if (Math.floor(r.clock) !== Math.floor(r.clock - dt)) events.current.setClock(r.clock)
       g.lightsActive = r.mode.type === 'level' ? r.mode.index >= 2 : r.gateNumber >= 4
@@ -718,7 +821,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
                   : allowed('energy') ? 'energy' : null
           if (moment) { events.current.openCoach(moment); return }
         }
-        if (g.phase === 'turn' && allowed('jump') && g.obstacles.some((item) => item.kind === 'barrier' && item.z - g.depth > 0 && item.z - g.depth <= 4.5)) {
+        if (g.phase === 'turn' && allowed('jump') && g.obstacles.some((item) => (item.kind === 'barrier' || item.kind === 'hole') && item.z - g.depth > 0 && item.z - g.depth <= 4.5)) {
           events.current.openCoach('jump')
           return
         }
@@ -778,9 +881,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       if (hint !== turnHintRef.current) { turnHintRef.current = hint; setTurnHint(hint) }
       const lastBendEnd = g.bends[g.bends.length - 1]?.endZ ?? 0
       const next = g.phase === 'turn'
-        ? g.obstacles.filter((item) => item.z - g.depth > -0.4 && item.z - g.depth <= 8 && (item.kind === 'barrier' || g.depth >= lastBendEnd - 1)).sort((a, b) => a.z - b.z)[0]
+        ? g.obstacles.filter((item) => item.z - g.depth > -0.4 && item.z - g.depth <= 8 && (item.kind === 'barrier' || item.kind === 'hole' || g.depth >= lastBendEnd - 1)).sort((a, b) => a.z - b.z)[0]
         : undefined
-      const hazard: Hazard = !next ? 0 : next.kind === 'barrier' ? 2 : -next.side as -1 | 1
+      const hazard: Hazard = !next ? 0 : next.kind === 'barrier' || next.kind === 'hole' ? 2 : -next.side as -1 | 1
       if (hazard !== hazardHintRef.current) { hazardHintRef.current = hazard; setHazardHint(hazard) }
 
       const center = corridorCenterAt(g.gateCenter, g.bends, g.depth)
@@ -790,13 +893,16 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         screen.style.setProperty('--wall-right', Math.max(0, Math.min(1, offset / WALL_LIMIT)).toFixed(2))
         screen.style.setProperty('--wall-left', Math.max(0, Math.min(1, -offset / WALL_LIMIT)).toFixed(2))
       }
-      // Walls do not end the run: they stop you, slow you and break the combo.
+      // Touching a wall, anything on the floor or a hole ends the run.
       if (Math.abs(offset) >= WALL_LIMIT) {
         g.playerX = center + Math.sign(offset) * WALL_LIMIT
-        if (!g.wallContact) { g.wallContact = true; events.current.scrape() }
-      } else if (Math.abs(offset) < WALL_LIMIT - 0.06) g.wallContact = false
+        events.current.crash('wall')
+        return
+      }
       const hit = g.obstacles.find((item) => hitsObstacle(previousDepth, g.depth, g.playerX, item, airborne))
-      if (hit) events.current.stumble(hit)
+      if (hit) { events.current.crash(hit.kind); return }
+      const pickup = g.pickups.find((item) => picksUp(previousDepth, g.depth, g.playerX, item))
+      if (pickup) events.current.collectBattery(pickup)
 
       if (g.phase === 'gate' && target) {
         if (g.resolved === 'none' && distance <= LOCK_DISTANCE) {
@@ -821,6 +927,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       last = now
       if (!document.hidden) {
         if (g.status === 'running') update(dt)
+        else if (g.status === 'entering') enter(dt)
         else if (g.status === 'menu') idle(dt)
         else g.time += dt
         g.glitch = Math.max(0, g.glitch - dt * 1.4)
@@ -832,7 +939,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       const signal: GateSignal = !g.gate ? 'unknown'
         : g.gate.kind === 'set' && g.gate.liveTruth ? (g.truth ? 'true' : 'false')
           : g.resolved === 'none' ? 'unknown' : g.truth ? 'true' : 'false'
-      view.render({
+      const frameView: BackroomView = {
         depth: g.depth,
         gateZ: g.gateZ,
         gateCenter: g.gateCenter,
@@ -865,7 +972,15 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         jump: g.jump,
         pace: g.speed / baseRunSpeed,
         hideGate: g.menu,
-      })
+        pickups: g.pickups,
+        entry: g.menu ? -1 : g.entry,
+        cameraLight: g.menu ? 1 : g.cameraLight,
+        fall: g.fall,
+      }
+      view.render(frameView)
+      // Browser checks steer through real tapes; they switch this on, students never do.
+      const qa = (window as unknown as { __backroomQA?: { view?: BackroomView; centerAt?: (z: number) => number } }).__backroomQA
+      if (qa) { qa.view = frameView; qa.centerAt = (z) => corridorCenterAt(g.gateCenter, g.bends, z) }
       screenRef.current?.style.setProperty('--false', g.falseIntensity.toFixed(3))
     }
     frame = requestAnimationFrame(frameLoop)
@@ -1098,6 +1213,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   const retry = () => startMode(run.current.mode, true)
 
   const live = status !== 'menu'
+  const cameraOff = live && lives <= 0 && status !== 'gameOver' && status !== 'levelClear'
   const inGate = phase === 'gate'
   const canEdit = inGate && !locked && gate?.kind === 'set' && (status === 'running' || status === 'coach')
   const usesEnergy = !!gate && gateUsesEnergy(gate)
@@ -1119,8 +1235,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       case 'energy': return coach.satisfied
         ? { title: 'TRUE. THE GATE OPENS.', body: `${values.energy} ${conditionCode(gate).replace('energy ', '')} is TRUE. Keep going.` }
         : { title: 'MAKE IT TRUE', body: `This gate runs if (${conditionCode(gate)}). energy is ${values.energy}, so the condition is FALSE. Use ▲ / ▼ (or ↑ / ↓) to change energy until it reads TRUE.` }
-      case 'steer': return { title: 'FOLLOW THE CORRIDOR', body: `The corridor bends ${sideWord(coach.direction ?? 1)}. Hold ${coach.direction === -1 ? '◀ (or ←)' : '▶ (or →)'} to steer. Scraping a wall slows you down and breaks your combo.` }
-      case 'jump': return { title: 'JUMP!', body: 'A barrier blocks the whole corridor. Press SPACE or tap JUMP to leap over it. Chairs and bins can be jumped too.' }
+      case 'steer': return { title: 'FOLLOW THE CORRIDOR', body: `The corridor bends ${sideWord(coach.direction ?? 1)}. Hold ${coach.direction === -1 ? '◀ (or ←)' : '▶ (or →)'} to steer. Touch a wall and the run is over.` }
+      case 'jump': return { title: 'JUMP!', body: 'A barrier or a hole blocks the whole corridor. Press SPACE or tap JUMP just before it. Touch it and the run is over.' }
       case 'fork': return { title: 'TWO DOORS', body: 'This time the code sets the values. Read the condition: is it TRUE or FALSE? Steer into that door. Your choice locks just before the gate.' }
       case 'bool': return coach.satisfied
         ? { title: 'TRUE. THE GATE OPENS.', body: `${flagName} is now ${String(values.flag)}, so the condition is TRUE.` }
@@ -1168,7 +1284,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
   return <main
     ref={screenRef}
-    className={`br-screen br-screen--${status} ${live ? 'is-live' : ''} ${nightshot ? 'is-nightshot' : ''} ${lives <= 1 && live ? 'is-low-battery' : ''}`}
+    className={`br-screen br-screen--${status} ${live ? 'is-live' : ''} ${nightshot ? 'is-nightshot' : ''} ${lives <= 1 && live ? 'is-low-battery' : ''} ${cameraOff ? 'is-camera-off' : ''}`}
     tabIndex={0}
     onPointerDown={focusScreen}
   >
@@ -1179,6 +1295,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     {live && <>
       <div className="br-viewfinder" aria-hidden="true"><i /><i /><i /><i /></div>
       <div className="br-lcd" aria-hidden="true"><i /></div>
+      {cameraOff && <div className="br-blind" role="status"><b>NO BATTERY</b><span>Find a battery on the floor</span></div>}
       <header className="br-osd">
         <div className="br-osd-left">
           <span className="br-rec-row">{clock < 2 ? <span className="br-rec is-play">▶ PLAY</span> : <span className="br-rec"><i /> REC</span>}<span className="br-sp">SP</span></span>
@@ -1224,7 +1341,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         <div className="br-console-center">
           {codeGate && <CodePanel key={`${phase}-${gateNumber}`} gate={codeGate} values={codeValues} editable={canEdit} truth={codeTruth} trueSide={phase === 'turn' ? game.current.nextTrueSide : trueSide} label={phase === 'turn' ? `NEXT · GATE ${String(gateNumber + 1).padStart(2, '0')}` : `GATE ${String(gateNumber).padStart(2, '0')}`} />}
           <div className="br-console-foot">
-            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint === 2 ? 'JUMP THE BARRIER' : hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · THE CODE LOADS AT THE GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
+            <p className="br-instruction">{locked && phase === 'gate' ? 'LOCKED IN' : phase === 'turn' ? (hazardHint === 2 ? 'JUMP! · SPACE' : hazardHint !== 0 ? `DODGE ${sideWord(hazardHint)}` : turnHint !== 0 ? `TURN ${sideWord(turnHint)}` : 'FOLLOW THE CORRIDOR · THE CODE LOADS AT THE GATE') : forkNow ? 'PICK THE DOOR THAT MATCHES' : gate?.liveTruth ? 'MAKE IT TRUE' : 'NO LIGHT ON THIS GATE · THINK IT THROUGH'}</p>
             <button className="br-hint-button" disabled={!inGate || (status !== 'running' && status !== 'coach')} onClick={() => setHintOpen((open) => !open)} aria-expanded={hintOpen}><Lightbulb size={15} /> HINT</button>
           </div>
           {hintOpen && inGate && <p className="br-hint" role="status"><Lightbulb size={15} /> {hint}</p>}
@@ -1251,22 +1368,23 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
       </div>}
     </>}
 
-    {status === 'loading' && tape && <TapeDeck key={tape.key} kind={tape.kind} label={tape.label} reduced={game.current.reduced} onCue={tapeCue} onDone={finishTape} />}
+    {status === 'loading' && tape && <TapeDeck key={tape.key} kind={tape.kind} label={tape.label} shelf={tape.shelf} slot={tape.slot} reduced={game.current.reduced} onCue={tapeCue} onDone={finishTape} />}
 
-    {status === 'menu' && <BackroomMenu progress={progress} scores={scores} audioOn={audioOn} champion={champion} onToggleAudio={toggleAudio} onPlayLevel={playLevel} onPlayEndless={playEndless} onBack={onBack} />}
+    {status === 'menu' && <BackroomMenu progress={progress} scores={scores} audioOn={audioOn} champion={champion} fresh={freshTape} onToggleAudio={toggleAudio} onPlayLevel={playLevel} onPlayEndless={playEndless} onBack={onBack} />}
 
     {status === 'briefing' && <div className="br-overlay br-overlay--briefing" role="dialog" aria-label="Briefing">
       <div className="br-card">
         <small className="br-kicker"><i /> {level ? `TAPE ${String(level.id).padStart(2, '0')} · ${level.focus}` : 'THE DEEP · ENDLESS'}</small>
         <h2 className="br-title br-title--md" data-text={level ? level.title : 'THE DEEP'}>{level ? level.title : 'THE DEEP'}</h2>
-        <p>{level ? level.lead : 'Everything you learned, mixed. No gate shows TRUE or FALSE before you reach it. The pace keeps climbing. Every 10 gates you find a battery.'}</p>
+        <p>{level ? level.lead : 'Everything you learned, mixed. No gate shows TRUE or FALSE before you reach it. The pace keeps climbing. Spare batteries lie on the floor when the camera needs them.'}</p>
         <ul className="br-examples">
           {(level ? level.examples : [{ code: '70 >= 70', result: true }, { code: '30 > 40 && true', result: false }]).map((example) => <li key={example.code}><code><CodeTokens code={example.code} /></code><span className={example.result ? 'is-true' : 'is-false'}>→ {example.result ? 'TRUE' : 'FALSE'}</span></li>)}
         </ul>
         <div className="br-brief-meta">
           <span>{level ? `${level.gates.length} GATES` : '∞ GATES'}</span>
           <span>{batteries(maxBatteries)} {maxBatteries} BATTERIES</span>
-          <span>WRONG ANSWER = −1 BATTERY</span>
+          <span>WRONG GATE = −1 BATTERY</span>
+          <span className="is-bad">WALLS · PROPS · HOLES = SIGNAL LOST</span>
         </div>
         <div className="br-overlay-actions">
           <button className="br-primary" onClick={launch}><Play size={18} fill="currentColor" /> {level && level.id === 1 && stars[0] === 0 ? 'START TUTORIAL' : 'PRESS PLAY'}</button>
@@ -1289,7 +1407,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
     {status === 'mistake' && mistake && <div className="br-overlay br-overlay--mistake" role="dialog" aria-label={mistakeTitle}>
       <div className="br-card br-card--mistake">
-        <small className="br-kicker is-bad"><i /> −1 BATTERY · {mistake.livesLeft} LEFT</small>
+        <small className="br-kicker is-bad"><i /> {mistake.final ? 'NO BATTERY LEFT' : mistake.livesLeft === 0 ? '−1 BATTERY · CAMERA OFF' : `−1 BATTERY · ${mistake.livesLeft} LEFT`}</small>
         <h2 className="br-title br-title--md is-bad" data-text={mistakeTitle}>{mistakeTitle}</h2>
         <p>{mistakeLead}</p>
         <pre className="br-trace">
@@ -1297,8 +1415,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
           {mistake.explanation.steps.map((step, index) => <code key={`${step.code}-${index}`} className="br-trace-step"><span className="br-trace-arrow">{index === mistake.explanation.steps.length - 1 && mistake.explanation.steps.length > 1 ? '⇒' : '→'}</span><span><CodeTokens code={step.code} /></span><b className={step.result ? 'is-true' : 'is-false'}>{step.result ? 'true' : 'false'}</b></code>)}
         </pre>
         <p className="br-tip"><Lightbulb size={16} /> {mistake.explanation.tip}</p>
+        {mistake.livesLeft === 0 && !mistake.final && <p className="br-dark-note">The camera is off. Find a spare battery on the floor; miss a gate in the dark and the run is over.</p>}
         <div className="br-overlay-actions">
-          <button className="br-primary" onClick={continueAfterMistake} autoFocus>{mistake.livesLeft > 0 ? <><Play size={16} fill="currentColor" /> CONTINUE</> : <><SkipForward size={16} /> SEE RESULTS</>}</button>
+          <button className="br-primary" onClick={continueAfterMistake} autoFocus>{mistake.final ? <><SkipForward size={16} /> SEE RESULTS</> : <><Play size={16} fill="currentColor" /> {mistake.livesLeft === 0 ? 'CONTINUE IN THE DARK' : 'CONTINUE'}</>}</button>
         </div>
         <span className="br-batteries-line">{batteries(mistake.livesLeft)}</span>
       </div>
@@ -1313,9 +1432,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
           <p>{result.stars === 3 ? 'Perfect tape. Every condition read right.' : result.stars === 2 ? 'One wrong answer. Replay for three stars.' : 'Cleared. Replay it to read every gate right.'}</p>
           {result.mode.type === 'level' && result.mode.index === backroomLevels.length - 1 && <div className="br-unlock"><BatteryFull size={20} /> THE DEEP IS OPEN · ENDLESS UNLOCKED</div>}
         </> : <>
-          <small className="br-kicker is-bad"><i /> {result.mode.type === 'level' ? 'BATTERIES EMPTY' : 'THE DEEP'}</small>
+          <small className="br-kicker is-bad"><i /> {result.crash ? crashCopy[result.crash].title : result.mode.type === 'level' ? 'GATE MISSED IN THE DARK' : 'THE DEEP'}</small>
           <h2 className="br-title is-bad" data-text="SIGNAL LOST">SIGNAL LOST</h2>
-          <p>{result.mode.type === 'level' ? 'The camera died before the end of the tape. Read the notes below, then try again.' : result.newBest ? 'New personal record in The Deep.' : 'The Deep keeps going. So can you.'}</p>
+          <p>{result.crash ? crashCopy[result.crash].body : result.mode.type === 'level' ? 'The camera was dead and the gate stayed shut. Read the notes below, then try again.' : ''}{result.mode.type === 'endless' ? ` ${result.newBest ? 'New personal record in The Deep.' : 'The Deep keeps going. So can you.'}` : ''}</p>
         </>}
         <div className="br-summary-grid">
           <article><strong>{result.mode.type === 'level' ? `${result.gates}/${result.totalGates}` : result.gates}</strong><span>GATES READ RIGHT</span></article>
@@ -1333,10 +1452,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         </div>}
         {status === 'gameOver' && result.mode.type === 'endless' && scores.length > 0 && <ol className="br-mini-board">{scores.map((score, index) => <li key={score.username} className={score.username === progress.username ? 'is-you' : ''}><b>{index + 1}</b><span>{score.name}</span><strong>{score.gates}</strong></li>)}</ol>}
         <div className="br-overlay-actions">
-          {status === 'levelClear' && result.mode.type === 'level' && result.mode.index < backroomLevels.length - 1 && <button className="br-primary" onClick={() => playLevel((result.mode as { index: number }).index + 1)}><Play size={16} fill="currentColor" /> NEXT TAPE</button>}
-          {status === 'levelClear' && result.mode.type === 'level' && result.mode.index === backroomLevels.length - 1 && <button className="br-primary" onClick={playEndless}><Play size={16} fill="currentColor" /> ENTER THE DEEP</button>}
+          {status === 'levelClear' && <button className="br-primary" onClick={toMenu}><ArrowLeft size={16} /> BACK TO THE SHELF</button>}
           <button className={status === 'gameOver' ? 'br-primary' : 'br-secondary'} onClick={retry}><RotateCcw size={16} /> {result.mode.type === 'endless' ? 'RUN AGAIN' : status === 'gameOver' ? 'RETRY TAPE' : 'REPLAY'}</button>
-          <button className="br-secondary" onClick={toMenu}>TAPES</button>
+          {status === 'gameOver' && <button className="br-secondary" onClick={toMenu}>TAPES</button>}
           {status === 'gameOver' && nextIndex === null && result.mode.type === 'level' && <button className="br-secondary" onClick={onBack}><ArrowLeft size={15} /> MODULE</button>}
         </div>
       </div>

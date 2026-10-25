@@ -205,6 +205,7 @@ export interface CorridorBend {
 export interface CorridorPlan {
   bends: CorridorBend[]
   obstacles: CorridorObstacle[]
+  pickups: CorridorPickup[]
   nextGateZ: number
   nextGateCenter: number
   activationZ: number
@@ -214,9 +215,18 @@ export interface CorridorObstacle {
   z: number
   x: number
   side: -1 | 1
-  // A barrier spans the whole corridor and can only be jumped.
-  kind: 'chair' | 'trash' | 'barrier'
+  // A barrier or a hole spans the whole corridor and can only be jumped.
+  kind: 'chair' | 'trash' | 'barrier' | 'hole'
 }
+
+// A spare camcorder battery lying on the carpet.
+export interface CorridorPickup {
+  z: number
+  x: number
+}
+
+export type JumpHazard = 'barrier' | 'hole'
+export const holeHalfLength = 0.26
 
 const bendLength = 8
 const bendSpacing = 12
@@ -224,7 +234,7 @@ const gateClearance = 26
 export const gateApproach = 16
 const turnShift = 1.15
 
-export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[], barrier = false): CorridorPlan {
+export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTile[], jumps: boolean | JumpHazard | Array<JumpHazard | null> = false, battery = false): CorridorPlan {
   let center = gateCenter
   const bends = tiles.filter((tile) => tile.kind === 'curve').map((tile, index) => {
     const dir = tile.dir as -1 | 1
@@ -242,17 +252,32 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
     side,
     kind: Math.abs(Math.round(gateZ + center * 5)) % 2 === 0 ? 'chair' : 'trash',
   }] : []
-  // Barriers sit on the straight between the first two bends.
-  if (barrier && bends.length >= 2) obstacles.unshift({ z: bends[0].endZ + 2, x: bends[0].to, side: 1, kind: 'barrier' })
-  return { bends, obstacles, nextGateZ, nextGateCenter: center, activationZ: nextGateZ - gateApproach }
+  // Barriers and holes fill up to two slots: the straight after the first bend, then the
+  // straight after the second (or, with only two bends, the last straight past the chair).
+  const wanted = Array.isArray(jumps) ? jumps : jumps ? [jumps === true ? 'barrier' : jumps] : []
+  const slots = bends.length >= 3 ? [bends[0].endZ + 2, bends[1].endZ + 2] : bends.length === 2 ? [bends[0].endZ + 2, bends[1].endZ + 8.5] : []
+  wanted.forEach((kind, index) => {
+    const z = slots[index]
+    if (kind && z !== undefined) obstacles.push({ z, x: corridorCenterAt(gateCenter, bends, z), side: 1, kind })
+  })
+  obstacles.sort((a, b) => a.z - b.z)
+  // A battery waits on the last straight, on the side away from the chair or bin.
+  const pickups: CorridorPickup[] = battery && lastBend ? [{ z: lastBend.endZ + 3, x: center - side * 0.22 }] : []
+  return { bends, obstacles, pickups, nextGateZ, nextGateCenter: center, activationZ: nextGateZ - gateApproach }
 }
 
 export function hitsObstacle(previousDepth: number, depth: number, playerX: number, obstacle: CorridorObstacle, airborne = false): boolean {
   if (airborne) return false
+  // Anyone on the ground over the hole falls: the whole crossing must be in the air.
+  if (obstacle.kind === 'hole') return previousDepth <= obstacle.z + holeHalfLength && depth >= obstacle.z - holeHalfLength
   const crossing = obstacle.kind === 'barrier'
     ? previousDepth <= obstacle.z + 0.06 && depth >= obstacle.z - 0.06
     : previousDepth <= obstacle.z + 0.35 && depth >= obstacle.z - 0.35
-  return crossing && (obstacle.kind === 'barrier' || Math.abs(playerX - obstacle.x) < 0.34)
+  return crossing && (obstacle.kind === 'barrier' || Math.abs(playerX - obstacle.x) < 0.27)
+}
+
+export function picksUp(previousDepth: number, depth: number, playerX: number, pickup: CorridorPickup): boolean {
+  return previousDepth <= pickup.z + 0.2 && depth >= pickup.z - 0.2 && Math.abs(playerX - pickup.x) < 0.32
 }
 
 export function corridorCenterAt(baseCenter: number, bends: CorridorBend[], worldZ: number): number {

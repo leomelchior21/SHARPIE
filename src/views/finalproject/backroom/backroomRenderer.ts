@@ -1,4 +1,4 @@
-import { corridorCenterAt, type CorridorBend, type CorridorObstacle, type GateKind } from './backroomEngine'
+import { corridorCenterAt, holeHalfLength, type CorridorBend, type CorridorObstacle, type CorridorPickup, type GateKind } from './backroomEngine'
 
 export type GateSignal = 'true' | 'false' | 'unknown'
 
@@ -44,6 +44,14 @@ export interface BackroomView {
   // Current speed relative to the opening pace.
   pace: number
   hideGate?: boolean
+  // Spare batteries on the floor.
+  pickups?: CorridorPickup[]
+  // The door into Level 0 at the start of a run: 0 shut, 1 open, -1 not drawn.
+  entry?: number
+  // The camcorder's video light, 0 (dead) to 1 (full charge).
+  cameraLight?: number
+  // How far the camera has dropped into a hole.
+  fall?: number
 }
 
 export interface BackroomRendererHandle {
@@ -574,14 +582,49 @@ function drawBarrier(ctx: CanvasRenderingContext2D, p: Projector, view: Backroom
   }
 }
 
+const floorAt = (p: Projector, distance: number) => p.horizon + (p.focal * 0.83 / perspectiveDistance(distance)) * p.eye
+
+// A hole: the carpet simply stops, and below it there is nothing.
+function drawHole(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView, z: number) {
+  const near = Math.max(0.2, z - holeHalfLength - view.depth)
+  const far = z + holeHalfLength - view.depth
+  if (far <= 0.2 || near > 20) return
+  const center = centerAt(view, z)
+  ctx.fillStyle = '#000'
+  ctx.beginPath()
+  ctx.moveTo(screenX(p, near, center - p.half), floorAt(p, near))
+  ctx.lineTo(screenX(p, near, center + p.half), floorAt(p, near))
+  ctx.lineTo(screenX(p, far, center + p.half), floorAt(p, far))
+  ctx.lineTo(screenX(p, far, center - p.half), floorAt(p, far))
+  ctx.closePath()
+  ctx.fill()
+}
+
+function drawPickups(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  for (const pickup of view.pickups ?? []) {
+    const distance = pickup.z - view.depth
+    if (distance <= 0.2 || distance > 18) continue
+    const unit = p.focal * 0.83 / perspectiveDistance(distance)
+    const x = screenX(p, distance, pickup.x)
+    const floor = floorAt(p, distance)
+    const width = unit * 0.18
+    ctx.fillStyle = '#e8e6df'
+    ctx.fillRect(x - width / 2, floor - width * 0.6, width, width * 0.55)
+    ctx.fillStyle = '#4dff8a'
+    for (let led = 0; led < 4; led += 1) ctx.fillRect(x - width * 0.38 + led * width * 0.2, floor - width * 0.45, width * 0.12, width * 0.12)
+  }
+}
+
 function drawObstacles(ctx: CanvasRenderingContext2D, p: Projector, view: BackroomView) {
+  for (const obstacle of view.obstacles) if (obstacle.kind === 'hole') drawHole(ctx, p, view, obstacle.z)
   for (const obstacle of view.obstacles) if (obstacle.kind === 'barrier') drawBarrier(ctx, p, view, obstacle.z)
+  drawPickups(ctx, p, view)
   if (view.phase !== 'turn') return
   const lastBend = view.bends[view.bends.length - 1]
   if (!lastBend || view.depth < lastBend.endZ - 4) return
   for (const obstacle of view.obstacles) {
     const distance = obstacle.z - view.depth
-    if (obstacle.kind === 'barrier' || distance <= 0.2 || distance > 18) continue
+    if (obstacle.kind === 'barrier' || obstacle.kind === 'hole' || distance <= 0.2 || distance > 18) continue
     const unit = p.focal * 0.83 / perspectiveDistance(distance)
     const x = screenX(p, distance, obstacle.x)
     const floor = p.horizon + unit * p.eye
