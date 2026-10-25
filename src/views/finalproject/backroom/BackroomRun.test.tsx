@@ -55,8 +55,14 @@ describe('Backrooms Run', () => {
 
   const student = (changes: Partial<BackroomProgress> = {}) => ({ ...createBackroomProgress('Ana', 'ana'), ...changes })
 
+  // Every run starts with the tape change; tests skip it.
+  function skipTape() {
+    fireEvent.click(within(screen.getByRole('dialog', { name: /Loading tape/ })).getByRole('button', { name: /SKIP/ }))
+  }
+
   function playTape(title: string) {
     fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }))
+    skipTape()
     const briefing = screen.getByRole('dialog', { name: 'Briefing' })
     fireEvent.click(within(briefing).getAllByRole('button')[0])
     tick()
@@ -81,6 +87,7 @@ describe('Backrooms Run', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     mount(student())
     fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    skipTape()
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getByRole('button', { name: /START TUTORIAL/ }))
     until(() => !!screen.queryByRole('dialog', { name: 'MAKE IT TRUE' }))
     const frozen = tick().depth
@@ -146,6 +153,7 @@ describe('Backrooms Run', () => {
   it('clears a tape with three stars, saves it and offers the next one', () => {
     const { saves } = mount(student({ backroomRunBest: 5 }))
     fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    skipTape()
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getAllByRole('button')[0])
     const targets = [60, 20, 80, 10]
     backroomLevels[0].gates.forEach((_, index) => {
@@ -202,6 +210,7 @@ describe('Backrooms Run', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     const { saves } = mount(student())
     fireEvent.click(screen.getByRole('button', { name: /START TUTORIAL/ }))
+    skipTape()
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Briefing' })).getByRole('button', { name: /START TUTORIAL/ }))
     until(() => !!screen.queryByRole('dialog', { name: 'MAKE IT TRUE' }))
     setEnergy(51)
@@ -214,6 +223,9 @@ describe('Backrooms Run', () => {
     }
     expect(saves[saves.length - 1].coachSeen).toEqual(['energy', 'steer'])
     fireEvent.click(screen.getByRole('button', { name: /RETRY TAPE/ }))
+    // A retry rewinds the same tape and goes straight back in.
+    expect(screen.getByRole('dialog', { name: 'Loading tape 01' })).toHaveTextContent('◀◀ REW')
+    skipTape()
     expect(screen.queryByRole('dialog', { name: 'Briefing' })).not.toBeInTheDocument()
     until(() => !!screen.queryByRole('dialog', { name: 'THE GATE STAYED SHUT' }))
     expect(screen.queryByRole('dialog', { name: 'MAKE IT TRUE' })).not.toBeInTheDocument()

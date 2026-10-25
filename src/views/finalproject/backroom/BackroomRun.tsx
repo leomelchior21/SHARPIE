@@ -13,6 +13,8 @@ import { rememberBackroomScore, type BackroomScore } from './backroomScores'
 import { BackroomMenu, Stars } from './BackroomMenu'
 import { CodePanel, CodeTokens, type CodeTruth } from './BackroomCode'
 import { BackroomChampionAward, BackroomChampionBadge } from './BackroomChampion'
+import { TapeDeck } from './BackroomTape'
+import type { TapeCue, TapeKind, TapeLabel } from './tapeTimeline'
 import type { BackroomProgress, SkillRecord } from './types'
 import './backroomRun.css'
 
@@ -24,7 +26,8 @@ interface Props {
 }
 
 type Mode = { type: 'level'; index: number } | { type: 'endless' }
-type Status = 'menu' | 'briefing' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
+type Status = 'menu' | 'loading' | 'briefing' | 'running' | 'coach' | 'paused' | 'mistake' | 'levelClear' | 'gameOver'
+type Tape = { kind: TapeKind; label: TapeLabel; then: 'briefing' | 'running'; key: number }
 type MistakeReason = 'closed' | 'wrong-door' | 'pillar'
 // Steering hint: dodge left or right, or 2 for a barrier to jump.
 type Hazard = 0 | -1 | 1 | 2
@@ -146,6 +149,10 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   const [hintOpen, setHintOpen] = useState(false)
   // The choice locks just before the gate; controls show it.
   const [locked, setLocked] = useState(false)
+  // Every run starts by loading its tape; a retry rewinds it instead.
+  const [tape, setTape] = useState<Tape | null>(null)
+  const tapeRef = useRef<Tape | null>(null)
+  const [dateStamp] = useState(() => { const now = new Date(); return `${now.toLocaleString('en-US', { month: 'short' }).toUpperCase()}.${now.getDate()} ${now.getFullYear()}` })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const screenRef = useRef<HTMLElement>(null)
@@ -372,7 +379,34 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     setNightshot(false)
     setShowChampion(false)
     steerRef.current = { left: false, right: false }
-    if (quick) {
+    const tapeLevel = next.type === 'level' ? backroomLevels[next.index] : null
+    const label: TapeLabel = tapeLevel
+      ? { number: String(tapeLevel.id).padStart(2, '0'), title: tapeLevel.title, focus: tapeLevel.focus, stars: normalizeStars(progressRef.current.levelStars)[next.type === 'level' ? next.index : 0], deep: false }
+      : { number: '∞', title: 'THE DEEP', focus: 'ENDLESS · EVERY GATE', stars: 0, deep: true }
+    const loaded: Tape = { kind: quick ? 'rewind' : 'insert', label, then: quick ? 'running' : 'briefing', key: Date.now() }
+    tapeRef.current = loaded
+    setTape(loaded)
+    // Choosing a tape is a tap, so the deck may already make its sounds.
+    if (audioOn) audio.current?.enable()
+    setGameStatus('loading')
+  }
+
+  const tapeCue = (cue: TapeCue) => {
+    const sound = audio.current
+    if (!sound) return
+    const play: Partial<Record<TapeCue, () => void>> = {
+      eject: () => sound.tapeEject(), insert: () => sound.tapeInsert(), seat: () => sound.tapeSeat(), clack: () => sound.tapeClack(),
+      motor: () => sound.tapeMotor(), play: () => sound.tapePlay(), static: () => sound.tapeStatic(), rewind: () => sound.tapeRewind(),
+    }
+    play[cue]?.()
+  }
+
+  const finishTape = () => {
+    if (game.current.status !== 'loading') return
+    const then = tapeRef.current?.then ?? 'briefing'
+    tapeRef.current = null
+    setTape(null)
+    if (then === 'running') {
       enableAudioFromGesture()
       setGameStatus('running')
       screenRef.current?.focus()
@@ -791,6 +825,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         else g.time += dt
         g.glitch = Math.max(0, g.glitch - dt * 1.4)
       }
+      // The tape deck covers the corridor while it loads a tape: no need to draw both.
+      if (g.status === 'loading' && tapeRef.current?.kind === 'insert') return
       // Values can change while the run is frozen for a guide, so the sign follows them.
       if (g.gate) g.truth = evaluateGate(g.gate, g.values)
       const signal: GateSignal = !g.gate ? 'unknown'
@@ -1008,6 +1044,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     }
     // A focused button handles Enter and Space itself.
     if ((key === 'Enter' || key === ' ') && target?.tagName === 'BUTTON') return
+    if (current === 'loading' && (key === 'Enter' || key === ' ' || key === 'Escape')) { event.preventDefault(); finishTape(); return }
     if (key === 'Enter' || key === ' ') {
       if (current === 'briefing') { event.preventDefault(); launch(); return }
       if (current === 'mistake') { event.preventDefault(); continueAfterMistake(); return }
@@ -1141,11 +1178,13 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
 
     {live && <>
       <div className="br-viewfinder" aria-hidden="true"><i /><i /><i /><i /></div>
+      <div className="br-lcd" aria-hidden="true"><i /></div>
       <header className="br-osd">
         <div className="br-osd-left">
-          <span className="br-rec"><i /> REC</span>
+          <span className="br-rec-row">{clock < 2 ? <span className="br-rec is-play">▶ PLAY</span> : <span className="br-rec"><i /> REC</span>}<span className="br-sp">SP</span></span>
           <span className="br-timecode">{timecode(clock)}</span>
           <span className="br-tapename">{level ? `TAPE ${String(level.id).padStart(2, '0')} · ${level.title}` : 'THE DEEP · ENDLESS'}</span>
+          <span className="br-zoom" aria-hidden="true">W<i><b style={{ width: `${Math.round(Math.min(1, Math.max(0.08, (pace - 1) / 1.4)) * 100)}%` }} /></i>T</span>
           {nightshot && <span className="br-nightshot">NIGHTSHOT</span>}
         </div>
         <div className="br-osd-center" aria-label={level ? `Gate ${gateNumber} of ${levelGates}` : `Gate ${gateNumber}`}>
@@ -1158,6 +1197,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
           <span className="br-pace" aria-label={`Pace ${pace.toFixed(1)} times`}>PACE {pace.toFixed(1)}×</span>
           <span className="br-xp"><Zap size={15} fill="currentColor" /> {xp}</span>
           {batteries(lives)}
+          <span className="br-datestamp" aria-hidden="true">{dateStamp}</span>
           <button className="br-icon" onClick={toggleAudio} aria-label={audioOn ? 'Turn sound off' : 'Turn sound on'}>{audioOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
           <button className="br-icon" onClick={togglePause} aria-label={status === 'paused' ? 'Resume run' : 'Pause run'}>{status === 'paused' ? <Play size={17} /> : <Pause size={17} />}</button>
         </div>
@@ -1210,6 +1250,8 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
         {(coach?.moment === 'steer' || coach?.moment === 'fork' || coach?.moment === 'jump') && <button className="br-secondary" onClick={closeCoach}>GOT IT</button>}
       </div>}
     </>}
+
+    {status === 'loading' && tape && <TapeDeck key={tape.key} kind={tape.kind} label={tape.label} reduced={game.current.reduced} onCue={tapeCue} onDone={finishTape} />}
 
     {status === 'menu' && <BackroomMenu progress={progress} scores={scores} audioOn={audioOn} champion={champion} onToggleAudio={toggleAudio} onPlayLevel={playLevel} onPlayEndless={playEndless} onBack={onBack} />}
 

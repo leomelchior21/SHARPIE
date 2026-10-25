@@ -226,6 +226,45 @@ export class BackroomAudio {
     ;[523, 659, 784, 1046].forEach((frequency, index) => this.tone(frequency, 0.4, 'triangle', 0.045, index * 0.11))
   }
 
+  // The tape change: spring door, plastic slide, latch, transport motor and the camcorder beep.
+  tapeEject(): void {
+    this.burst(0.16, 420, 1, 0.1, 'lowpass')
+    this.tone(260, 0.22, 'sawtooth', 0.016, 0, 150)
+  }
+
+  tapeInsert(): void {
+    this.burst(0.38, 1700, 0.7, 0.045, 'bandpass')
+  }
+
+  tapeSeat(): void {
+    this.burst(0.06, 3200, 2, 0.06, 'bandpass')
+    this.tone(1900, 0.03, 'square', 0.02)
+  }
+
+  tapeClack(): void {
+    this.burst(0.14, 240, 0.9, 0.18, 'lowpass')
+    this.tone(92, 0.16, 'square', 0.05)
+    this.tone(2300, 0.03, 'square', 0.02, 0.04)
+  }
+
+  tapeMotor(): void {
+    this.tone(150, 0.55, 'sawtooth', 0.016, 0, 260)
+    this.burst(0.55, 650, 3, 0.022, 'bandpass')
+  }
+
+  tapePlay(): void {
+    this.tone(2093, 0.07, 'square', 0.02)
+  }
+
+  tapeStatic(): void {
+    this.burst(0.3, 4200, 0.3, 0.06, 'highpass')
+  }
+
+  tapeRewind(): void {
+    this.tone(320, 0.9, 'sawtooth', 0.016, 0, 980)
+    this.burst(0.9, 2600, 1, 0.03, 'bandpass')
+  }
+
   battery(): void {
     this.tone(880, 0.1, 'square', 0.025)
     this.tone(1320, 0.18, 'square', 0.025, 0.1)

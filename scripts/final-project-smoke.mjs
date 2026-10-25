@@ -25,7 +25,15 @@ const saved=()=>evaluate(`JSON.parse(localStorage.getItem(finalQA.storageKey('fi
 const energyTo=async target=>{
   await evaluate(`(()=>{const current=Number(document.querySelector('.br-slot').textContent);const label=${target}>current?'Increase energy':'Decrease energy';const button=[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===label);for(let i=0;i<Math.abs(${target}-current);i++)button.click();})()`);
 };
-const startTutorial=async()=>{await evaluate('document.querySelector(".br-primary--hero").click()');await delay(150);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
+// The first run also films the 3D tape change: door, cassette, lens dive, PLAY.
+let deckFilmed=false;
+const startTutorial=async()=>{
+  if(!deckFilmed){await wait('!!document.querySelector(".br-tape")',15000);await delay(400);const shelf=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,'tape-library.png'),Buffer.from(shelf.data,'base64'));}
+  await evaluate(`window.__tapeDeckPace=${deckFilmed?1:0.25};document.querySelector(".br-primary--hero").click()`);await wait('!!document.querySelector(".br-deck")',5000);
+  if(!deckFilmed){deckFilmed=true;await wait('document.querySelector(".br-deck")?.classList.contains("is-3d")',15000);let elapsed=0;
+    // Filmed at quarter speed so each shot lands on its moment.
+    for(const [at,name] of [[1000,'tape-door'],[2300,'tape-loaded'],[3150,'tape-lens'],[3800,'tape-play']].map(([at,name])=>[at*4,name])){await delay(at-elapsed);elapsed=at;const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));}}
+  await wait('!!document.querySelector(".br-overlay--briefing")',15000);await click('START TUTORIAL');await wait('!!document.querySelector(".br-coach")',15000);};
 const pressLabel=async label=>{await evaluate(`[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`);await delay(120);};
 try{
   let target;for(let i=0;i<70;i++){try{const list=await(await fetch(`http://127.0.0.1:${port}/json`)).json();target=list.find(t=>t.type==='page');if(target)break;}catch{}await delay(150);}

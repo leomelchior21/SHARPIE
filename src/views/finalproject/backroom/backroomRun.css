@@ -369,6 +369,77 @@
 @keyframes br-glitch-a { 0%, 84%, 100% { opacity: 0; transform: none; } 86% { opacity: .85; transform: translateX(-7px); } 90% { opacity: .6; transform: translateX(4px); } 93% { opacity: 0; } }
 @keyframes br-glitch-b { 0%, 76%, 100% { opacity: 0; transform: none; } 78% { opacity: .8; transform: translateX(8px); } 82% { opacity: .5; transform: translateX(-4px); } 85% { opacity: 0; } }
 
+/* Looking through the camcorder's flip-out LCD: rounded screen, dark bezel, RGB pixel grid, glare. */
+.br-lcd { position: absolute; z-index: 3; inset: 3px; border-radius: clamp(16px, 3vh, 30px); pointer-events: none; box-shadow: 0 0 0 48px #050404, inset 0 0 0 1px rgba(255,255,255,.08), inset 0 0 0 3px rgba(0,0,0,.65), inset 0 0 70px rgba(0,0,0,.55); }
+.br-lcd::before { position: absolute; inset: 0; content: ''; border-radius: inherit; background: repeating-linear-gradient(90deg, rgba(255,70,70,.035) 0 1px, rgba(70,255,110,.03) 1px 2px, rgba(80,120,255,.035) 2px 3px); }
+.br-lcd i { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(122deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.025) 20%, transparent 38%); }
+.br-rec-row { display: inline-flex; align-items: center; gap: 12px; }
+.br-rec.is-play { color: var(--br-ink); animation: br-fade .2s steps(2) both; }
+.br-sp { padding: 0 6px; border: 2px solid currentColor; font-size: .72em; line-height: 1.15; }
+.br-zoom { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; font-size: .7em; }
+.br-zoom i { position: relative; width: clamp(60px, 9vw, 110px); height: 8px; border: 2px solid var(--br-ink); }
+.br-zoom b { position: absolute; inset: 1px auto 1px 1px; background: var(--br-ink); transition: width .6s; }
+.br-datestamp { flex-basis: 100%; color: var(--br-ink); font-size: .78em; letter-spacing: .1em; text-align: right; }
+
+/* The tape change. */
+.br-deck { position: absolute; z-index: 9; inset: 0; overflow: hidden; background: #0b0906; animation: br-fade .25s ease-out both; }
+.br-deck--rewind { background: rgba(6,5,4,.55); }
+.br-deck-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
+.br-deck.is-3d .br-deck-canvas { opacity: 1; }
+.br-deck::after { position: absolute; inset: 0; content: ''; pointer-events: none; background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 55%, rgba(0,0,0,.7) 100%); }
+.br-deck-osd { position: absolute; z-index: 2; top: clamp(16px, 3vh, 32px); left: clamp(20px, 3vw, 44px); right: clamp(20px, 3vw, 44px); display: grid; justify-items: start; gap: 6px; text-shadow: 0 0 8px rgba(255,250,230,.3), 2px 2px 0 rgba(0,0,0,.6); }
+.br-deck-kicker { color: var(--br-amber); font-size: clamp(14px, 2.2vh, 20px); letter-spacing: .1em; }
+.br-deck-status { display: inline-flex; align-items: center; gap: 10px; color: var(--br-ink); font-size: clamp(22px, 3.6vh, 34px); letter-spacing: .08em; animation: br-blink 1s steps(1) infinite; }
+.br-deck-status i { display: inline-flex; gap: 4px; }
+.br-deck-status i span { width: .5em; height: .7em; background: currentColor; animation: br-load 0.9s steps(1) infinite; }
+.br-deck-status i span:nth-child(2) { animation-delay: .3s; }
+.br-deck-status i span:nth-child(3) { animation-delay: .6s; }
+.br-deck-rew { color: var(--br-ink); font-size: clamp(30px, 5vh, 48px); letter-spacing: .06em; animation: br-blink .6s steps(1) infinite; }
+.fp-shell .br-screen.br-screen button.br-deck-skip { position: absolute; z-index: 4; right: clamp(16px, 3vw, 40px); bottom: clamp(16px, 3vh, 34px); display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 16px; border: 1px solid var(--br-line-strong); border-radius: 999px; color: var(--br-ink); background: rgba(10,10,8,.6); font: 16px var(--br-font); letter-spacing: .1em; }
+/* VHS-blue PLAY screen, then a burst of static. */
+.br-deck-blue { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; color: #fff; background: #1730c8; font-family: var(--br-font); text-shadow: 2px 2px 0 rgba(0,0,0,.35); animation: br-fade .12s steps(2) both; }
+.br-deck-blue.is-clear { background: transparent; }
+.br-deck-blue strong { display: grid; justify-items: center; gap: 6px; font-size: clamp(34px, 7vh, 64px); letter-spacing: .1em; }
+.br-deck-blue strong small { font-size: .45em; letter-spacing: .14em; }
+.br-deck-play { position: absolute; top: clamp(16px, 3vh, 32px); left: clamp(20px, 3vw, 44px); font-size: clamp(26px, 4.4vh, 40px); }
+.br-deck-sp { position: absolute; top: clamp(16px, 3vh, 32px); right: clamp(20px, 3vw, 44px); padding: 0 8px; border: 3px solid currentColor; font-size: clamp(20px, 3.4vh, 30px); }
+.br-deck-counter { position: absolute; bottom: clamp(16px, 3vh, 32px); left: clamp(20px, 3vw, 44px); font-size: clamp(22px, 3.6vh, 32px); }
+.br-deck-tracking { position: absolute; left: 0; right: 0; height: 14%; background: linear-gradient(180deg, transparent, rgba(255,255,255,.22) 40%, rgba(255,255,255,.08) 60%, transparent); filter: blur(1px); animation: br-tracking .9s linear infinite; }
+.br-deck-static { position: absolute; z-index: 3; inset: 0; background-color: #888; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); background-size: 160px; mix-blend-mode: normal; animation: br-grain .2s steps(4) infinite, br-static-out .3s ease-in forwards; }
+/* Rewind: picture streaks race upward. */
+.br-deck-rewind { position: absolute; inset: 0; overflow: hidden; }
+.br-deck-rewind i { position: absolute; left: -10%; right: -10%; height: 9%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), rgba(255,240,200,.12), transparent); filter: blur(2px); animation: br-rew .45s linear infinite; }
+.br-deck-rewind i:nth-child(2) { animation-delay: -.11s; }
+.br-deck-rewind i:nth-child(3) { animation-delay: -.23s; }
+.br-deck-rewind i:nth-child(4) { animation-delay: -.34s; }
+/* Flat fallback: the cassette rises into frame. */
+.br-deck-flat { position: absolute; inset: 0; display: grid; place-items: center; perspective: 900px; }
+.br-deck-cassette { display: grid; gap: 4%; width: min(78vw, 520px); aspect-ratio: 1.6; padding: 4%; border-radius: 14px; background: linear-gradient(180deg, #1d1c1a, #0d0c0b); box-shadow: 0 30px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.1); animation: br-cassette-in 1s cubic-bezier(.2,.8,.3,1) .5s both; }
+.br-deck-window { display: flex; justify-content: space-around; align-items: center; height: 100%; border-radius: 8px; background: rgba(60,48,38,.55); }
+.br-deck-window i { width: 22%; aspect-ratio: 1; border-radius: 50%; border: 6px solid #efe8d8; background: radial-gradient(circle, #efe8d8 0 18%, #2b1c12 20%); animation: br-spin-reel 1.2s linear infinite; }
+.br-deck-label { display: grid; gap: 2px; padding: 3% 4%; border-radius: 6px; color: #1b2a6b; background: #efe5c8; }
+.br-deck-label small { display: flex; justify-content: space-between; padding: 2px 6px; color: #fff; background: #d0161f; font: 12px var(--br-font); letter-spacing: .1em; }
+.br-deck-label strong { font: 700 clamp(22px, 4vh, 34px) "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive; }
+.br-deck-label em { color: #1b2a6b; font: 600 clamp(14px, 2.2vh, 18px) "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive; }
+@keyframes br-tracking { from { top: -15%; } to { top: 105%; } }
+@keyframes br-rew { from { top: 105%; } to { top: -12%; } }
+@keyframes br-static-out { 0%, 60% { opacity: 1; } 100% { opacity: .2; } }
+@keyframes br-load { 0% { opacity: .2; } 34% { opacity: 1; } }
+@keyframes br-cassette-in { from { opacity: 0; transform: translateY(70%) rotateX(35deg) rotate(-6deg); } to { opacity: 1; transform: none; } }
+@keyframes br-spin-reel { to { transform: rotate(-360deg); } }
+
+/* The tape library: every tape is a labelled Hi8 cassette pulled from the shelf. */
+.fp-shell .br-screen.br-screen button.br-tape { border: 1px solid #000; border-radius: 10px; background: linear-gradient(180deg, #262522 0%, #141311 55%, #0b0a09 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 -2px 0 rgba(0,0,0,.6), 0 6px 16px rgba(0,0,0,.45); transition: transform .16s, border-color .16s, box-shadow .16s; }
+.fp-shell .br-screen.br-screen button.br-tape:hover:not(:disabled) { border-color: var(--br-amber); background: linear-gradient(180deg, #2e2c28 0%, #171614 55%, #0c0b0a 100%); transform: translateX(8px); }
+.fp-shell .br-screen.br-screen button.br-tape.is-next { border-color: rgba(255,212,90,.8); box-shadow: 0 0 0 3px rgba(255,212,90,.14), 0 6px 18px rgba(0,0,0,.5); }
+.br-screen .br-tape .br-tape-copy { padding: 4px 12px 5px; border-radius: 3px; background: linear-gradient(180deg, #d0161f 0 7px, #efe5c8 7px), #efe5c8; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); transform: rotate(-.5deg); }
+.br-screen .br-tape .br-tape-copy strong { color: #1b2a6b; font: 700 clamp(16px, 2.4vh, 21px) "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive; letter-spacing: .01em; }
+.br-screen .br-tape .br-tape-copy small { color: #7a5b2b; }
+.br-screen .br-tape.is-locked .br-tape-copy { background: #8d8676; filter: grayscale(1); }
+.br-screen .br-tape--deep .br-tape-copy { background: linear-gradient(180deg, #111 0 7px, #f2d6cf 7px), #f2d6cf; }
+.br-screen .br-tape--deep .br-tape-copy strong { color: #8a0f16; }
+.br-screen .br-tape .br-tape-number { justify-self: center; width: 40px; height: 40px; border-radius: 50%; transform: rotate(-8deg); box-shadow: 0 2px 0 rgba(0,0,0,.4); }
+
 @media (prefers-reduced-motion: reduce) {
   .br-film .br-grain, .br-rec i, .br-kicker i, .br-pips i.is-now, .br-truth.is-unknown, .br-battery.is-low, .br-unlock,
   .br-title::before, .br-title::after, .br-screen.is-low-battery .br-film .br-vignette,
