@@ -1,17 +1,28 @@
-import { ArrowLeft, Check, Download, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, Download, FileText, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
-import { TARGET_PUZZLES, WARMUP_TOTAL } from "../data/basicOperations";
-import { finalBosses } from "../data/finalBosses";
 import { CLASS_CODES } from "../data/roster";
 import type { ClassCode } from "../data/roster";
 import { fetchClassMathlerProgress, fetchClassMathlerScores } from "../lib/basicOps/survivalLeaderboard";
 import type { MathlerProgressRow, MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TAPES, FINAL_TICKETS } from "../lib/finalProjectSync";
-import type { FinalProjectSyncState } from "../lib/finalProjectSync";
+import { FINAL_FLOWS, FINAL_POLICIES, FINAL_TAPES, FINAL_TICKETS } from "../lib/finalProjectSync";
 import { supabase } from "../lib/supabase";
+import {
+  BOSS_TOTAL,
+  MODULES,
+  buildClassProgress,
+  compareByClassAndName,
+  isActiveNow,
+  percent,
+  relativeTime,
+  summarizeClass,
+} from "./teacher/progress";
+import type { ClassSummary, StudentProgress } from "./teacher/progress";
+import { StudentPanel } from "./teacher/StudentPanel";
+import { BossStrip, ModuleBar, ProgressRing, StepBar } from "./teacher/visuals";
+import "./teacher/teacher.css";
 
 type TeacherDashboardProps = {
   onOpenModules: () => void;
@@ -20,42 +31,62 @@ type TeacherDashboardProps = {
 
 type ClassFilter = "ALL" | ClassCode;
 type GroupFilter = "ALL" | "Amarelo" | "Branco";
+type SortMode = "class" | "progress" | "recent";
+
+type DashboardData = {
+  rows: ClassProgressRow[];
+  scores: MathlerScoreRow[];
+  steps: MathlerProgressRow[];
+};
 
 const GROUPS: GroupFilter[] = ["ALL", "Amarelo", "Branco"];
+const SORTS: { key: SortMode; label: string }[] = [
+  { key: "class", label: "BY CLASS" },
+  { key: "progress", label: "PROGRESS" },
+  { key: "recent", label: "RECENT" },
+];
 const AUTO_REFRESH_MS = 20_000;
+const CLOCK_MS = 15_000;
+const MATHLER_STEPS = ["Translate", "Warm up", "Mathler game"];
+const FINAL_STAGES = ["Backrooms", "IF / ELSE Lab", "Shadow Feed"];
 
-function formatWhen(value: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleString("en-US", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-// Final project: Backrooms tapes, the IF / ELSE Lab stations and Shadow Feed.
-function finalStages(record: FinalProjectSyncState | null | undefined) {
-  const tapes = record ? record.tapes.filter((stars) => stars > 0).length : 0;
-  const lab = record ? [record.flows >= FINAL_FLOWS, record.quizAnswered >= FINAL_QUESTIONS, record.built.length >= FINAL_TICKETS].filter(Boolean).length : 0;
-  const labStarted = !!record && (record.flows > 0 || record.quizAnswered > 0 || record.built.length > 0);
-  const policies = record?.policies ?? 0;
-  return { tapes, lab, labStarted, policies, done: !!record?.reportDone };
+async function fetchDashboardData(): Promise<DashboardData> {
+  const [rows, scores, steps] = await Promise.all([
+    fetchClassProgress(),
+    fetchClassMathlerScores().catch(() => [] as MathlerScoreRow[]),
+    fetchClassMathlerProgress().catch(() => [] as MathlerProgressRow[]),
+  ]);
+  return { rows, scores, steps };
 }
 
 function csvCell(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+function timeOf(value: string | null) {
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
 export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardProps) {
-  const [rows, setRows] = useState<ClassProgressRow[]>([]);
-  const [mathlerRows, setMathlerRows] = useState<MathlerScoreRow[]>([]);
-  const [mathlerProgress, setMathlerProgress] = useState<MathlerProgressRow[]>([]);
+  const [data, setData] = useState<DashboardData>({ rows: [], scores: [], steps: [] });
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const [syncedAt, setSyncedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [classFilter, setClassFilter] = useState<ClassFilter>("ALL");
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("ALL");
+  const [sort, setSort] = useState<SortMode>("class");
   const [query, setQuery] = useState("");
   const [selectedLogin, setSelectedLogin] = useState<string | null>(null);
-  const [selectedBoss, setSelectedBoss] = useState(1);
+  const [report, setReport] = useState<"idle" | "building" | "error">("idle");
+
+  const apply = useCallback((next: DashboardData) => {
+    setData(next);
+    setSyncedAt(Date.now());
+    setNow(Date.now());
+    setStatus("ready");
+  }, []);
 
   // A quiet load refreshes the table in place, without the loading state.
   const load = useCallback(async (quiet = false) => {
@@ -64,21 +95,13 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
       setError(null);
     }
     try {
-      const [data, mathler, mathlerSteps] = await Promise.all([
-        fetchClassProgress(),
-        fetchClassMathlerScores().catch(() => [] as MathlerScoreRow[]),
-        fetchClassMathlerProgress().catch(() => [] as MathlerProgressRow[]),
-      ]);
-      setRows(data);
-      setMathlerRows(mathler);
-      setMathlerProgress(mathlerSteps);
-      setStatus("ready");
+      apply(await fetchDashboardData());
     } catch (loadError) {
       if (quiet) return;
       setError(loadError instanceof Error ? loadError.message : "Could not load submissions.");
       setStatus("error");
     }
-  }, []);
+  }, [apply]);
 
   useEffect(() => {
     void load();
@@ -91,105 +114,87 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
       if (document.visibilityState === "visible") void load(true);
     };
     const timer = window.setInterval(refresh, AUTO_REFRESH_MS);
+    const clock = window.setInterval(() => setNow(Date.now()), CLOCK_MS);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
+      window.clearInterval(clock);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [load]);
 
-  const mathlerByLogin = useMemo(() => {
-    const map = new Map(mathlerRows.map((row) => [row.login, row]));
-    for (const row of rows) {
-      if (row.mathlerGame && !map.has(row.student.login)) map.set(row.student.login, row.mathlerGame);
-    }
-    return map;
-  }, [mathlerRows, rows]);
+  const students = useMemo(() => buildClassProgress(data.rows, data.scores, data.steps), [data]);
 
-  const mathlerStepsByLogin = useMemo(() => {
-    const map = new Map(mathlerProgress.map((row) => [row.login, row]));
-    for (const row of rows) {
-      if (row.mathlerSteps && !map.has(row.student.login)) map.set(row.student.login, row.mathlerSteps);
-    }
-    return map;
-  }, [mathlerProgress, rows]);
-
-  const effectiveMathler = useMemo(() => [...mathlerByLogin.values()], [mathlerByLogin]);
+  const summaries = useMemo(
+    () => [
+      ...CLASS_CODES.map((code) => summarizeClass(code, students.filter((item) => item.student.classCode === code), now)),
+      summarizeClass("ALL", students, now),
+    ],
+    [students, now],
+  );
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return rows
-      .filter((row) => classFilter === "ALL" || row.student.classCode === classFilter)
-      .filter((row) => groupFilter === "ALL" || row.student.group === groupFilter)
-      .filter((row) => !needle || row.student.name.toLowerCase().includes(needle) || row.student.login.includes(needle))
-      .sort((a, b) => a.student.classCode.localeCompare(b.student.classCode) || a.student.name.localeCompare(b.student.name));
-  }, [classFilter, groupFilter, query, rows]);
+    const list = students
+      .filter((item) => classFilter === "ALL" || item.student.classCode === classFilter)
+      .filter((item) => groupFilter === "ALL" || item.student.group === groupFilter)
+      .filter((item) => !needle || item.student.name.toLowerCase().includes(needle) || item.student.login.includes(needle));
+    if (sort === "progress") return [...list].sort((a, b) => b.overall - a.overall || compareByClassAndName(a, b));
+    if (sort === "recent") return [...list].sort((a, b) => timeOf(b.lastActive) - timeOf(a.lastActive) || compareByClassAndName(a, b));
+    return list;
+  }, [classFilter, groupFilter, query, sort, students]);
 
-  const summary = useMemo(() => {
-    return CLASS_CODES.map((code) => {
-      const students = rows.filter((row) => row.student.classCode === code);
-      const finished = students.filter((row) => row.completedBosses.length === finalBosses.length).length;
-      const average = students.length
-        ? students.reduce((total, row) => total + row.completedBosses.length, 0) / students.length
-        : 0;
-      const mathler = effectiveMathler.filter((row) => row.class_code === code);
-      const timeAverage = mathler.length
-        ? mathler.reduce((total, row) => total + row.time_attack_best, 0) / mathler.length
-        : 0;
-      return { code, total: students.length, finished, average, mathlerPlayers: mathler.length, timeAverage };
-    });
-  }, [rows, effectiveMathler]);
+  // Sorted by class, the list is split into one titled block per class.
+  const blocks = useMemo(() => {
+    if (sort !== "class") return [{ code: null as ClassCode | null, items: filtered }];
+    const codes = [...new Set(filtered.map((item) => item.student.classCode))];
+    return codes.map((code) => ({ code, items: filtered.filter((item) => item.student.classCode === code) }));
+  }, [filtered, sort]);
 
-  const mathlerOverview = useMemo(() => {
-    const players = effectiveMathler.length;
-    const timeAverage = players ? effectiveMathler.reduce((total, row) => total + row.time_attack_best, 0) / players : 0;
-    const bestStreak = effectiveMathler.reduce((best, row) => Math.max(best, row.best_streak), 0);
-    return { players, timeAverage, bestStreak };
-  }, [effectiveMathler]);
-
-  const selected = rows.find((row) => row.student.login === selectedLogin) ?? null;
-  const selectedMathler = selected ? mathlerByLogin.get(selected.student.login) ?? null : null;
-  const selectedSteps = selected ? mathlerStepsByLogin.get(selected.student.login) ?? null : null;
+  const selected = students.find((item) => item.student.login === selectedLogin) ?? null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_tapes", "final_deep_best", "final_live_flows", "final_quiz_right", "final_quiz_answered", "final_builder", "final_policies", "final_report", "final_xp", "final_reflection", "updated_at"];
-    const lines = filtered.map((row) => {
-      const mathler = mathlerByLogin.get(row.student.login);
-      const steps = mathlerStepsByLogin.get(row.student.login);
+    const header = ["name", "login", "class", "group", "overall_pct", "mathler_pct", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_pct", "final_tapes", "final_deep_best", "final_live_flows", "final_quiz_right", "final_quiz_answered", "final_builder", "final_policies", "final_report", "final_xp", "final_reflection", "last_active"];
+    const lines = filtered.map((item) => {
+      const { mathler, final } = item;
+      const record = final.record;
       return [
-        row.student.name,
-        row.student.login,
-        row.student.classCode,
-        row.student.group ?? "",
-        steps ? String(steps.warmup_solved) : "",
-        steps ? String(steps.rush_completed) : "",
-        steps ? String(steps.rush_rounds) : "",
-        steps ? String(steps.target_completed) : "",
-        mathler ? String(mathler.time_attack_best) : "",
-        mathler ? String(mathler.best_streak) : "",
-        mathler ? String(mathler.best_score) : "",
-        `${row.completedBosses.length}/15`,
-        String(row.xp),
-        ...(row.finalProject
+        item.student.name,
+        item.student.login,
+        item.student.classCode,
+        item.student.group ?? "",
+        String(Math.round(item.overall * 100)),
+        String(Math.round(mathler.share * 100)),
+        mathler.steps ? String(mathler.warmup) : "",
+        mathler.steps ? String(mathler.rushDone) : "",
+        mathler.steps ? String(mathler.rushRounds) : "",
+        mathler.steps ? String(mathler.target) : "",
+        mathler.game ? String(mathler.game.time_attack_best) : "",
+        mathler.game ? String(mathler.game.best_streak) : "",
+        mathler.game ? String(mathler.game.best_score) : "",
+        `${item.bosses.passed.length}/${BOSS_TOTAL}`,
+        String(item.bosses.xp),
+        String(Math.round(final.share * 100)),
+        ...(record
           ? [
-              `${finalStages(row.finalProject).tapes}/${FINAL_TAPES}`,
-              String(row.finalProject.endlessBest),
-              `${row.finalProject.flows}/${FINAL_FLOWS}`,
-              String(row.finalProject.quizRight),
-              String(row.finalProject.quizAnswered),
-              `${row.finalProject.built.length}/${FINAL_TICKETS}`,
-              `${row.finalProject.policies}/${FINAL_POLICIES}`,
-              row.finalProject.reportDone ? "yes" : "no",
-              String(row.finalProject.xp),
-              row.finalProject.reflection,
+              `${final.tapes}/${FINAL_TAPES}`,
+              String(record.endlessBest),
+              `${record.flows}/${FINAL_FLOWS}`,
+              String(record.quizRight),
+              String(record.quizAnswered),
+              `${record.built.length}/${FINAL_TICKETS}`,
+              `${record.policies}/${FINAL_POLICIES}`,
+              record.reportDone ? "yes" : "no",
+              String(record.xp),
+              record.reflection,
             ]
           : Array.from({ length: 10 }, () => "")),
-        row.updatedAt ?? "",
+        item.lastActive ?? "",
       ]
         .map(csvCell)
         .join(",");
     });
-    const blob = new Blob([`\uFEFF${[header.join(","), ...lines].join("\n")}`], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([`﻿${[header.join(","), ...lines].join("\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -198,13 +203,34 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
     URL.revokeObjectURL(url);
   };
 
+  // The report always covers every class, built from a fresh read so it
+  // includes whatever students saved a moment ago.
+  const downloadReport = async () => {
+    if (report === "building") return;
+    setReport("building");
+    try {
+      let latest = data;
+      try {
+        latest = await fetchDashboardData();
+        apply(latest);
+      } catch {
+        // Offline: the report uses the last data on screen.
+      }
+      const { downloadClassReport } = await import("./teacher/pdfReport");
+      downloadClassReport(buildClassProgress(latest.rows, latest.scores, latest.steps), new Date());
+      setReport("idle");
+    } catch {
+      setReport("error");
+    }
+  };
+
   const signOut = async () => {
     await supabase?.auth.signOut();
     onSignOut();
   };
 
   return (
-    <section className="teacher-dashboard screen-enter" aria-labelledby="teacher-title">
+    <section className="teacher-dashboard tdb screen-enter" aria-labelledby="teacher-title">
       <header className="playground-header teacher-header">
         <div className="playground-identity">
           <Brand compact />
@@ -215,8 +241,15 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
           </div>
         </div>
         <div className="playground-tools">
-          <button className="icon-text-button" onClick={() => void load()} disabled={status === "loading"}>
-            <RefreshCw size={15} /> <span>REFRESH</span>
+          <button
+            className={`tdb-sync ${status === "error" ? "is-error" : ""}`}
+            onClick={() => void load()}
+            disabled={status === "loading"}
+            title="Updates by itself every 20 seconds. Click to refresh now."
+          >
+            {status === "loading" ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+            <i />
+            <span>{status === "error" ? "OFFLINE" : syncedAt ? `LIVE · ${relativeTime(new Date(syncedAt).toISOString(), now).toUpperCase()}` : "SYNCING"}</span>
           </button>
           <button className="icon-text-button" onClick={onOpenModules}>
             <ArrowLeft size={15} /> <span>MODULES</span>
@@ -224,264 +257,189 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
           <button className="icon-text-button" onClick={() => void signOut()}>
             <LogOut size={15} /> <span>SIGN OUT</span>
           </button>
+          <button className="icon-text-button" onClick={exportCsv} disabled={filtered.length === 0} title="Spreadsheet of the students shown">
+            <Download size={15} /> <span>CSV</span>
+          </button>
+          <button
+            className={`tdb-report-button ${report === "error" ? "is-error" : ""}`}
+            onClick={() => void downloadReport()}
+            disabled={report === "building" || (status !== "ready" && data.rows.length === 0)}
+            title="Landscape PDF with every class and every student, built from the latest data"
+          >
+            {report === "building" ? <Loader2 size={15} className="spin" /> : <FileText size={15} />}
+            <span>{report === "building" ? "BUILDING PDF..." : report === "error" ? "PDF FAILED · RETRY" : "PDF REPORT"}</span>
+          </button>
         </div>
       </header>
 
-      <div className="teacher-body">
-        <div className="teacher-summary">
-          {summary.map((item) => (
-            <button
-              key={item.code}
-              className={`teacher-summary-card ${classFilter === item.code ? "is-active" : ""}`}
-              onClick={() => setClassFilter(classFilter === item.code ? "ALL" : item.code)}
-            >
-              <span>{item.code}</span>
-              <strong>{item.finished}<small>/{item.total}</small></strong>
-              <em>{item.total ? item.average.toFixed(1) : "0.0"} bosses avg{item.mathlerPlayers ? ` · TA ${item.timeAverage.toFixed(1)}` : ""}</em>
-            </button>
+      <div className="tdb-body">
+        <div className="tdb-classes">
+          {summaries.map((summary) => (
+            <ClassCard
+              key={summary.code}
+              summary={summary}
+              active={classFilter === summary.code}
+              onSelect={() => setClassFilter(summary.code === "ALL" || classFilter === summary.code ? "ALL" : summary.code)}
+            />
           ))}
-          <button className={`teacher-summary-card ${classFilter === "ALL" ? "is-active" : ""}`} onClick={() => setClassFilter("ALL")}>
-            <span>ALL</span>
-            <strong>{rows.filter((row) => row.completedBosses.length === finalBosses.length).length}<small>/{rows.length}</small></strong>
-            <em>15/15 · {mathlerOverview.players} Mathler players · TA {mathlerOverview.timeAverage.toFixed(1)} avg</em>
-          </button>
         </div>
 
-        <div className="teacher-toolbar">
-          <label className="teacher-search">
+        <div className="tdb-toolbar">
+          <label className="tdb-search">
             <Search size={14} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name or login"
-              aria-label="Search student"
-            />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name or login" aria-label="Search student" />
           </label>
-          <div className="teacher-class-tabs" role="tablist" aria-label="Classes">
-            {(["ALL", ...CLASS_CODES] as ClassFilter[]).map((code) => (
-              <button
-                key={code}
-                role="tab"
-                aria-selected={classFilter === code}
-                className={classFilter === code ? "is-active" : ""}
-                onClick={() => setClassFilter(code)}
-              >
-                {code === "ALL" ? "ALL" : code}
-              </button>
-            ))}
-          </div>
-          <div className="teacher-class-tabs teacher-group-tabs" role="tablist" aria-label="Groups">
+          <div className="tdb-segment" role="tablist" aria-label="Groups">
             {GROUPS.map((group) => (
-              <button
-                key={group}
-                role="tab"
-                aria-selected={groupFilter === group}
-                className={groupFilter === group ? "is-active" : ""}
-                onClick={() => setGroupFilter(group)}
-              >
+              <button key={group} role="tab" aria-selected={groupFilter === group} className={groupFilter === group ? "is-active" : ""} onClick={() => setGroupFilter(group)}>
                 {group === "ALL" ? "ALL GROUPS" : group.toUpperCase()}
               </button>
             ))}
           </div>
-          <button className="teacher-export" onClick={exportCsv} disabled={filtered.length === 0}>
-            <Download size={14} /> CSV
-          </button>
+          <div className="tdb-segment" role="tablist" aria-label="Sort students">
+            {SORTS.map((option) => (
+              <button key={option.key} role="tab" aria-selected={sort === option.key} className={sort === option.key ? "is-active" : ""} onClick={() => setSort(option.key)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <span className="tdb-count">
+            {filtered.length} {filtered.length === 1 ? "student" : "students"}
+            {classFilter !== "ALL" && ` · ${classFilter}`}
+          </span>
+          <span className="tdb-legend" aria-hidden="true">
+            <i className="is-done" /> done <i className="is-progress" /> in progress <i /> not started
+          </span>
         </div>
 
-        <div className="teacher-workspace">
-          <div className="teacher-list" role="table" aria-label="Student submissions">
-            <div className="teacher-list-head" role="row">
+        <div className={`tdb-workspace ${selected ? "has-panel" : ""}`}>
+          <div className="tdb-table" role="table" aria-label="Student progress">
+            <div className="tdb-head" role="row">
               <span role="columnheader">STUDENT</span>
-              <span role="columnheader">CLASS</span>
-              <span role="columnheader">GROUP</span>
-              <span role="columnheader">MATHLER</span>
-              <span role="columnheader">BOSSES</span>
-              <span role="columnheader">FINAL</span>
-              <span role="columnheader">XP</span>
+              {MODULES.map((module) => (
+                <span role="columnheader" key={module.key} className={`tdb-${module.key}`}>
+                  <i /> {module.id} · {module.label.toUpperCase()}
+                </span>
+              ))}
+              <span role="columnheader">OVERALL</span>
+              <span role="columnheader">LAST ACTIVE</span>
             </div>
 
-            {status === "loading" && (
-              <div className="teacher-state"><Loader2 size={18} className="spin" /> Loading submissions...</div>
-            )}
-            {status === "error" && (
-              <div className="teacher-state is-error">
-                <strong>Could not load.</strong>
-                <p>{error}</p>
-                <p className="teacher-state-hint">Make sure the setup SQL was run in Supabase.</p>
+            {status === "loading" && data.rows.length === 0 && (
+              <div className="tdb-state">
+                <Loader2 size={18} className="spin" /> Loading the class...
               </div>
             )}
-            {status === "ready" && filtered.length === 0 && (
-              <div className="teacher-state">No students found.</div>
+            {status === "error" && (
+              <div className="tdb-state is-error">
+                <strong>Could not load.</strong>
+                <p>{error}</p>
+                <p className="tdb-state-hint">Make sure the setup SQL was run in Supabase.</p>
+              </div>
             )}
-            {status === "ready" && filtered.map((row) => {
-              const done = row.completedBosses.length;
-              const active = row.student.login === selectedLogin;
-              const mathler = mathlerByLogin.get(row.student.login);
-              const steps = mathlerStepsByLogin.get(row.student.login);
-              const warmupCount = steps ? Math.min(steps.warmup_solved, WARMUP_TOTAL) : 0;
-              const targetCount = steps ? Math.min(steps.target_completed, TARGET_PUZZLES.length) : 0;
-              const gameCount = mathler ? Math.max(mathler.time_attack_best, mathler.best_streak) : 0;
-              const translateDone = Boolean(steps && warmupCount >= WARMUP_TOTAL && steps.rush_completed);
-              const targetDone = targetCount >= TARGET_PUZZLES.length;
-              const gamePlayed = gameCount > 0;
-              const badgeState = (done: boolean, started: boolean) => (done ? "is-done" : started ? "is-progress" : "");
-              const final = row.finalProject;
-              const stages = finalStages(final);
-              return (
-                <button
-                  key={row.student.login}
-                  role="row"
-                  className={`teacher-row ${active ? "is-active" : ""}`}
-                  onClick={() => { setSelectedLogin(row.student.login); setSelectedBoss(1); }}
-                >
-                  <span role="cell" className="teacher-name">
-                    <strong>{row.student.name}</strong>
-                    <small>{row.student.login}</small>
-                  </span>
-                  <span role="cell">{row.student.classCode}</span>
-                  <span role="cell">{row.student.group ?? "—"}</span>
-                  <span role="cell" className="teacher-mathler-cell">
-                    <b className={badgeState(translateDone, warmupCount > 0)} title={steps ? `Translate: ${warmupCount}/${WARMUP_TOTAL} examples · rush ${steps.rush_completed ? "complete" : `${steps.rush_rounds}/5`}` : "Translate: not started"}>
-                      T<small>{warmupCount}</small>
-                    </b>
-                    <b className={badgeState(targetDone, targetCount > 0)} title={steps ? `Warm up: ${targetCount}/${TARGET_PUZZLES.length} steps` : "Warm up: not started"}>
-                      W<small>{targetCount}</small>
-                    </b>
-                    <b className={badgeState(gamePlayed, gameCount > 0)} title={mathler ? `Mathler game: TA ${mathler.time_attack_best} · SV ${mathler.best_streak}` : "Mathler game: not played"}>
-                      G<small>{gameCount}</small>
-                    </b>
-                  </span>
-                  <span role="cell" className={`teacher-progress ${done === finalBosses.length ? "is-done" : ""}`}>
-                    {done === finalBosses.length && <Check size={12} />}
-                    {done}/15
-                    <i><b style={{ width: `${(done / finalBosses.length) * 100}%` }} /></i>
-                  </span>
-                  <span role="cell" className="teacher-final-cell">
-                    <b className={badgeState(stages.tapes >= FINAL_TAPES, stages.tapes > 0 || (final?.endlessBest ?? 0) > 0)} title={final ? `Backrooms Run: ${stages.tapes}/${FINAL_TAPES} tapes · The Deep best ${final.endlessBest} gates` : "Final project: not opened"}>
-                      B<small>{stages.tapes}</small>
-                    </b>
-                    <b className={badgeState(stages.lab === 3, stages.labStarted)} title={final ? `IF / ELSE Lab: Live Flow ${final.flows}/${FINAL_FLOWS} · Quiz ${final.quizRight}/${FINAL_QUESTIONS} right · Code Builder ${final.built.length}/${FINAL_TICKETS}` : "IF / ELSE Lab: not started"}>
-                      L<small>{stages.lab}</small>
-                    </b>
-                    <b className={badgeState(stages.done, stages.policies > 0)} title={final ? `Shadow Feed: ${stages.policies}/${FINAL_POLICIES} policies${final.reportDone ? " · report complete" : ""}` : "Shadow Feed: not started"}>
-                      S<small>{stages.policies}</small>
-                    </b>
-                  </span>
-                  <span role="cell" className="teacher-xp">{row.xp} XP</span>
-                </button>
-              );
-            })}
+            {status !== "error" && data.rows.length > 0 && filtered.length === 0 && <div className="tdb-state">No students match these filters.</div>}
+
+            {status !== "error" &&
+              blocks.map((block) => (
+                <div key={block.code ?? "all"} role="rowgroup">
+                  {block.code && <ClassDivider summary={summarizeClass(block.code, block.items, now)} />}
+                  {block.items.map((item) => (
+                    <StudentRow
+                      key={item.student.login}
+                      progress={item}
+                      now={now}
+                      active={item.student.login === selectedLogin}
+                      onSelect={() => setSelectedLogin(item.student.login === selectedLogin ? null : item.student.login)}
+                    />
+                  ))}
+                </div>
+              ))}
           </div>
 
-          <aside className="teacher-detail" aria-label="Student details">
-            {!selected ? (
-              <div className="teacher-state">Select a student to see their submissions.</div>
-            ) : (
-              <>
-                <header>
-                  <strong>{selected.student.name}</strong>
-                  <span>{selected.student.classCode} · {selected.student.group ?? "no group"} · {selected.xp} XP</span>
-                </header>
-                <div className="teacher-mathler">
-                  <div className="teacher-mathler-head">
-                    <span>MODULE 04 · MATHLER · 3 STEPS</span>
-                    <small>{selectedSteps?.updated_at ? `updated ${formatWhen(selectedSteps.updated_at)}` : selectedMathler ? `last played ${formatWhen(selectedMathler.updated_at)}` : "not started"}</small>
-                  </div>
-                  <div className="teacher-mathler-steps">
-                    <div className={selectedSteps && selectedSteps.warmup_solved >= WARMUP_TOTAL && selectedSteps.rush_completed ? "is-done" : ""}>
-                      <span>01 · TRANSLATE</span>
-                      <strong>
-                        {selectedSteps ? `${Math.min(selectedSteps.warmup_solved, WARMUP_TOTAL)} / ${WARMUP_TOTAL}` : "—"}
-                        {selectedSteps ? (selectedSteps.rush_completed ? " · RUSH ✓" : ` · RUSH ${selectedSteps.rush_rounds}/5`) : ""}
-                      </strong>
-                      <i><b style={{ width: `${selectedSteps ? Math.min(100, (selectedSteps.warmup_solved / WARMUP_TOTAL) * 100) : 0}%` }} /></i>
-                    </div>
-                    <div className={selectedSteps && selectedSteps.target_completed >= TARGET_PUZZLES.length ? "is-done" : ""}>
-                      <span>02 · WARM UP</span>
-                      <strong>{selectedSteps ? `${Math.min(selectedSteps.target_completed, TARGET_PUZZLES.length)} / ${TARGET_PUZZLES.length} steps` : "—"}</strong>
-                      <i><b style={{ width: `${selectedSteps ? Math.min(100, (selectedSteps.target_completed / TARGET_PUZZLES.length) * 100) : 0}%` }} /></i>
-                    </div>
-                    <div className={selectedMathler && (selectedMathler.time_attack_best > 0 || selectedMathler.best_streak > 0) ? "is-done" : ""}>
-                      <span>03 · MATHLER GAME</span>
-                      <strong>TA {selectedMathler?.time_attack_best ?? 0} · SV {selectedMathler?.best_streak ?? 0} · {(selectedMathler?.best_score ?? 0).toLocaleString("en-US")} pts</strong>
-                      <i><b style={{ width: `${selectedMathler && (selectedMathler.time_attack_best > 0 || selectedMathler.best_streak > 0) ? 100 : 0}%` }} /></i>
-                    </div>
-                  </div>
-                </div>
-                <FinalProjectDetail record={selected.finalProject ?? null} />
-                <div className="teacher-boss-grid">
-                  {finalBosses.map((boss) => {
-                    const passed = selected.completedBosses.includes(boss.id);
-                    const attempts = selected.attempts[String(boss.id)] ?? 0;
-                    return (
-                      <button
-                        key={boss.id}
-                        className={`${passed ? "is-pass" : ""} ${selectedBoss === boss.id ? "is-active" : ""}`}
-                        onClick={() => setSelectedBoss(boss.id)}
-                        title={`${boss.title} · ${attempts} attempt(s)`}
-                      >
-                        {passed ? <Check size={11} /> : String(boss.id).padStart(2, "0")}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="teacher-code">
-                  <div className="teacher-code-head">
-                    <span>BOSS {String(selectedBoss).padStart(2, "0")} · {finalBosses.find((boss) => boss.id === selectedBoss)?.title}</span>
-                    <small>{selected.attempts[String(selectedBoss)] ?? 0} attempt(s)</small>
-                  </div>
-                  <pre>{selected.codes[String(selectedBoss)]?.trim() || "No code submitted for this boss."}</pre>
-                </div>
-              </>
-            )}
-          </aside>
+          {selected && <StudentPanel key={selected.student.login} progress={selected} now={now} onClose={() => setSelectedLogin(null)} />}
         </div>
       </div>
     </section>
   );
 }
 
-function FinalProjectDetail({ record }: { record: FinalProjectSyncState | null }) {
-  const stages = finalStages(record);
-  const bar = (share: number) => <i><b style={{ width: `${Math.min(100, share * 100)}%` }} /></i>;
+function ClassCard({ summary, active, onSelect }: { summary: ClassSummary; active: boolean; onSelect: () => void }) {
+  const total = summary.students.length;
   return (
-    <div className="teacher-mathler teacher-final">
-      <div className="teacher-mathler-head">
-        <span>MODULE 08 · FINAL PROJECT</span>
-        <small>{record?.updatedAt ? `updated ${formatWhen(record.updatedAt)}` : "not opened"}</small>
+    <button className={`tdb-class-card ${active ? "is-active" : ""} ${summary.code === "ALL" ? "is-all" : ""}`} onClick={onSelect} aria-pressed={active}>
+      <header>
+        <strong>{summary.code === "ALL" ? "ALL CLASSES" : summary.code}</strong>
+        <span>{total} students</span>
+      </header>
+      <div className="tdb-class-main">
+        <ProgressRing share={summary.overall} size={58} label={`${summary.code} ${percent(summary.overall)} overall`} />
+        <ul>
+          {MODULES.map((module) => (
+            <li key={module.key} className={`tdb-${module.key}`}>
+              <span>{module.short}</span>
+              <ModuleBar share={summary[module.key]} module={module.key} />
+              <b>{percent(summary[module.key])}</b>
+            </li>
+          ))}
+        </ul>
       </div>
-      {record && (
-        <div className="teacher-mathler-steps">
-          <div className={stages.tapes >= FINAL_TAPES ? "is-done" : ""}>
-            <span>01 · BACKROOMS</span>
-            <strong>{stages.tapes} / {FINAL_TAPES} tapes · {record.tapes.reduce((total, stars) => total + stars, 0)}★ · Deep {record.endlessBest}</strong>
-            {bar(stages.tapes / FINAL_TAPES)}
-          </div>
-          <div className={record.flows >= FINAL_FLOWS ? "is-done" : ""}>
-            <span>02 · LIVE FLOW</span>
-            <strong>{record.flows} / {FINAL_FLOWS} tickets</strong>
-            {bar(record.flows / FINAL_FLOWS)}
-          </div>
-          <div className={record.quizAnswered >= FINAL_QUESTIONS ? "is-done" : ""}>
-            <span>02 · QUIZ</span>
-            <strong>{record.quizRight} right · {record.quizAnswered} / {FINAL_QUESTIONS} answered</strong>
-            {bar(record.quizAnswered / FINAL_QUESTIONS)}
-          </div>
-          <div className={record.built.length >= FINAL_TICKETS ? "is-done" : ""}>
-            <span>02 · BUILDER</span>
-            <strong>{record.built.length} / {FINAL_TICKETS} shipped</strong>
-            {bar(record.built.length / FINAL_TICKETS)}
-          </div>
-          <div className={record.reportDone ? "is-done" : ""}>
-            <span>03 · SHADOW FEED</span>
-            <strong>{record.policies} / {FINAL_POLICIES} policies{record.reportDone ? " · REPORT ✓" : ""}</strong>
-            {bar(record.policies / FINAL_POLICIES)}
-          </div>
-        </div>
-      )}
-      {record && record.quizMissed.length > 0 && <p className="teacher-final-missed">Quiz to review: <b>{record.quizMissed.map((n) => `Q${n}`).join(" · ")}</b></p>}
-      {record && record.built.length > 0 && record.built.length < FINAL_TICKETS && <p className="teacher-final-missed">Builder tickets shipped: {record.built.join(", ")}</p>}
-      {record?.reflection.trim() && <p className="teacher-final-reflection"><small>WHITE HAT REFLECTION</small>{record.reflection}</p>}
+      <footer>
+        <span className={summary.activeNow ? "is-live" : ""}>
+          <i /> {summary.activeNow} active now
+        </span>
+        <span>
+          {summary.started}/{total} started
+        </span>
+      </footer>
+    </button>
+  );
+}
+
+function ClassDivider({ summary }: { summary: ClassSummary }) {
+  return (
+    <div className="tdb-divider" role="row">
+      <strong>{summary.code}</strong>
+      <span>{summary.students.length} students</span>
+      <span>{summary.started} started</span>
+      <span className={summary.activeNow ? "is-live" : ""}>{summary.activeNow} active now</span>
+      <b>{percent(summary.overall)} average</b>
     </div>
+  );
+}
+
+function StudentRow({ progress, now, active, onSelect }: { progress: StudentProgress; now: number; active: boolean; onSelect: () => void }) {
+  const { student, mathler, bosses, final } = progress;
+  const live = isActiveNow(progress, now);
+  return (
+    <button role="row" className={`tdb-row ${active ? "is-active" : ""} ${progress.started ? "" : "is-idle"}`} onClick={onSelect}>
+      <span role="cell" className="tdb-student">
+        <strong>{student.name}</strong>
+        <small>
+          <b>{student.classCode}</b>
+          {student.group && <em className={`tdb-group is-${student.group.toLowerCase()}`}>{student.group}</em>}
+          {student.login}
+        </small>
+      </span>
+      <span role="cell" className="tdb-module-cell tdb-mathler">
+        <StepBar parts={mathler.parts} module="mathler" titles={MATHLER_STEPS} />
+        <em>{mathler.stepsDone}/3 steps</em>
+      </span>
+      <span role="cell" className="tdb-module-cell tdb-bosses">
+        <BossStrip passed={bosses.passed} attempts={bosses.attempts} />
+        <em>
+          {bosses.passed.length}/{BOSS_TOTAL} bosses
+        </em>
+      </span>
+      <span role="cell" className="tdb-module-cell tdb-final">
+        <StepBar parts={final.parts} module="final" titles={FINAL_STAGES} />
+        <em>{final.record ? `${final.stagesDone}/3 stages` : "not opened"}</em>
+      </span>
+      <span role="cell" className="tdb-overall">
+        <ProgressRing share={progress.overall} size={36} />
+      </span>
+      <span role="cell" className={`tdb-active ${live ? "is-live" : ""}`}>
+        <i /> {relativeTime(progress.lastActive, now)}
+      </span>
+    </button>
   );
 }
