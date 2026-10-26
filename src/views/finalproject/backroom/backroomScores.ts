@@ -10,14 +10,14 @@ export interface BackroomScore {
 
 const storageKey = 'sharpie.backroom-scores.v1'
 
-export function rankBackroomScores(scores: BackroomScore[]): BackroomScore[] {
+export function rankBackroomScores(scores: BackroomScore[], limit = boardSize): BackroomScore[] {
   const best = new Map<string, BackroomScore>()
   for (const score of scores) {
     if (!score || typeof score.username !== 'string' || !score.username || typeof score.name !== 'string' || !score.name || !Number.isSafeInteger(score.gates) || score.gates < 1 || !Number.isSafeInteger(score.xp) || score.xp < 0) continue
     const previous = best.get(score.username)
     best.set(score.username, previous ? { ...score, gates: Math.max(previous.gates, score.gates), xp: Math.max(previous.xp, score.xp) } : score)
   }
-  return [...best.values()].sort((a, b) => b.gates - a.gates || b.xp - a.xp || a.name.localeCompare(b.name)).slice(0, 5)
+  return [...best.values()].sort((a, b) => b.gates - a.gates || b.xp - a.xp || a.name.localeCompare(b.name)).slice(0, limit)
 }
 
 // Guests share one profile on a device, so each one types a name and their own
@@ -57,6 +57,8 @@ function isMissingRelation(message: string) {
 }
 
 let remoteAvailable = true
+// The class ranking every student sees.
+export const boardSize = 20
 
 export async function fetchBackroomScores(): Promise<BackroomScore[]> {
   if (!supabase || !remoteAvailable) return []
@@ -65,7 +67,7 @@ export async function fetchBackroomScores(): Promise<BackroomScore[]> {
     .select('player_key,display_name,gates,xp')
     .order('gates', { ascending: false })
     .order('xp', { ascending: false })
-    .limit(20)
+    .limit(boardSize)
   if (error) {
     if (isMissingRelation(error.message)) remoteAvailable = false
     return []
@@ -79,14 +81,16 @@ export async function submitBackroomScore(score: BackroomScore): Promise<void> {
   if (error && isMissingRelation(error.message)) remoteAvailable = false
 }
 
-// Device scores right away, then the class board merged in when it answers.
+// Device scores right away, then the class board merged in when it answers. Runs this
+// device recorded are sent up too, so the ranking gathers every run from every device.
 export function loadBackroomScores(local: BackroomScore[], onScores: (scores: BackroomScore[]) => void, submit?: BackroomScore): void {
   onScores(local)
   void (async () => {
     try {
-      if (submit) await submitBackroomScore(submit)
+      const outgoing = submit ? [submit, ...local.filter((score) => score.username !== submit.username)] : local
+      for (const score of outgoing) await submitBackroomScore(score)
       const remote = await fetchBackroomScores()
-      if (remote.length) onScores(rankBackroomScores([...local, ...remote]))
+      if (remote.length) onScores(rankBackroomScores([...local, ...remote], boardSize))
     } catch { /* Offline: the device scores stay on screen. */ }
   })()
 }
