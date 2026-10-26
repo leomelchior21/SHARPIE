@@ -9,6 +9,21 @@ type LoginGateProps = {
   onAuthenticated: (session: { login: string; name: string; isTeacher: boolean }) => void;
 };
 
+async function trySignIn(login: string): Promise<boolean> {
+  if (!supabase) return false;
+  const credentials = { email: loginToEmail(login), password: login };
+  const attempt = async () => {
+    const { error } = await supabase!.auth.signInWithPassword(credentials);
+    return !error;
+  };
+  const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 6000));
+  try {
+    return await Promise.race([attempt(), timeout]);
+  } catch {
+    return false;
+  }
+}
+
 export function LoginGate({ onAuthenticated }: LoginGateProps) {
   const [loginInput, setLoginInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,35 +43,26 @@ export function LoginGate({ onAuthenticated }: LoginGateProps) {
       setError("Type your first and last name.");
       return;
     }
-    if (!supabase) {
-      setError("The classroom server is not configured.");
-      return;
-    }
-
+    // Open access: any student name gets in. Roster names map to their account
+    // login; the server sign-in is best-effort so it never blocks a student.
     const student = isTeacherLogin ? undefined : findStudent(login);
-    if (!isTeacherLogin && !student) {
-      setError("Name not found. Type first name + last name together. Ex.: joaosilva");
-      return;
-    }
+    const accountLogin = student?.login ?? login;
 
     setBusy(true);
     setError(null);
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: loginToEmail(login),
-      password: login,
-    });
+    const signedIn = await trySignIn(accountLogin);
     setBusy(false);
 
-    if (authError) {
-      setError(
-        isTeacherLogin
-          ? "Could not sign in as the teacher."
-          : "Could not sign in. Ask your teacher to confirm your login.",
-      );
+    if (isTeacherLogin && !signedIn) {
+      setError("Could not sign in as the teacher.");
       return;
     }
 
-    onAuthenticated({ login, name: student?.name ?? "Professor", isTeacher: isTeacherLogin });
+    onAuthenticated({
+      login: accountLogin,
+      name: isTeacherLogin ? "Professor" : student?.name ?? loginInput.trim(),
+      isTeacher: isTeacherLogin,
+    });
   };
 
   return (

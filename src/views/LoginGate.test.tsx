@@ -15,13 +15,16 @@ describe("classroom login gate", () => {
     auth.signInWithPassword.mockReset();
   });
 
-  it("rejects a name that is not in the roster without calling Supabase", async () => {
-    render(<LoginGate onAuthenticated={() => undefined} />);
-    fireEvent.change(screen.getByPlaceholderText("joaosilva"), { target: { value: "fulanodetal" } });
+  it("lets in a name that is not in the roster", async () => {
+    auth.signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+    const onAuthenticated = vi.fn();
+    render(<LoginGate onAuthenticated={onAuthenticated} />);
+    fireEvent.change(screen.getByPlaceholderText("joaosilva"), { target: { value: "Fulano Detal" } });
     fireEvent.click(screen.getByRole("button", { name: /ENTER/ }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Name not found/));
-    expect(auth.signInWithPassword).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith({ login: "fulanodetal", name: "Fulano Detal", isTeacher: false }),
+    );
   });
 
   it("lets a student in with only first name plus last name, no password field", async () => {
@@ -46,14 +49,21 @@ describe("classroom login gate", () => {
     });
   });
 
-  it("explains when the school account is missing or unavailable", async () => {
+  it("still lets a roster student in when the server sign-in fails", async () => {
     auth.signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
-    render(<LoginGate onAuthenticated={() => undefined} />);
+    const onAuthenticated = vi.fn();
+    render(<LoginGate onAuthenticated={onAuthenticated} />);
 
-    fireEvent.change(screen.getByPlaceholderText("joaosilva"), { target: { value: "joaodedivitis" } });
+    fireEvent.change(screen.getByPlaceholderText("joaosilva"), { target: { value: "João Pedro Dedivitis" } });
     fireEvent.click(screen.getByRole("button", { name: /ENTER/ }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Ask your teacher/));
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith({
+        login: "joaodedivitis",
+        name: "João Pedro Dedivitis",
+        isTeacher: false,
+      }),
+    );
   });
 
   it("lets the teacher in with only the leleomaker login, no password field", async () => {
