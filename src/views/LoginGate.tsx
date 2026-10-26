@@ -7,6 +7,7 @@ import { TEACHER_LOGIN, loginToEmail } from "../lib/supabaseConfig";
 
 type LoginGateProps = {
   onAuthenticated: (session: { login: string; name: string; isTeacher: boolean }) => void;
+  onGuest?: () => void;
 };
 
 async function trySignIn(login: string): Promise<boolean> {
@@ -24,7 +25,7 @@ async function trySignIn(login: string): Promise<boolean> {
   }
 }
 
-export function LoginGate({ onAuthenticated }: LoginGateProps) {
+export function LoginGate({ onAuthenticated, onGuest }: LoginGateProps) {
   const [loginInput, setLoginInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,26 +44,30 @@ export function LoginGate({ onAuthenticated }: LoginGateProps) {
       setError("Type your first and last name.");
       return;
     }
-    // Open access: any student name gets in. Roster names map to their account
-    // login; the server sign-in is best-effort so it never blocks a student.
-    const student = isTeacherLogin ? undefined : findStudent(login);
-    const accountLogin = student?.login ?? login;
+    // Students are matched against the class roster on this device, with no
+    // server sign-in, so entering never depends on Supabase Auth. Only the
+    // teacher signs in, to read the whole class.
+    if (!isTeacherLogin) {
+      const student = findStudent(login);
+      if (!student) {
+        setError("That name is not on the class list. Type your first and last name together, like joaosilva.");
+        return;
+      }
+      onAuthenticated({ login: student.login, name: student.name, isTeacher: false });
+      return;
+    }
 
     setBusy(true);
     setError(null);
-    const signedIn = await trySignIn(accountLogin);
+    const signedIn = await trySignIn(login);
     setBusy(false);
 
-    if (isTeacherLogin && !signedIn) {
+    if (!signedIn) {
       setError("Could not sign in as the teacher.");
       return;
     }
 
-    onAuthenticated({
-      login: accountLogin,
-      name: isTeacherLogin ? "Professor" : student?.name ?? loginInput.trim(),
-      isTeacher: isTeacherLogin,
-    });
+    onAuthenticated({ login, name: "Professor", isTeacher: true });
   };
 
   return (
@@ -108,6 +113,11 @@ export function LoginGate({ onAuthenticated }: LoginGateProps) {
               : "FIRST NAME + LAST NAME, TOGETHER. EX.: JOAOSILVA"}
           </p>
           {error && <p className="login-error" role="alert">{error}</p>}
+          {onGuest && (
+            <button className="login-guest" type="button" onClick={onGuest}>
+              CONTINUE WITHOUT SAVING
+            </button>
+          )}
         </form>
       </div>
     </section>

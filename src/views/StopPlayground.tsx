@@ -21,7 +21,6 @@ import { buildStopBoard, stopBoardLimits } from "../lib/stopBoard";
 import type { StopBoard } from "../lib/stopBoard";
 import { stopSession } from "../lib/stopSession";
 import type { RunResult, RunnerError } from "../types";
-import { useLiveCode } from "../lib/useLiveCode";
 
 type StopPlaygroundProps = {
   name: string;
@@ -47,7 +46,6 @@ export function StopPlayground({ name, onBack }: StopPlaygroundProps) {
   const previousColumnsRef = useRef(board.columns.length);
   const [boardPulse, setBoardPulse] = useState(0);
 
-  useLiveCode("stop", code, "STOP · String Sheet");
 
   useEffect(() => {
     if (board.columns.length > previousColumnsRef.current) setBoardPulse((value) => value + 1);

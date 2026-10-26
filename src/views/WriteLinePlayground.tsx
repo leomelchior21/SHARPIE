@@ -22,7 +22,6 @@ import { isMorningSignalCode } from "../lib/morningSignal";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import { session } from "../lib/session";
 import { getIntroductionMessage, isFrameSignalCode, isGapFlightCode } from "../lib/specialOutputs";
-import { useLiveCode } from "../lib/useLiveCode";
 import type { RunResult } from "../types";
 
 type PlaygroundProps = {
@@ -41,7 +40,6 @@ export function WriteLinePlayground({ name, onBack }: PlaygroundProps) {
   const challenge = challenges[challengeId - 1];
   const savedCodes = session.getCodes();
   const [code, setCode] = useState(savedCodes[challengeId] ?? challenge.starterCode(name));
-  useLiveCode("writeline", code, challenge.title);
   const [lastRunCode, setLastRunCode] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(challengeId === 1 ? defaultResult : null);
   const [hasRun, setHasRun] = useState(false);

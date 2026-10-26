@@ -22,7 +22,6 @@ import { recordWarmupSolve } from "../../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
 import { useRunWave } from "../../lib/basicOps/useRunWave";
-import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "complete";
 
@@ -84,7 +83,6 @@ export function TranslatePhase({ name, progress, onProgress, soundOn, onToggleSo
   const meta = TRANSLATE_LEVELS[challenge.level - 1];
   const operatorExample = (index % WARMUP_EXAMPLES_PER_OPERATOR) + 1;
   const solved = Math.max(storedSolved, 0);
-  useLiveCode("mathler", value, `MODULE 04 · MATHLER WARMUP · EXAMPLE ${index + 1}`);
 
   useEffect(() => {
     let active = true;

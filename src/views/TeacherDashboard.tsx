@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Download, Eye, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, Check, Download, Loader2, LogOut, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brand } from "../components/Brand";
 import { TARGET_PUZZLES, WARMUP_TOTAL } from "../data/basicOperations";
@@ -15,7 +15,6 @@ import { supabase } from "../lib/supabase";
 
 type TeacherDashboardProps = {
   onOpenModules: () => void;
-  onOpenLive: () => void;
   onSignOut: () => void;
 };
 
@@ -23,6 +22,7 @@ type ClassFilter = "ALL" | ClassCode;
 type GroupFilter = "ALL" | "Amarelo" | "Branco";
 
 const GROUPS: GroupFilter[] = ["ALL", "Amarelo", "Branco"];
+const AUTO_REFRESH_MS = 20_000;
 
 function formatWhen(value: string | null) {
   if (!value) return "—";
@@ -45,7 +45,7 @@ function csvCell(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: TeacherDashboardProps) {
+export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardProps) {
   const [rows, setRows] = useState<ClassProgressRow[]>([]);
   const [mathlerRows, setMathlerRows] = useState<MathlerScoreRow[]>([]);
   const [mathlerProgress, setMathlerProgress] = useState<MathlerProgressRow[]>([]);
@@ -57,9 +57,12 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
   const [selectedLogin, setSelectedLogin] = useState<string | null>(null);
   const [selectedBoss, setSelectedBoss] = useState(1);
 
-  const load = useCallback(async () => {
-    setStatus("loading");
-    setError(null);
+  // A quiet load refreshes the table in place, without the loading state.
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setStatus("loading");
+      setError(null);
+    }
     try {
       const [data, mathler, mathlerSteps] = await Promise.all([
         fetchClassProgress(),
@@ -71,6 +74,7 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
       setMathlerProgress(mathlerSteps);
       setStatus("ready");
     } catch (loadError) {
+      if (quiet) return;
       setError(loadError instanceof Error ? loadError.message : "Could not load submissions.");
       setStatus("error");
     }
@@ -78,6 +82,20 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Students save as they work, so the class view keeps itself current while
+  // the tab is open, and catches up as soon as it becomes visible again.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load(true);
+    };
+    const timer = window.setInterval(refresh, AUTO_REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [load]);
 
   const mathlerByLogin = useMemo(() => {
@@ -197,9 +215,6 @@ export function TeacherDashboard({ onOpenModules, onOpenLive, onSignOut }: Teach
           </div>
         </div>
         <div className="playground-tools">
-          <button className="icon-text-button live-view-button" onClick={onOpenLive}>
-            <Eye size={15} /> <span>LIVE VIEW</span>
-          </button>
           <button className="icon-text-button" onClick={() => void load()} disabled={status === "loading"}>
             <RefreshCw size={15} /> <span>REFRESH</span>
           </button>

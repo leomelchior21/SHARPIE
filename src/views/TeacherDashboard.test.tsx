@@ -49,7 +49,7 @@ describe("Teacher dashboard", () => {
   afterEach(cleanup);
 
   it("shows the three Mathler steps before the boss progress", async () => {
-    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
     await waitFor(() => expect(screen.getByText("Ada Lovelace")).toBeInTheDocument());
 
     expect(screen.getByText("MATHLER")).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("Teacher dashboard", () => {
       },
     ]);
 
-    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
     await waitFor(() => expect(screen.getByText("Grace Hopper")).toBeInTheDocument());
 
     const row = screen.getByText("Grace Hopper").closest(".teacher-row");
@@ -134,7 +134,7 @@ describe("Teacher dashboard", () => {
       },
     ]);
 
-    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
     await waitFor(() => expect(screen.getByText("Linus Torvalds")).toBeInTheDocument());
 
     const badges = screen.getByText("Linus Torvalds").closest(".teacher-row")!.querySelectorAll(".teacher-mathler-cell b");
@@ -162,7 +162,7 @@ describe("Teacher dashboard", () => {
         },
       },
     ]);
-    render(<TeacherDashboard onOpenModules={() => undefined} onOpenLive={() => undefined} onSignOut={() => undefined} />);
+    render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
     await waitFor(() => expect(screen.getByText("Alan Turing")).toBeInTheDocument());
 
     const badges = screen.getByText("Alan Turing").closest(".teacher-row")!.querySelectorAll(".teacher-final-cell b");

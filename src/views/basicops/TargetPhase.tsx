@@ -19,7 +19,6 @@ import {
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
 import { useRunWave } from "../../lib/basicOps/useRunWave";
-import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "game" | "complete";
 
@@ -89,7 +88,6 @@ export function TargetPhase({ name, progress, replay = false, onReplay, onProgre
   const editorRef = useRef<ExpressionEditorHandle>(null);
   const wave = useRunWave();
 
-  useLiveCode("mathler", value, `MODULE 04 · TARGET · PUZZLE ${puzzle.index}`);
 
   const puzzleIdRef = useRef(puzzle.id);
   useEffect(() => {

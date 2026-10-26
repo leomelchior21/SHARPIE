@@ -43,17 +43,12 @@ const FinalProject = lazy(() => import("./views/finalproject/FinalProject").then
 const TeacherDashboard = lazy(() =>
   import("./views/TeacherDashboard").then((module) => ({ default: module.TeacherDashboard })),
 );
-const TeacherLive = lazy(() =>
-  import("./views/TeacherLive").then((module) => ({ default: module.TeacherLive })),
-);
-
 type AuthState = "checking" | "signed-out" | "student" | "teacher";
 
 function screenFromPath(): Screen {
   if (typeof window === "undefined") return "hub";
   if (window.location.pathname === "/final-project") return "final-project";
   if (window.location.pathname === "/final-bosses") return "final-bosses";
-  if (window.location.pathname === "/professor/live") return "teacher-live";
   if (window.location.pathname === "/professor") return "teacher";
   if (window.location.pathname === "/memory-machine/experience") return "memory-experience";
   if (window.location.pathname === "/memory-machine/variable-run") return "variable-run";
@@ -77,21 +72,51 @@ const paths: Partial<Record<Screen, string>> = {
   "final-bosses": "/final-bosses",
   "final-project": "/final-project",
   teacher: "/professor",
-  "teacher-live": "/professor/live",
 };
 
 const GUEST_NAME = "Guest";
 
-// Open access: everyone lands on the homepage. Only the teacher routes ask for a login.
 function isTeacherPath() {
   return window.location.pathname.startsWith("/professor");
 }
 
+// Students enter with their roster login, without a Supabase account. The
+// device remembers it so they only type it once.
+const STUDENT_KEY = "sharpie:student";
+
+const rememberedStudent = {
+  get: () => {
+    try {
+      return findStudent(localStorage.getItem(STUDENT_KEY) ?? "") ?? null;
+    } catch {
+      return null;
+    }
+  },
+  set: (login: string) => {
+    try {
+      localStorage.setItem(STUDENT_KEY, login);
+    } catch {
+      // Storage is optional; the student types their name again next time.
+    }
+  },
+  clear: () => {
+    try {
+      localStorage.removeItem(STUDENT_KEY);
+    } catch {
+      // Nothing to forget.
+    }
+  },
+};
+
 export default function App() {
-  const [authState, setAuthState] = useState<AuthState>(() => (isTeacherPath() ? "signed-out" : "student"));
-  const [login, setLogin] = useState("");
-  const [name, setName] = useState(() => session.getName() || GUEST_NAME);
-  const [screen, setScreen] = useState<Screen>(() => (isTeacherPath() ? "name" : screenFromPath()));
+  const [authState, setAuthState] = useState<AuthState>(() =>
+    !isTeacherPath() && rememberedStudent.get() ? "student" : "signed-out",
+  );
+  const [login, setLogin] = useState(() => (isTeacherPath() ? "" : rememberedStudent.get()?.login ?? ""));
+  const [name, setName] = useState(() => (isTeacherPath() ? "" : rememberedStudent.get()?.name) || session.getName() || GUEST_NAME);
+  const [screen, setScreen] = useState<Screen>(() =>
+    !isTeacherPath() && rememberedStudent.get() ? screenFromPath() : "name",
+  );
 
   const navigate = (next: Screen, replace = false) => {
     const path = paths[next];
@@ -102,61 +127,62 @@ export default function App() {
   };
   const goHome = () => navigate("hub");
 
-  const enterGuest = () => {
-    if (isTeacherPath()) {
+  // Without a teacher session: the remembered student, or the name prompt.
+  const enterStudent = () => {
+    const student = isTeacherPath() ? null : rememberedStudent.get();
+    if (!student) {
       activeStudent.clear();
+      setLogin("");
       setAuthState("signed-out");
       setScreen("name");
       return;
     }
-    const guestName = session.getName() || GUEST_NAME;
-    activeStudent.set({ login: guestName.toLowerCase(), name: guestName, isTeacher: false });
-    setLogin("");
-    setName(guestName);
+    activeStudent.set({ login: student.login, name: student.name, isTeacher: false });
+    session.setName(student.name);
+    setLogin(student.login);
+    setName(student.name);
     setAuthState("student");
     setScreen(screenFromPath());
   };
 
+  const enterGuest = () => {
+    activeStudent.set({ login: "", name: GUEST_NAME, isTeacher: false });
+    setLogin("");
+    setName(GUEST_NAME);
+    setAuthState("student");
+    navigate(isTeacherPath() ? "hub" : screenFromPath(), true);
+  };
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      enterGuest();
+      enterStudent();
       return;
     }
 
     let active = true;
-    const applySession = (userLogin: string) => {
+    // Only the teacher keeps a Supabase session; older student sessions are ignored.
+    const applySession = (email: string | undefined) => {
       if (!active) return;
-      const isTeacher = userLogin === TEACHER_LOGIN;
-      const student = findStudent(userLogin);
-      const displayName = isTeacher ? "Professor" : student?.name ?? userLogin;
-      activeStudent.set({ login: userLogin, name: displayName, isTeacher });
-      session.setName(displayName);
-      setLogin(userLogin);
-      setName(displayName);
-      setAuthState(isTeacher ? "teacher" : "student");
-      const restored = screenFromPath();
-      const teacherOnly = restored === "teacher" || restored === "teacher-live";
-      setScreen(isTeacher ? (restored === "hub" ? "teacher" : restored) : teacherOnly ? "hub" : restored);
-    };
-
-    supabase.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email;
-      if (!email) {
-        if (active) enterGuest();
+      if (email?.split("@")[0] !== TEACHER_LOGIN) {
+        enterStudent();
         return;
       }
-      applySession(email.split("@")[0]);
-    }).catch(() => {
-      if (active) enterGuest();
+      activeStudent.set({ login: TEACHER_LOGIN, name: "Professor", isTeacher: true });
+      session.setName("Professor");
+      setLogin(TEACHER_LOGIN);
+      setName("Professor");
+      setAuthState("teacher");
+      const restored = screenFromPath();
+      setScreen(restored === "hub" ? "teacher" : restored);
+    };
+
+    enterStudent();
+    supabase.auth.getSession().then(({ data }) => applySession(data.session?.user?.email)).catch(() => {
+      if (active) enterStudent();
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, authSession) => {
-      const email = authSession?.user?.email;
-      if (!email) {
-        if (active) enterGuest();
-        return;
-      }
-      applySession(email.split("@")[0]);
+      applySession(authSession?.user?.email);
     });
 
     return () => {
@@ -167,10 +193,6 @@ export default function App() {
 
   useEffect(() => {
     const restorePath = () => {
-      if (authState === "signed-out" && !isTeacherPath()) {
-        enterGuest();
-        return;
-      }
       setScreen(authState === "signed-out" || authState === "checking" ? "name" : screenFromPath());
     };
     window.addEventListener("popstate", restorePath);
@@ -178,6 +200,7 @@ export default function App() {
   }, [authState]);
 
   const enter = (student: { login: string; name: string; isTeacher: boolean }) => {
+    if (!student.isTeacher) rememberedStudent.set(student.login);
     activeStudent.set({ login: student.login, name: student.name, isTeacher: student.isTeacher });
     session.setName(student.name);
     setLogin(student.login);
@@ -195,10 +218,11 @@ export default function App() {
   };
 
   const signOut = () => {
-    void supabase?.auth.signOut();
+    if (authState === "teacher") void supabase?.auth.signOut();
+    rememberedStudent.clear();
     session.setName("");
     window.history.replaceState({}, "", "/");
-    enterGuest();
+    enterStudent();
   };
 
   const syncProgress = useCallback((state: BossProgressState) => {
@@ -209,7 +233,7 @@ export default function App() {
   const authenticated = authState === "student" || authState === "teacher";
   const isTeacher = authState === "teacher";
   const fullAccess = isTeacher || login.toLowerCase() === TEACHER_LOGIN || name.toLowerCase() === TEACHER_LOGIN;
-  const teacherOnly = screen === "teacher" || screen === "teacher-live";
+  const teacherOnly = screen === "teacher";
   const finalBossesLocked = screen === "final-bosses" && (!FINAL_BOSSES_ENABLED || (!isTeacher && !FINAL_BOSSES_STUDENT_ACCESS));
   const activeScreen: Screen = teacherOnly && !isTeacher ? "hub" : finalBossesLocked ? "hub" : screen;
 
@@ -219,7 +243,7 @@ export default function App() {
       <div className="ambient-grid" aria-hidden="true" />
       {authState === "checking" && <ModuleLoader />}
       {authState === "signed-out" && (
-        isSupabaseConfigured ? <LoginGate onAuthenticated={enter} /> : <NameGate onEnter={enterLocal} />
+        isSupabaseConfigured ? <LoginGate onAuthenticated={enter} onGuest={enterGuest} /> : <NameGate onEnter={enterLocal} />
       )}
       {authenticated && (
         <BrandHomeContext.Provider value={goHome}>
@@ -227,14 +251,8 @@ export default function App() {
             <Suspense fallback={<ModuleLoader />}>
               <TeacherDashboard
                 onOpenModules={() => navigate("hub")}
-                onOpenLive={() => navigate("teacher-live")}
                 onSignOut={signOut}
               />
-            </Suspense>
-          )}
-          {activeScreen === "teacher-live" && (
-            <Suspense fallback={<ModuleLoader />}>
-              <TeacherLive onBack={() => navigate("teacher")} />
             </Suspense>
           )}
           {activeScreen === "hub" && (

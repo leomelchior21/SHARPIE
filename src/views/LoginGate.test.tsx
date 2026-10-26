@@ -15,20 +15,20 @@ describe("classroom login gate", () => {
     auth.signInWithPassword.mockReset();
   });
 
-  it("lets in a name that is not in the roster", async () => {
-    auth.signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+  it("asks again for a name that is not in the roster, and offers guest access", async () => {
     const onAuthenticated = vi.fn();
-    render(<LoginGate onAuthenticated={onAuthenticated} />);
+    const onGuest = vi.fn();
+    render(<LoginGate onAuthenticated={onAuthenticated} onGuest={onGuest} />);
     fireEvent.change(screen.getByPlaceholderText("joaosilva"), { target: { value: "Fulano Detal" } });
-    fireEvent.click(screen.getByRole("button", { name: /ENTER/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^ENTER/ }));
 
-    await waitFor(() =>
-      expect(onAuthenticated).toHaveBeenCalledWith({ login: "fulanodetal", name: "Fulano Detal", isTeacher: false }),
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/not on the class list/);
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "CONTINUE WITHOUT SAVING" }));
+    expect(onGuest).toHaveBeenCalled();
   });
 
-  it("lets a student in with only first name plus last name, no password field", async () => {
-    auth.signInWithPassword.mockResolvedValue({ error: null });
+  it("lets a student in with only first name plus last name, without a server sign-in", async () => {
     const onAuthenticated = vi.fn();
     render(<LoginGate onAuthenticated={onAuthenticated} />);
 
@@ -43,14 +43,10 @@ describe("classroom login gate", () => {
         isTeacher: false,
       }),
     );
-    expect(auth.signInWithPassword).toHaveBeenCalledWith({
-      email: "joaodedivitis@alunos.sharpie.app",
-      password: "joaodedivitis",
-    });
+    expect(auth.signInWithPassword).not.toHaveBeenCalled();
   });
 
-  it("still lets a roster student in when the server sign-in fails", async () => {
-    auth.signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+  it("matches a roster student by full name", async () => {
     const onAuthenticated = vi.fn();
     render(<LoginGate onAuthenticated={onAuthenticated} />);
 

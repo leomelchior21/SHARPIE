@@ -1,3 +1,5 @@
+import { activeStudent } from "../activeStudent";
+import { canSyncProgress, saveProgress } from "../progressStore";
 import { supabase } from "../supabase";
 import { MAX_SURVIVAL_SCORE } from "./progress";
 import type { BasicOpsProgress } from "./progress";
@@ -74,9 +76,11 @@ export async function fetchTimeAttackLeaderboard(): Promise<TimeAttackLeader[]> 
 
 let dedicatedScoresAvailable = true;
 
-export async function submitTimeAttackScore(solved: number): Promise<void> {
-  if (!supabase || !dedicatedScoresAvailable) return;
-  const { error } = await supabase.rpc("sharpie_record_mathler_time_attack", { p_correct: solved });
+// Scores go under the roster login of whoever is playing; guests keep them on the device only.
+async function recordMathlerScore(score: { p_score?: number; p_streak?: number; p_time_attack?: number }): Promise<void> {
+  const login = activeStudent.get()?.login;
+  if (!supabase || !dedicatedScoresAvailable || !canSyncProgress(login)) return;
+  const { error } = await supabase.rpc("sharpie_record_mathler_score", { p_login: login, ...score });
   if (!error) return;
   if (isMissingRelation(error.message)) {
     dedicatedScoresAvailable = false;
@@ -85,18 +89,12 @@ export async function submitTimeAttackScore(solved: number): Promise<void> {
   throw new Error(error.message);
 }
 
-export async function submitSurvivalScore(score: number, streak: number): Promise<void> {
-  if (!supabase || !dedicatedScoresAvailable) return;
-  const { error } = await supabase.rpc("sharpie_record_mathler_survival", {
-    p_score: score,
-    p_streak: streak,
-  });
-  if (!error) return;
-  if (isMissingRelation(error.message)) {
-    dedicatedScoresAvailable = false;
-    return;
-  }
-  throw new Error(error.message);
+export function submitTimeAttackScore(solved: number): Promise<void> {
+  return recordMathlerScore({ p_time_attack: solved });
+}
+
+export function submitSurvivalScore(score: number, streak: number): Promise<void> {
+  return recordMathlerScore({ p_score: score, p_streak: streak });
 }
 
 export type MathlerProgressRow = {
@@ -175,24 +173,17 @@ export async function fetchClassMathlerProgress(): Promise<MathlerProgressRow[]>
 // the project yet, the same state is mirrored inside sharpie_progress.codes so
 // the teacher dashboard still tracks the three steps.
 async function writeMathlerSyncState(login: string, payload: MathlerSyncState): Promise<void> {
-  if (!supabase || !login) return;
-  const { data, error } = await supabase.from("sharpie_progress").select("codes").eq("login", login).maybeSingle();
-  if (error) throw new Error(error.message);
-  const existing = data?.codes && typeof data.codes === "object" ? (data.codes as Record<string, unknown>) : {};
-  const { error: writeError } = await supabase.from("sharpie_progress").upsert(
-    { login, codes: { ...existing, mathler: payload }, updated_at: payload.updatedAt },
-    { onConflict: "login" },
-  );
-  if (writeError) throw new Error(writeError.message);
+  await saveProgress(login, { codes: { mathler: payload } });
 }
 
 let dedicatedProgressAvailable = true;
 
 export async function pushMathlerProgress(login: string, progress: BasicOpsProgress): Promise<void> {
-  if (!supabase || !login) return;
+  if (!supabase || !canSyncProgress(login)) return;
   const payload = mathlerSyncPayload(progress);
   if (dedicatedProgressAvailable) {
-    const { error } = await supabase.rpc("sharpie_record_mathler_progress", {
+    const { error } = await supabase.rpc("sharpie_record_mathler_steps", {
+      p_login: login,
       p_warmup: payload.warmup,
       p_rush_completed: payload.rushCompleted,
       p_rush_rounds: payload.rushRounds,
@@ -209,12 +200,12 @@ export async function pushMathlerProgress(login: string, progress: BasicOpsProgr
 let pendingProgressTimer: number | null = null;
 
 export function queueMathlerProgressSync(login: string, progress: BasicOpsProgress) {
-  if (!supabase || typeof window === "undefined") return;
+  if (!canSyncProgress(login) || typeof window === "undefined") return;
   if (pendingProgressTimer !== null) window.clearTimeout(pendingProgressTimer);
   pendingProgressTimer = window.setTimeout(() => {
     pendingProgressTimer = null;
     void pushMathlerProgress(login, progress).catch(() => {
       // Offline or transient failure: the local draft stays authoritative.
     });
-  }, 900);
+  }, 3000);
 }

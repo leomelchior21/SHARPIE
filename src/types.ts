@@ -10,8 +10,7 @@ export type Screen =
   | "variable-sprint"
   | "final-bosses"
   | "final-project"
-  | "teacher"
-  | "teacher-live";
+  | "teacher";
 
 export type RunnerError = {
   title: string;

@@ -29,7 +29,6 @@ import { fetchSurvivalLeaderboard, fetchTimeAttackLeaderboard, submitSurvivalSco
 import type { SurvivalLeader, TimeAttackLeader } from "../../lib/basicOps/survivalLeaderboard";
 import { basicOpsSound } from "../../lib/basicOps/sound";
 import { useRunWave } from "../../lib/basicOps/useRunWave";
-import { useLiveCode } from "../../lib/useLiveCode";
 
 type Mode = "time" | "survival";
 type Phase = "menu" | "playing" | "won" | "ended";
@@ -88,7 +87,6 @@ export function MathlerGamePhase({ name, progress, onProgress, soundOn, onToggle
   const phaseRef = useRef<Phase>("menu");
   const wave = useRunWave();
   const puzzle = useMemo(() => generateSurvivalPuzzle(index, seed), [index, seed]);
-  useLiveCode("mathler", value, `MODULE 04 · MATHLER GAME · ${mode?.toUpperCase() ?? "MENU"} · CHALLENGE ${index}`);
 
   const changePhase = (next: Phase) => { phaseRef.current = next; setPhase(next); };
   const running = phase === "playing" || phase === "won";

@@ -5,6 +5,7 @@ import { bossProgress, bossXp, createBossProgress, sanitizeBossProgress, unlockB
 import type { BossProgressState } from "./bossProgress";
 import { parseFinalProjectSync } from "./finalProjectSync";
 import type { FinalProjectSyncState } from "./finalProjectSync";
+import { canSyncProgress, loadProgress, saveProgress } from "./progressStore";
 import { supabase } from "./supabase";
 
 export type SharpieProgressRow = {
@@ -67,40 +68,24 @@ export function mergeBossProgress(local: BossProgressState, remote: BossProgress
 }
 
 export async function fetchBossProgress(login: string): Promise<BossProgressState | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("sharpie_progress")
-    .select("login, current_boss, completed_bosses, xp, codes, attempts")
-    .eq("login", login)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ? rowToBossProgress(data as SharpieProgressRow) : null;
+  const data = await loadProgress(login);
+  return data ? rowToBossProgress({ login, ...data } as SharpieProgressRow) : null;
 }
 
 export async function pushBossProgress(login: string, state: BossProgressState): Promise<void> {
-  if (!supabase) return;
-  const { data } = await supabase.from("sharpie_progress").select("codes").eq("login", login).maybeSingle();
-  const existingCodes = data?.codes && typeof data.codes === "object" ? (data.codes as Record<string, unknown>) : {};
-  const { error } = await supabase.from("sharpie_progress").upsert(
-    {
-      login,
-      module: "final-bosses",
-      current_boss: state.currentBoss,
-      completed_bosses: state.completedBosses,
-      xp: bossXp(state.completedBosses),
-      codes: { ...existingCodes, ...state.codeByBoss },
-      attempts: state.attemptsByBoss,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "login" },
-  );
-  if (error) throw new Error(error.message);
+  await saveProgress(login, {
+    codes: state.codeByBoss,
+    currentBoss: state.currentBoss,
+    completedBosses: state.completedBosses,
+    xp: bossXp(state.completedBosses),
+    attempts: state.attemptsByBoss,
+  });
 }
 
 const pendingSync = new Map<string, number>();
 
 export function queueBossProgressSync(login: string, state: BossProgressState) {
-  if (!supabase) return;
+  if (!canSyncProgress(login)) return;
   const existing = pendingSync.get(login);
   if (existing) window.clearTimeout(existing);
   const timer = window.setTimeout(() => {
@@ -109,7 +94,7 @@ export function queueBossProgressSync(login: string, state: BossProgressState) {
       // Offline or transient failure: the local draft stays authoritative and
       // the next change queues another attempt.
     });
-  }, 900);
+  }, 3000);
   pendingSync.set(login, timer);
 }
 

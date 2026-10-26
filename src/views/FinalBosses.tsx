@@ -20,7 +20,6 @@ import type { BossTestCard } from "../lib/bossTestRunner";
 import { csharpEditorBasicSetup, csharpEditorExtensions } from "../lib/csharpSyntax";
 import { executeCSharp, prepareCSharp } from "../lib/runner";
 import type { RunnerError } from "../types";
-import { useLiveCode } from "../lib/useLiveCode";
 
 type AttemptPhase = "idle" | "running" | "passed" | "failed";
 
@@ -84,7 +83,6 @@ export function FinalBosses({
   const xp = bossXp(completed);
   const nextId = nextBossId(completed, bossId, fullAccess);
 
-  useLiveCode("final-bosses", code, `Boss ${String(boss.id).padStart(2, "0")} · ${boss.title}`);
 
   useEffect(() => {
     onProgressChangeRef.current = onProgressChange;

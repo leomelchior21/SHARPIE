@@ -14,7 +14,6 @@ import { recordRushRound, recordRushRun } from "../../lib/basicOps/progress";
 import type { BasicOpsProgress } from "../../lib/basicOps/progress";
 import { basicOpsSound } from "../../lib/basicOps/sound";
 import { useRunWave } from "../../lib/basicOps/useRunWave";
-import { useLiveCode } from "../../lib/useLiveCode";
 
 type Stage = "intro" | "translate" | "rush" | "target" | "complete";
 
@@ -60,7 +59,6 @@ export function OperatorRushPhase({ name, progress, onProgress, soundOn, onToggl
   const wave = useRunWave();
 
   const challenge = challenges[Math.min(index, total - 1)];
-  useLiveCode("mathler", value, `MODULE 04 · OPERATOR RUSH · ROUND ${round.round}`);
 
   const openRound = useCallback((nextIndex: number) => {
     setRoundIndex(nextIndex);

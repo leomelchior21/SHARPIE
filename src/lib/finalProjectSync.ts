@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { canSyncProgress, saveProgress } from "./progressStore";
 
 // The Final project keeps its full save in the browser. A compact summary is
 // mirrored inside sharpie_progress.codes so the teacher dashboard can show it
@@ -53,21 +53,13 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
 }
 
 export async function pushFinalProjectSync(login: string, payload: FinalProjectSyncState): Promise<void> {
-  if (!supabase || !login) return;
-  const { data, error } = await supabase.from("sharpie_progress").select("codes").eq("login", login).maybeSingle();
-  if (error) throw new Error(error.message);
-  const existing = data?.codes && typeof data.codes === "object" ? (data.codes as Record<string, unknown>) : {};
-  const { error: writeError } = await supabase.from("sharpie_progress").upsert(
-    { login, codes: { ...existing, finalProject: payload }, updated_at: payload.updatedAt },
-    { onConflict: "login" },
-  );
-  if (writeError) throw new Error(writeError.message);
+  await saveProgress(login, { codes: { finalProject: payload } });
 }
 
 let pendingTimer: number | null = null;
 
 export function queueFinalProjectSync(login: string, payload: () => FinalProjectSyncState) {
-  if (!supabase || !login || typeof window === "undefined") return;
+  if (!canSyncProgress(login) || typeof window === "undefined") return;
   if (pendingTimer !== null) window.clearTimeout(pendingTimer);
   pendingTimer = window.setTimeout(() => {
     pendingTimer = null;
@@ -75,5 +67,5 @@ export function queueFinalProjectSync(login: string, payload: () => FinalProject
       // Offline or transient failure: the browser save stays authoritative and
       // the next change queues another attempt.
     });
-  }, 1200);
+  }, 3000);
 }
