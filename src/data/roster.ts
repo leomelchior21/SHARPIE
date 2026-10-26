@@ -7,6 +7,8 @@ export type RosterStudent = {
   name: string;
   classCode: ClassCode;
   group: string | null;
+  // Extra logins a student may type; progress is still saved under `login`.
+  aliases?: string[];
 };
 
 export const CLASS_CODES: ClassCode[] = ["9A", "9B", "9C", "9D"];
@@ -18,6 +20,9 @@ for (const student of roster) byLogin.set(student.login, student);
 for (const student of roster) {
   const fullName = normalizeLogin(student.name);
   if (!byLogin.has(fullName)) byLogin.set(fullName, student);
+  for (const alias of student.aliases ?? []) {
+    if (!byLogin.has(alias)) byLogin.set(alias, student);
+  }
 }
 
 export function normalizeLogin(input: string): string {

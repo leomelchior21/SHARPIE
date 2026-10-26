@@ -21,6 +21,8 @@ describe("SHARPIE roster", () => {
     expect(findStudent("João Dedivitis")?.classCode).toBe("9A");
     expect(findStudent("João Pedro Dedivitis")?.classCode).toBe("9A");
     expect(findStudent("Julia O'Reilly de Araujo Castro")?.login).toBe("juliacastro");
+    expect(findStudent("nunomendes")?.login).toBe("henriquemarsaioli");
+    expect(findStudent("Nuno Mendes")?.name).toBe("Henrique Botelho Marsaioli");
     expect(findStudent("naoexiste")).toBeUndefined();
     expect(findStudent(TEACHER_LOGIN)).toBeUndefined();
   });
