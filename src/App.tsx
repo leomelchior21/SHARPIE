@@ -80,14 +80,18 @@ const paths: Partial<Record<Screen, string>> = {
   "teacher-live": "/professor/live",
 };
 
+const GUEST_NAME = "Guest";
+
+// Open access: everyone lands on the homepage. Only the teacher routes ask for a login.
+function isTeacherPath() {
+  return window.location.pathname.startsWith("/professor");
+}
+
 export default function App() {
-  const [authState, setAuthState] = useState<AuthState>(() => {
-    if (isSupabaseConfigured) return "checking";
-    return session.getName() ? "student" : "signed-out";
-  });
+  const [authState, setAuthState] = useState<AuthState>(() => (isTeacherPath() ? "signed-out" : "student"));
   const [login, setLogin] = useState("");
-  const [name, setName] = useState(() => session.getName());
-  const [screen, setScreen] = useState<Screen>(() => (isSupabaseConfigured ? "hub" : session.getName() ? screenFromPath() : "name"));
+  const [name, setName] = useState(() => session.getName() || GUEST_NAME);
+  const [screen, setScreen] = useState<Screen>(() => (isTeacherPath() ? "name" : screenFromPath()));
 
   const navigate = (next: Screen, replace = false) => {
     const path = paths[next];
@@ -98,12 +102,24 @@ export default function App() {
   };
   const goHome = () => navigate("hub");
 
+  const enterGuest = () => {
+    if (isTeacherPath()) {
+      activeStudent.clear();
+      setAuthState("signed-out");
+      setScreen("name");
+      return;
+    }
+    const guestName = session.getName() || GUEST_NAME;
+    activeStudent.set({ login: guestName.toLowerCase(), name: guestName, isTeacher: false });
+    setLogin("");
+    setName(guestName);
+    setAuthState("student");
+    setScreen(screenFromPath());
+  };
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      const stored = session.getName();
-      setName(stored);
-      setAuthState(stored ? "student" : "signed-out");
-      setScreen(stored ? screenFromPath() : "name");
+      enterGuest();
       return;
     }
 
@@ -126,33 +142,18 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       const email = data.session?.user?.email;
       if (!email) {
-        if (active) {
-          activeStudent.clear();
-          setAuthState("signed-out");
-          setScreen("name");
-        }
+        if (active) enterGuest();
         return;
       }
       applySession(email.split("@")[0]);
     }).catch(() => {
-      if (active) {
-        activeStudent.clear();
-        setAuthState("signed-out");
-        setScreen("name");
-      }
+      if (active) enterGuest();
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, authSession) => {
       const email = authSession?.user?.email;
       if (!email) {
-        if (active) {
-          activeStudent.clear();
-          session.setName("");
-          setLogin("");
-          setName("");
-          setAuthState("signed-out");
-          setScreen("name");
-        }
+        if (active) enterGuest();
         return;
       }
       applySession(email.split("@")[0]);
@@ -165,7 +166,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const restorePath = () => setScreen(authState === "signed-out" || authState === "checking" ? "name" : screenFromPath());
+    const restorePath = () => {
+      if (authState === "signed-out" && !isTeacherPath()) {
+        enterGuest();
+        return;
+      }
+      setScreen(authState === "signed-out" || authState === "checking" ? "name" : screenFromPath());
+    };
     window.addEventListener("popstate", restorePath);
     return () => window.removeEventListener("popstate", restorePath);
   }, [authState]);
@@ -188,12 +195,10 @@ export default function App() {
   };
 
   const signOut = () => {
-    activeStudent.clear();
+    void supabase?.auth.signOut();
     session.setName("");
-    setLogin("");
-    setName("");
-    setAuthState("signed-out");
-    navigate("name", true);
+    window.history.replaceState({}, "", "/");
+    enterGuest();
   };
 
   const syncProgress = useCallback((state: BossProgressState) => {
