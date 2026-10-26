@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowLeft, Infinity as InfinityIcon, LockKeyhole, Play, Star, Trophy, Volume2, VolumeX } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { ArrowLeft, Infinity as InfinityIcon, LockKeyhole, Play, Star, Trophy, UserRound, Volume2, VolumeX } from 'lucide-react'
 import { comparisonOperators, type SkillKey } from './backroomEngine'
 
 // The tapes teach comparisons; older saves may also hold bool and && records, which stay hidden.
@@ -12,6 +12,11 @@ import { BackroomChampionAward } from './BackroomChampion'
 interface Props {
   progress: BackroomProgress
   scores: BackroomScore[]
+  // The score row that belongs to whoever is playing.
+  you: string
+  // Guests only: the name typed for the top scores, null until they type one.
+  player?: string | null
+  onPlayer: (name: string | null) => void
   audioOn: boolean
   champion: boolean
   // The tape a clear just opened: it waits with a NEW sticker.
@@ -32,7 +37,7 @@ export function Stars({ count, size = 16 }: { count: number; size?: number }) {
 
 const skillLabels: Record<SkillKey, string> = { '>': '>', '<': '<', '>=': '>=', '<=': '<=', '==': '==', '!=': '!=', bool: 'bool', '&&': '&&' }
 
-export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null, onToggleAudio, onPlayLevel, onPlayEndless, onBack }: Props) {
+export function BackroomMenu({ progress, scores, you, player, onPlayer, audioOn, champion, fresh = null, onToggleAudio, onPlayLevel, onPlayEndless, onBack }: Props) {
   const stars = normalizeStars(progress.levelStars)
   const next = nextLevelIndex(stars)
   const unlockAll = progress.unlockAll ?? progress.isTeacher
@@ -40,6 +45,13 @@ export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null
   const [tab, setTab] = useState<Tab>('tapes')
   const firstVisit = stars[0] === 0
   const totalStars = stars.reduce((sum, value) => sum + value, 0)
+  const needsName = player === null
+  const [draft, setDraft] = useState('')
+  const submitName = (event: FormEvent) => {
+    event.preventDefault()
+    const name = draft.trim().replace(/\s+/g, ' ').slice(0, 24)
+    if (name) onPlayer(name)
+  }
   const practised = skillKeys.filter((key) => (progress.skills[key]?.right ?? 0) + (progress.skills[key]?.wrong ?? 0) > 0)
 
   const primary = firstVisit
@@ -53,8 +65,17 @@ export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null
       <small className="br-kicker"><i /> FOUND FOOTAGE · LEVEL 0</small>
       <h2 className="br-title" data-text="BACKROOMS RUN">BACKROOMS RUN</h2>
       <p>Every gate in here runs C#. Make the condition <b className="is-true">TRUE</b>, or walk through the right door before the batteries die.</p>
-      <button className="br-primary br-primary--hero" onClick={primary.run}><Play size={20} fill="currentColor" /><span><strong>{primary.label}</strong><small>{primary.detail}</small></span></button>
+      {needsName
+        ? <form className="br-name-form" onSubmit={submitName} aria-label="Who is playing?">
+          <label htmlFor="br-player-name">WHO IS PLAYING? YOUR NAME GOES ON THE TOP RUNS.</label>
+          <div>
+            <input id="br-player-name" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={24} autoComplete="off" spellCheck={false} placeholder="First and last name" autoFocus />
+            <button className="br-primary" type="submit" disabled={!draft.trim()}><Play size={18} fill="currentColor" /> PLAY</button>
+          </div>
+        </form>
+        : <button className="br-primary br-primary--hero" onClick={primary.run}><Play size={20} fill="currentColor" /><span><strong>{primary.label}</strong><small>{primary.detail}</small></span></button>}
       <div className="br-menu-meta">
+        {player && <button className="br-chip-button" onClick={() => { setDraft(player); onPlayer(null) }} title="Change player"><UserRound size={15} /> {player.toUpperCase()} · CHANGE</button>}
         <button className={`br-chip-button ${audioOn ? 'is-on' : ''}`} onClick={onToggleAudio} aria-pressed={audioOn}>{audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />} SOUND {audioOn ? 'ON' : 'OFF'}</button>
         <span className="br-chip"><Star size={14} fill="currentColor" /> {totalStars}/{backroomLevels.length * 3}</span>
         <button className="br-chip-button" onClick={onBack}><ArrowLeft size={15} /> MODULE</button>
@@ -72,7 +93,7 @@ export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null
         {backroomLevels.map((level, index) => {
           const open = levelUnlocked(index, stars, unlockAll)
           return <li key={level.id}>
-            <button className={`br-tape ${open ? '' : 'is-locked'} ${index === next ? 'is-next' : ''} ${stars[index] > 0 ? 'is-done' : ''} ${index === fresh ? 'is-fresh' : ''}`} disabled={!open} onClick={() => onPlayLevel(index)}>
+            <button className={`br-tape ${open ? '' : 'is-locked'} ${index === next ? 'is-next' : ''} ${stars[index] > 0 ? 'is-done' : ''} ${index === fresh ? 'is-fresh' : ''}`} disabled={!open || needsName} onClick={() => onPlayLevel(index)}>
               {index === fresh && <span className="br-tape-new">NEW</span>}
               <span className="br-tape-number">{String(level.id).padStart(2, '0')}</span>
               <span className="br-tape-copy"><strong>{level.title}</strong><small>{level.gates.length} GATES</small></span>
@@ -82,10 +103,10 @@ export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null
           </li>
         })}
         <li>
-          <button className={`br-tape br-tape--deep ${deepOpen ? '' : 'is-locked'} ${fresh === backroomLevels.length ? 'is-fresh' : ''}`} disabled={!deepOpen} onClick={onPlayEndless}>
+          <button className={`br-tape br-tape--deep ${deepOpen ? '' : 'is-locked'} ${fresh === backroomLevels.length ? 'is-fresh' : ''}`} disabled={!deepOpen || needsName} onClick={onPlayEndless}>
             {fresh === backroomLevels.length && <span className="br-tape-new">NEW</span>}
             <span className="br-tape-number"><InfinityIcon size={20} /></span>
-            <span className="br-tape-copy"><strong>THE DEEP</strong><small>{deepOpen ? `ENDLESS · BEST ${progress.backroomRunBest} GATES` : 'CLEAR ALL 6 TAPES TO OPEN'}</small></span>
+            <span className="br-tape-copy"><strong>THE DEEP</strong><small>{deepOpen ? `ENDLESS · BEST ${progress.backroomRunBest} GATES` : `CLEAR ALL ${backroomLevels.length} TAPES TO OPEN`}</small></span>
             <code className="br-tape-focus">ALL</code>
             {deepOpen ? <Play size={18} /> : <LockKeyhole size={18} aria-label="Locked" />}
           </button>
@@ -95,8 +116,8 @@ export function BackroomMenu({ progress, scores, audioOn, champion, fresh = null
       {tab === 'records' && <div className="br-records">
         <h3><Trophy size={20} /> THE DEEP · TOP RUNS</h3>
         <small>THIS DEVICE · BEST GATES / BEST XP</small>
-        {scores.length > 0 ? <ol>{scores.map((score, index) => <li key={score.username} className={score.username === progress.username ? 'is-you' : ''}>
-          <b>{index + 1}</b><span>{score.name}{score.username === progress.username ? ' (YOU)' : ''}</span><strong>{score.gates} <small>GATES</small></strong><em>{score.xp} XP</em>
+        {scores.length > 0 ? <ol>{scores.map((score, index) => <li key={score.username} className={score.username === you ? 'is-you' : ''}>
+          <b>{index + 1}</b><span>{score.name}{score.username === you ? ' (YOU)' : ''}</span><strong>{score.gates} <small>GATES</small></strong><em>{score.xp} XP</em>
         </li>)}</ol> : <p>No runs recorded yet. Clear the tapes, then set the first record in The Deep.</p>}
       </div>}
 

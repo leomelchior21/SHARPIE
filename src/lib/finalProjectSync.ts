@@ -18,7 +18,7 @@ export type FinalProjectSyncState = {
   updatedAt: string | null;
 };
 
-export const FINAL_TAPES = 6;
+export const FINAL_TAPES = 4;
 export const FINAL_FLOWS = 3;
 export const FINAL_QUESTIONS = 20;
 export const FINAL_TICKETS = 10;

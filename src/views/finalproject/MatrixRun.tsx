@@ -40,6 +40,7 @@ export function MatrixRun({ progress, update, name, studentKey, isTeacher, previ
         levels,
         skills: next.skills,
         coach: [...new Set([...p.backroom.coach, ...next.coachSeen])],
+        layout: 3,
       },
     }, 'backroom:best-run', bestXp);
     levels.forEach((stars, i) => { if (stars > 0) saved = award(saved, `backroom:level:${i}`, levelXp); });

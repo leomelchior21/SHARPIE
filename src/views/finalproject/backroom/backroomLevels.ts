@@ -1,7 +1,7 @@
-import { baseRunSpeed, type BackroomGate, type BoolName, type Clause, type ComparisonOperator } from './backroomEngine'
+import { baseRunSpeed, type BackroomGate, type Clause, type ComparisonOperator } from './backroomEngine'
 
-export type CoachMoment = 'energy' | 'steer' | 'jump' | 'fork' | 'bool' | 'and'
-export const coachMoments: CoachMoment[] = ['energy', 'steer', 'jump', 'fork', 'bool', 'and']
+export type CoachMoment = 'energy' | 'steer' | 'fork' | 'jump' | 'saw' | 'hole' | 'drill'
+export const coachMoments: CoachMoment[] = ['energy', 'steer', 'fork', 'jump', 'saw', 'hole', 'drill']
 
 export interface BackroomLevel {
   id: number
@@ -18,7 +18,6 @@ export interface BackroomLevel {
 export const maxBatteries = 3
 
 const cmp = (operator: ComparisonOperator, threshold: number): Clause => ({ type: 'compare', operator, threshold })
-const flag = (name: BoolName, form: 'plain' | 'true' | 'false' = 'plain'): Clause => ({ type: 'bool', name, form })
 
 function set(level: number, index: number, clauses: Clause[], energy: number, value = false, liveTruth = true): BackroomGate {
   return { id: `tape-${level}-${index}`, kind: 'set', clauses, start: { energy, flag: value }, liveTruth }
@@ -33,126 +32,101 @@ export const backroomLevels: BackroomLevel[] = [
     id: 1,
     title: 'LIGHTS ON',
     focus: '>  <',
-    lead: 'A gate only opens when its condition is TRUE. Change energy until it is.',
-    examples: [{ code: '70 > 50', result: true }, { code: '30 < 10', result: false }],
+    lead: 'A gate only opens when its condition is TRUE. Change energy until it is. The light shows TRUE or FALSE while you change it.',
+    examples: [{ code: '70 > 50', result: true }, { code: '30 < 30', result: false }],
     speed: baseRunSpeed * 0.82,
     coach: ['energy', 'steer'],
     gates: [
       set(1, 1, [cmp('>', 50)], 20),
-      set(1, 2, [cmp('<', 30)], 70),
-      set(1, 3, [cmp('>', 75)], 45),
-      set(1, 4, [cmp('<', 15)], 50),
+      set(1, 2, [cmp('<', 30)], 30),
+      set(1, 3, [cmp('>', 75)], 75),
+      set(1, 4, [cmp('<', 15)], 16),
     ],
   },
   {
     id: 2,
-    title: 'THE EDGE',
-    focus: '>=  <=',
-    lead: '>= and <= include the edge. > and < do not. Watch the exact number where the gate flips.',
-    examples: [{ code: '40 >= 40', result: true }, { code: '40 > 40', result: false }],
+    title: 'TWO DOORS',
+    focus: 'TRUE | FALSE',
+    lead: 'Now the code sets energy. Read the condition, decide TRUE or FALSE, and steer into that door. Barriers appear: jump them.',
+    examples: [{ code: '70 > 50', result: true }, { code: '60 > 60', result: false }],
     speed: baseRunSpeed * 0.9,
-    coach: ['jump'],
+    coach: ['fork', 'jump'],
     gates: [
-      set(2, 1, [cmp('>=', 40)], 26),
-      set(2, 2, [cmp('<=', 60)], 78),
-      set(2, 3, [cmp('>', 70)], 56),
-      set(2, 4, [cmp('>=', 85)], 70),
-      set(2, 5, [cmp('<', 20)], 34),
+      fork(2, 1, [cmp('>', 50)], 70),
+      fork(2, 2, [cmp('<', 30)], 45),
+      fork(2, 3, [cmp('>', 60)], 60),
+      fork(2, 4, [cmp('<', 25)], 24),
+      fork(2, 5, [cmp('>', 80)], 79),
+      fork(2, 6, [cmp('<', 40)], 12),
     ],
   },
   {
     id: 3,
-    title: 'EXACTLY',
-    focus: '==  !=',
-    lead: '== needs the exact same number. != is true for every number except one.',
-    examples: [{ code: '50 == 50', result: true }, { code: '50 != 50', result: false }],
+    title: 'THE EDGE',
+    focus: '>=  <=  ==  !=',
+    lead: '>= and <= include the edge; > and < do not. == needs the exact same number; != is TRUE for every number except one. The light helps only on the first gate.',
+    examples: [{ code: '40 >= 40', result: true }, { code: '50 != 50', result: false }],
     speed: baseRunSpeed * 0.95,
-    coach: [],
+    coach: ['saw', 'hole'],
     gates: [
-      set(3, 1, [cmp('==', 50)], 36),
-      set(3, 2, [cmp('!=', 50)], 50),
-      set(3, 3, [cmp('==', 25)], 40),
-      set(3, 4, [cmp('!=', 0)], 0),
-      set(3, 5, [cmp('==', 80)], 64),
+      set(3, 1, [cmp('>=', 40)], 39),
+      fork(3, 2, [cmp('>=', 45)], 45),
+      set(3, 3, [cmp('<=', 60)], 61, false, false),
+      fork(3, 4, [cmp('==', 25)], 25),
+      set(3, 5, [cmp('==', 80)], 81, false, false),
+      fork(3, 6, [cmp('!=', 50)], 50),
+      fork(3, 7, [cmp('<=', 30)], 31),
     ],
   },
   {
     id: 4,
-    title: 'TWO DOORS',
-    focus: 'TRUE | FALSE',
-    lead: 'Now the code sets energy. Read the condition, decide TRUE or FALSE, and steer into that door.',
-    examples: [{ code: '70 > 50', result: true }, { code: '25 > 25', result: false }],
-    speed: baseRunSpeed * 0.95,
-    coach: ['fork'],
-    gates: [
-      fork(4, 1, [cmp('>', 50)], 70),
-      fork(4, 2, [cmp('>=', 45)], 30),
-      fork(4, 3, [cmp('<=', 60)], 60),
-      fork(4, 4, [cmp('>', 25)], 25),
-      fork(4, 5, [cmp('!=', 50)], 50),
-      fork(4, 6, [cmp('<', 20)], 12),
-    ],
-  },
-  {
-    id: 5,
-    title: 'NO LIGHT',
-    focus: 'all  ?',
-    lead: 'From here no light says TRUE or FALSE. Read the condition, set energy and trust your reading. Watch the edges: >= and <= include the number itself.',
-    examples: [{ code: '50 >= 50', result: true }, { code: '50 > 50', result: false }],
-    speed: baseRunSpeed,
-    coach: [],
-    gates: [
-      set(5, 1, [cmp('>=', 60)], 52, false, false),
-      set(5, 2, [cmp('<', 35)], 41, false, false),
-      set(5, 3, [cmp('==', 45)], 39, false, false),
-      set(5, 4, [cmp('<=', 20)], 27, false, false),
-      set(5, 5, [cmp('!=', 70)], 70, false, false),
-      set(5, 6, [cmp('>', 85)], 80, false, false),
-    ],
-  },
-  {
-    id: 6,
     title: 'FINAL CUT',
-    focus: 'doors + edges',
-    lead: 'Everything together: gates you set and door pairs you choose, many right on the edge. No light helps you; only your reading does.',
-    examples: [{ code: '30 <= 30', result: true }, { code: '75 != 75', result: false }],
-    speed: baseRunSpeed * 1.05,
-    coach: [],
+    focus: 'everything',
+    lead: 'Every operator, gates and doors mixed, faster, every hazard in the building, and no light says TRUE or FALSE. Read the condition and trust your reading.',
+    examples: [{ code: '60 >= 60', result: true }, { code: '75 != 75', result: false }],
+    speed: baseRunSpeed * 1.02,
+    coach: ['drill'],
     gates: [
-      fork(6, 1, [cmp('>=', 40)], 40),
-      set(6, 2, [cmp('>', 65)], 60, false, false),
-      fork(6, 3, [cmp('<', 25)], 25),
-      fork(6, 4, [cmp('!=', 55)], 56),
-      set(6, 5, [cmp('<=', 15)], 22, false, false),
-      fork(6, 6, [cmp('==', 90)], 91),
+      set(4, 1, [cmp('>=', 60)], 59, false, false),
+      fork(4, 2, [cmp('<', 35)], 35),
+      set(4, 3, [cmp('!=', 20)], 20, false, false),
+      fork(4, 4, [cmp('>', 70)], 71),
+      fork(4, 5, [cmp('!=', 55)], 56),
+      set(4, 6, [cmp('<=', 15)], 16, false, false),
+      fork(4, 7, [cmp('==', 90)], 91),
+      set(4, 8, [cmp('<', 50)], 50, false, false),
     ],
   },
 ]
 
 export const levelCount = backroomLevels.length
 
-// Jumps start on tape 02, and after a few gates in The Deep. Most corridors have one;
-// later tapes often add a second.
-export function barrierChance(levelIndex: number | null, gateNumber: number): number {
-  if (levelIndex === null) return gateNumber >= 3 ? 0.85 : 0
-  return levelIndex >= 1 ? 0.85 : 0
+// Hazards build up per tape: barriers on 02, saws and holes on 03, drills on 04.
+// The Deep opens them one by one as the gates go by.
+export type HazardKind = 'barrier' | 'saw' | 'hole' | 'drill'
+const tapeHazards: HazardKind[][] = [[], ['barrier'], ['barrier', 'saw', 'hole'], ['barrier', 'saw', 'hole', 'drill']]
+const deepHazards: Array<[HazardKind, number]> = [['barrier', 3], ['saw', 5], ['hole', 7], ['drill', 9]]
+
+export function hazardsFor(levelIndex: number | null, gateNumber: number): HazardKind[] {
+  if (levelIndex === null) return deepHazards.filter(([, from]) => gateNumber >= from).map(([kind]) => kind)
+  return tapeHazards[levelIndex] ?? []
 }
 
-export function secondJumpChance(levelIndex: number | null, gateNumber: number): number {
+// Most corridors get one hazard; later tapes often add a second.
+export function hazardChance(levelIndex: number | null, gateNumber: number, slot: 0 | 1): number {
+  if (hazardsFor(levelIndex, gateNumber).length === 0) return 0
+  if (slot === 0) return 0.85
   if (levelIndex === null) return gateNumber >= 5 ? 0.65 : 0
-  return levelIndex >= 2 ? 0.6 : levelIndex === 1 ? 0.35 : 0
+  return levelIndex >= 2 ? 0.6 : 0.35
 }
 
-// Holes in the floor join the barriers from tape 03, and later in The Deep.
-export function holeShare(levelIndex: number | null, gateNumber: number): number {
-  if (levelIndex === null) return gateNumber >= 6 ? 0.45 : 0
-  return levelIndex >= 2 ? 0.45 : 0
-}
-
-// Saws come out of the walls from tape 02, and after a few gates in The Deep.
-export function sawShare(levelIndex: number | null, gateNumber: number): number {
-  if (levelIndex === null) return gateNumber >= 4 ? 0.35 : 0
-  return levelIndex >= 1 ? 0.35 : 0
+// Older saves held six tapes. Layout 2 was Lights On, Two Doors, The Edge, Exactly,
+// No Light, Final Cut; before that it was Lights On, The Edge, Exactly, Two Doors,
+// No Light, Final Cut. Merged tapes keep the best stars of the two they replace.
+const sixTapeOrder: Record<1 | 2, number[]> = { 1: [0, 3, 1, 2, 4, 5], 2: [0, 1, 2, 3, 4, 5] }
+export function migrateTapeStars(stars: readonly number[], layout: 1 | 2): number[] {
+  const six = sixTapeOrder[layout].map((index) => stars[index] ?? 0)
+  return normalizeStars([six[0], six[1], Math.max(six[2], six[3]), Math.max(six[4], six[5])])
 }
 
 // Spare batteries turn up only when the camcorder is missing charge, and always when it is dead.

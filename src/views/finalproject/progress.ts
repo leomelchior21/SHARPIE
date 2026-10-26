@@ -1,13 +1,14 @@
 import { challenges, flows, questions } from "./content";
 import { comparisonOperators, skillKeys, type ComparisonOperator } from "./backroom/backroomEngine";
-import { coachMoments, levelCount, normalizeStars, type CoachMoment } from "./backroom/backroomLevels";
+import { coachMoments, levelCount, migrateTapeStars, normalizeStars, type CoachMoment } from "./backroom/backroomLevels";
 import type { SkillRecord } from "./backroom/types";
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 export const activities = ["overview","matrix","transition","lab","flow","builder","quiz-intro","quiz","shadow","report"] as const;
 export type Activity = typeof activities[number];
 export type Progress = {
   version: 1; activity: Activity; best: number; transition: boolean; legacyXp: number;
-  backroom: { bestXp: number; gates: number; operators: ComparisonOperator[]; levels: number[]; skills: SkillRecord; coach: CoachMoment[] };
+  // layout 3: four tapes, Lights On, Two Doors, The Edge, Final Cut.
+  backroom: { bestXp: number; gates: number; operators: ComparisonOperator[]; levels: number[]; skills: SkillRecord; coach: CoachMoment[]; layout: 3 };
   flowIndex: number; flowPaths: Record<string,string[]>; flowValues: number[];
   labVisited: boolean;
   builderIndex: number; built: number[]; drafts: Record<string,string[]>;
@@ -15,7 +16,7 @@ export type Progress = {
   missionIndex: number; observed: number[]; repaired: number[]; patches: Record<string,string[]>;
   reflection: string; completedAt: string; awards: Record<string,number>;
 };
-export const freshProgress = (): Progress => ({version:1,activity:"overview",best:0,transition:false,legacyXp:0,backroom:{bestXp:0,gates:0,operators:[],levels:normalizeStars([]),skills:{},coach:[]},labVisited:false,flowIndex:0,flowPaths:{},flowValues:[5,12,900],builderIndex:0,built:[],drafts:{},quizIndex:0,answers:{},attempts:{},mastered:[],missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
+export const freshProgress = (): Progress => ({version:1,activity:"overview",best:0,transition:false,legacyXp:0,backroom:{bestXp:0,gates:0,operators:[],levels:normalizeStars([]),skills:{},coach:[],layout:3},labVisited:false,flowIndex:0,flowPaths:{},flowValues:[5,12,900],builderIndex:0,built:[],drafts:{},quizIndex:0,answers:{},attempts:{},mastered:[],missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
 export const storageKey = (student: string) => `sharpie:final-project:v1:${encodeURIComponent(student.trim().toLowerCase())}`;
 const count = (v: unknown,max: number, fallback=0) => typeof v === "number" && Number.isFinite(v) ? Math.max(0,Math.min(max,Math.floor(v))) : fallback;
 const indices = (v:unknown,max:number):number[] => Array.isArray(v) ? [...new Set(v.filter((x):x is number=>Number.isInteger(x)&&x>=0&&x<max))] : [];
@@ -32,9 +33,11 @@ export function sanitizeProgress(raw: unknown): Progress {
     bestXp:count(s.backroom?.bestXp,1500000,p.best*15),
     gates:Math.max(p.best,count(s.backroom?.gates,10000000,p.best)),
     operators:Array.isArray(s.backroom?.operators)?[...new Set(s.backroom.operators.filter(op=>comparisonOperators.includes(op)))]:[],
-    levels:normalizeStars(Array.isArray(s.backroom?.levels)?s.backroom.levels:[]),
+    // Stars from the six-tape layouts follow their tapes into the four tapes.
+    levels:((layout,levels)=>layout===3?normalizeStars(levels):migrateTapeStars(levels,layout===2?2:1))((s.backroom as {layout?:number}|undefined)?.layout,Array.isArray(s.backroom?.levels)?s.backroom.levels:[]),
     skills:{},
     coach:Array.isArray(s.backroom?.coach)?coachMoments.filter(moment=>s.backroom!.coach.includes(moment)):[],
+    layout:3,
   };
   for (const key of skillKeys) { const record=s.backroom?.skills?.[key]; if(record&&typeof record==="object")p.backroom.skills[key]={right:count(record.right,1000000),wrong:count(record.wrong,1000000)}; }
   p.flowIndex=count(s.flowIndex,2); p.builderIndex=count(s.builderIndex,9); p.quizIndex=count(s.quizIndex,20); p.missionIndex=count(s.missionIndex,3);

@@ -146,6 +146,18 @@ export function explainGate(gate: Pick<BackroomGate, 'clauses'>, values: GateVal
 }
 
 // XP for one cleared gate: a steady base, plus a bonus for a clean streak.
+// The value closest to the edge that still makes a comparison TRUE (!= accepts either neighbour).
+export function edgeValues(operator: ComparisonOperator, threshold: number): number[] {
+  switch (operator) {
+    case '>': return [threshold + 1]
+    case '>=': return [threshold]
+    case '<': return [threshold - 1]
+    case '<=': return [threshold]
+    case '==': return [threshold]
+    case '!=': return [threshold - 1, threshold + 1]
+  }
+}
+
 export function gateXp(combo: number): number {
   return 10 + (combo >= 6 ? 10 : combo >= 3 ? 5 : 0)
 }
@@ -217,7 +229,8 @@ export interface CorridorObstacle {
   side: -1 | 1
   // A barrier or a hole spans the whole corridor and can only be jumped.
   // A saw comes out of the wall on `side` and covers that half: dodge to the other side.
-  kind: 'chair' | 'trash' | 'barrier' | 'hole' | 'saw'
+  // A drill strikes one lane (x), down from the ceiling (side 1) or up from the floor (side -1).
+  kind: 'chair' | 'trash' | 'barrier' | 'hole' | 'saw' | 'drill'
 }
 
 // A spare camcorder battery lying on the carpet.
@@ -227,13 +240,20 @@ export interface CorridorPickup {
 }
 
 export type JumpHazard = 'barrier' | 'hole'
-export type CorridorHazard = JumpHazard | 'saw-left' | 'saw-right'
+export type DrillLane = 'left' | 'middle' | 'right'
+export type CorridorHazard = JumpHazard | 'saw-left' | 'saw-right' | `drill-${'ceiling' | 'floor'}-${DrillLane}`
 export const holeHalfLength = 0.26
 // A saw's blade reaches this far past the middle of the corridor.
 export const sawReach = 0.08
 // The blade starts coming out of the wall this far ahead, and is fully out at sawOut.
 export const sawEmerge = 7
 export const sawOut = 4.5
+// A drill marks its lane from drillWarn ahead, strikes at drillStrike and is fully out at drillOut.
+export const drillWarn = 9
+export const drillStrike = 6.5
+export const drillOut = 5.2
+export const drillLane = 0.4
+export const drillHit = 0.3
 
 const bendLength = 8
 const bendSpacing = 12
@@ -259,16 +279,20 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
     side,
     kind: Math.abs(Math.round(gateZ + center * 5)) % 2 === 0 ? 'chair' : 'trash',
   }] : []
-  // Barriers and holes fill up to two slots: the straight after the first bend, then the
-  // straight after the second (or, with only two bends, the last straight past the chair).
+  // Hazards fill up to two slots: the straight after the first bend, then the straight after the
+  // second. With two bends the second slot sits just past the last bend, before the battery and the
+  // chair, so there is always room to line up for the chair after a saw or a drill.
   const wanted = Array.isArray(jumps) ? jumps : jumps ? [jumps === true ? 'barrier' : jumps] : []
-  const slots = bends.length >= 3 ? [bends[0].endZ + 2, bends[1].endZ + 2] : bends.length === 2 ? [bends[0].endZ + 2, bends[1].endZ + 8.5] : []
+  const slots = bends.length >= 3 ? [bends[0].endZ + 2, bends[1].endZ + 2] : bends.length === 2 ? [bends[0].endZ + 2, bends[1].endZ + 1.5] : []
   wanted.forEach((kind, index) => {
     const z = slots[index]
     if (!kind || z === undefined) return
     const x = corridorCenterAt(gateCenter, bends, z)
     if (kind === 'saw-left' || kind === 'saw-right') obstacles.push({ z, x, side: kind === 'saw-left' ? -1 : 1, kind: 'saw' })
-    else obstacles.push({ z, x, side: 1, kind })
+    else if (kind.startsWith('drill-')) {
+      const [, from, lane] = kind.split('-')
+      obstacles.push({ z, x: x + (lane === 'left' ? -drillLane : lane === 'right' ? drillLane : 0), side: from === 'ceiling' ? 1 : -1, kind: 'drill' })
+    } else obstacles.push({ z, x, side: 1, kind: kind as JumpHazard })
   })
   obstacles.sort((a, b) => a.z - b.z)
   // A battery waits on the last straight, on the side away from the chair or bin.
@@ -277,6 +301,8 @@ export function planCorridor(gateZ: number, gateCenter: number, tiles: CourseTil
 }
 
 export function hitsObstacle(previousDepth: number, depth: number, playerX: number, obstacle: CorridorObstacle, airborne = false): boolean {
+  // A drill fills its lane from floor to ceiling: steer into another lane.
+  if (obstacle.kind === 'drill') return previousDepth <= obstacle.z + 0.25 && depth >= obstacle.z - 0.25 && Math.abs(playerX - obstacle.x) < drillHit
   // A saw cannot be jumped: only the far half of the corridor is safe.
   if (obstacle.kind === 'saw') return previousDepth <= obstacle.z + 0.2 && depth >= obstacle.z - 0.2 && obstacle.side * (playerX - obstacle.x) > -sawReach
   if (airborne) return false
@@ -384,13 +410,21 @@ function boolClause(random: () => number): Extract<Clause, { type: 'bool' }> {
 }
 
 // Endless gates: every type the levels teach, mixed and unlocked gradually.
-export function generateEndlessGate(gateNumber: number, random: () => number, previous?: BackroomGate): BackroomGate {
+// Operators the student often gets wrong come up more often (up to four times as likely).
+export function operatorWeight(record: { right: number; wrong: number } | undefined): number {
+  if (!record) return 1
+  return 1 + 3 * (record.wrong / (record.right + record.wrong + 1))
+}
+
+export function generateEndlessGate(gateNumber: number, random: () => number, previous?: BackroomGate, skills: Partial<Record<SkillKey, { right: number; wrong: number }>> = {}): BackroomGate {
   const id = `deep-${gateNumber}`
   const previousOperator = previous ? gateOperators(previous)[0] : undefined
   let shape = pick(random, shapesFor(gateNumber))
   if (previous && previous.kind === 'set' && shape.startsWith('set') && random() < 0.5) shape = shape.replace('set', 'fork') as EndlessShape
   const operators = comparisonOperators.filter((operator) => operator !== previousOperator)
-  const operator = pick(random, operators)
+  const weights = operators.map((operator) => operatorWeight(skills[operator]))
+  let roll = random() * weights.reduce((sum, weight) => sum + weight, 0)
+  const operator = operators.find((_, index) => (roll -= weights[index]) < 0) ?? operators[operators.length - 1]
   const threshold = thresholdFor(random, operator)
   const compare: Clause = { type: 'compare', operator, threshold }
   const flag = boolClause(random)

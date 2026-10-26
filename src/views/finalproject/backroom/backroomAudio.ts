@@ -268,6 +268,19 @@ export class BackroomAudio {
     this.burst(0.9, 1400, 6, 0.02, 'bandpass', 0.1)
   }
 
+  // A drill marks its lane: three quick warning beeps.
+  drillWarn(): void {
+    for (let beep = 0; beep < 3; beep += 1) this.tone(1250, 0.07, 'square', 0.018, beep * 0.14)
+  }
+
+  // A giant electric drill spinning up and punching through.
+  drill(): void {
+    this.tone(110, 0.8, 'sawtooth', 0.05, 0, 320)
+    this.tone(2400, 0.5, 'square', 0.008, 0.05, 3600)
+    this.burst(0.8, 1800, 1.2, 0.05, 'bandpass')
+    this.burst(0.25, 140, 0.8, 0.16, 'lowpass', 0.25)
+  }
+
   // A giant saw spinning up out of the wall.
   saw(): void {
     this.tone(700, 0.9, 'sawtooth', 0.02, 0, 1500)

@@ -157,7 +157,7 @@ describe("Teacher dashboard", () => {
         codes: {},
         attempts: {},
         finalProject: {
-          xp: 640, tapes: [3, 2, 3, 3, 1, 2], endlessBest: 23, flows: 3, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
+          xp: 640, tapes: [3, 2, 3, 3], endlessBest: 23, flows: 3, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
           built: [1, 2, 3, 4], policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
         },
       },
@@ -166,13 +166,13 @@ describe("Teacher dashboard", () => {
     await waitFor(() => expect(screen.getByText("Alan Turing")).toBeInTheDocument());
 
     const badges = screen.getByText("Alan Turing").closest(".teacher-row")!.querySelectorAll(".teacher-final-cell b");
-    expect([...badges].map((badge) => badge.textContent)).toEqual(["B6", "L2", "S2"]);
+    expect([...badges].map((badge) => badge.textContent)).toEqual(["B4", "L2", "S2"]);
     expect(badges[0]).toHaveClass("is-done");
     expect(badges[1]).toHaveClass("is-progress");
 
     fireEvent.click(screen.getByText("Alan Turing"));
     expect(screen.getByText("MODULE 08 · FINAL PROJECT")).toBeInTheDocument();
-    expect(screen.getByText("6 / 6 tapes · 14★ · Deep 23")).toBeInTheDocument();
+    expect(screen.getByText("4 / 4 tapes · 11★ · Deep 23")).toBeInTheDocument();
     expect(screen.getByText("17 right · 20 / 20 answered")).toBeInTheDocument();
     expect(screen.getByText("4 / 10 shipped")).toBeInTheDocument();
     expect(screen.getByText("Q4 · Q13 · Q16")).toBeInTheDocument();

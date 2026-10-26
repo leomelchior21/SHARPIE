@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baseRunSpeed, championGates, comparisonOperators, conditionCode, correctForkSide, corridorCenterAt, energyRange, evaluateCondition, evaluateGate,
   explainGate, falseStart, forkSide, gateSkills, gateXp, generateEndlessGate, hitsObstacle, mulberry32, operatorWords, planCorridor, planCourse,
-  speedForGate, speedForLevelGate, jumpOffset, jumpSeconds, jumpHeight, type BackroomGate, type Clause, picksUp,
+  speedForGate, speedForLevelGate, jumpOffset, jumpSeconds, jumpHeight, type BackroomGate, type Clause, picksUp, edgeValues, operatorWeight,
 } from './backroomEngine'
 
 function lcg(seed: number): () => number {
@@ -238,5 +238,34 @@ describe('jumping', () => {
     expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x - 0.3, saw)).toBe(true)
     expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x, saw, true)).toBe(true)
     expect(hitsObstacle(saw.z - 0.3, saw.z, saw.x + 0.3, saw)).toBe(false)
+  })
+
+  it('strikes drills in one lane, from the ceiling or the floor, and jumping does not help', () => {
+    const plan = planCorridor(9, 0, planCourse(() => 0.99), ['drill-ceiling-left', 'drill-floor-middle'])
+    const [left, middle] = plan.obstacles.filter((item) => item.kind === 'drill')
+    expect(left.side).toBe(1)
+    expect(middle.side).toBe(-1)
+    expect(hitsObstacle(left.z - 0.3, left.z, left.x, left, true)).toBe(true)
+    expect(hitsObstacle(left.z - 0.3, left.z, left.x + 0.4, left)).toBe(false)
+    expect(hitsObstacle(middle.z - 0.3, middle.z, middle.x - 0.4, middle)).toBe(false)
+  })
+
+  it('knows the value right on the edge for every operator', () => {
+    expect(edgeValues('>', 40)).toEqual([41])
+    expect(edgeValues('>=', 40)).toEqual([40])
+    expect(edgeValues('<', 40)).toEqual([39])
+    expect(edgeValues('<=', 40)).toEqual([40])
+    expect(edgeValues('==', 40)).toEqual([40])
+    expect(edgeValues('!=', 40)).toEqual([39, 41])
+  })
+
+  it('brings the operators a student misses back more often in The Deep', () => {
+    expect(operatorWeight(undefined)).toBe(1)
+    expect(operatorWeight({ right: 10, wrong: 0 })).toBe(1)
+    expect(operatorWeight({ right: 0, wrong: 9 })).toBeCloseTo(3.7)
+    const random = mulberry32(5)
+    const picks = Array.from({ length: 300 }, (_, index) => generateEndlessGate(20 + index, random, undefined, { '<=': { right: 0, wrong: 20 } }))
+    const share = picks.filter((gate) => gate.clauses[0].type === 'compare' && gate.clauses[0].operator === '<=').length / picks.length
+    expect(share).toBeGreaterThan(0.3)
   })
 })

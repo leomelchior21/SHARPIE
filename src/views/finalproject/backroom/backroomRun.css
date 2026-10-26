@@ -265,6 +265,11 @@
 .br-primary--hero > span { display: grid; gap: 2px; }
 .br-primary--hero strong { font-size: clamp(20px, 3vh, 27px); letter-spacing: .08em; }
 .br-screen .br-primary--hero small { color: rgba(15,31,18,.7); font-family: var(--br-font); font-size: clamp(12px, 1.7vh, 14px); letter-spacing: .12em; opacity: .75; }
+.br-name-form { display: grid; gap: 10px; max-width: 520px; }
+.br-name-form label { color: var(--br-ink); font-size: clamp(13px, 1.9vh, 15px); letter-spacing: .1em; }
+.br-name-form div { display: flex; flex-wrap: wrap; gap: 10px; }
+.br-name-form input { flex: 1 1 220px; min-height: 56px; padding: 0 18px; border: 1px solid var(--br-line-strong); border-radius: 16px; color: var(--br-ink); background: rgba(10,10,8,.7); font: inherit; font-size: 18px; letter-spacing: .04em; }
+.br-name-form input:focus { outline: 2px solid var(--br-amber); outline-offset: 2px; }
 .br-menu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .br-chip, .fp-shell .br-screen.br-screen button.br-chip-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 1px solid var(--br-line-strong); border-radius: 999px; color: var(--br-ink); background: rgba(10,10,8,.55); font-size: clamp(13px, 1.9vh, 16px); letter-spacing: .08em; }
 .br-chip { color: var(--br-amber); }

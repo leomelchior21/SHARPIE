@@ -27,6 +27,7 @@ const SQL_FILES = [
   "sharpie-setup.sql",
   "sharpie-live.sql",
   "sharpie-mathler-survival.sql",
+  "sharpie-backroom-scores.sql",
 ];
 
 for (const file of SQL_FILES) {

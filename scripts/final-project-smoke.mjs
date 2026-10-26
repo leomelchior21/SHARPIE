@@ -127,17 +127,17 @@ try{
   // Walls end the run on the spot.
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
   await wait('!!document.querySelector(".br-overlay--gameOver")',15000);await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
-  assert.match(await evaluate('document.querySelector(".br-overlay--gameOver").textContent'),/YOU TOUCHED THE WALL[\s\S]*SIGNAL LOST/);
+  assert.match(await evaluate('document.querySelector(".br-overlay--gameOver").textContent'),/YOU TOUCHED THE WALL[\s\S]*SIGNAL LOST[\s\S]*CONTINUE FROM GATE 02/);
   // A retry rewinds, opens the door again and skips the guides already seen.
   await click('RETRY TAPE');await wait('!!document.querySelector(".br-screen--entering")',8000);
   await wait('!!document.querySelector(".br-overlay--mistake")',30000);assert.match(await evaluate('document.querySelector(".br-overlay--mistake").textContent'),/THE GATE STAYED SHUT[\s\S]*20 > 50/);
   console.log('PASS Backrooms tutorial guide, pause and resume, wall crash, rewind, entry door, closed-gate explanation');
 
-  // Tape 03 with a steering pilot: jumps over holes and barriers, films the dark corridor,
+  // Tape 04 with a steering pilot: jumps over holes and barriers, films the dark corridor,
   // the camera going off and a spare battery bringing it back.
-  await seed({activity:'matrix',backroom:{bestXp:0,gates:0,operators:[],levels:[1,1,0,0,0,0],skills:{},coach:['energy','steer','jump','fork','bool','and']}});
+  await seed({activity:'matrix',backroom:{bestXp:0,gates:0,operators:[],levels:[1,1,1,0],skills:{},coach:['energy','steer','fork','jump','saw','hole','drill'],layout:3}});
   await evaluate('window.__backroomQA={}');
-  await wait('!!document.querySelector(".br-tape")',15000);await evaluate('document.querySelectorAll(".br-tape")[2].click()');
+  await wait('!!document.querySelector(".br-tape")',15000);await evaluate('document.querySelectorAll(".br-tape")[3].click()');
   await wait('!!document.querySelector(".br-deck-skip")',5000);await evaluate('document.querySelector(".br-deck-skip").click()');
   await wait('!!document.querySelector(".br-overlay--briefing")',5000);await evaluate('document.querySelector(".br-overlay--briefing .br-primary").click()');
   await delay(500);const door=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,'entry-door.png'),Buffer.from(door.data,'base64'));
@@ -147,25 +147,28 @@ try{
     const step=()=>{if(!q.pilot)return;requestAnimationFrame(step);const v=q.view;
       if(v)for(const o of v.obstacles)if(o.kind==='hole'){if(v.depth>o.z+0.4&&seen.has(o.z)&&document.querySelector('.br-screen--running')){seen.delete(o.z);q.holes+=1}else if(v.depth<o.z)seen.add(o.z)}
       if(!v||!q.centerAt||!document.querySelector('.br-screen--running')){if(held){fire('keyup',held<0?'ArrowLeft':'ArrowRight');held=0}return}
-      const saw=v.obstacles.find(o=>o.kind==='saw'&&o.z-v.depth>-0.3&&o.z-v.depth<5);const gap=(saw?saw.x-saw.side*0.38:q.centerAt(v.depth+0.9))-v.playerX;const want=Math.abs(gap)<0.04?0:gap>0?1:-1;const now=performance.now();
+      const guide=document.querySelector('.br-coach .br-secondary');if(guide)guide.click();
+      const saw=v.obstacles.find(o=>o.kind==='saw'&&o.z-v.depth>-0.3&&o.z-v.depth<5);const drill=v.obstacles.find(o=>o.kind==='drill'&&o.z-v.depth>-0.3&&o.z-v.depth<6);
+      let aim=q.centerAt(v.depth+0.9);if(saw)aim=saw.x-saw.side*0.38;if(drill){const mid=q.centerAt(drill.z);const prop=v.obstacles.find(o=>(o.kind==='chair'||o.kind==='trash')&&Math.abs(o.z-drill.z)<5);aim=Math.abs(drill.x-mid)<0.05?mid+(prop?-prop.side:(v.playerX>=mid?1:-1))*0.42:mid-Math.sign(drill.x-mid)*0.2}
+      const gap=aim-v.playerX;const want=Math.abs(gap)<0.04?0:gap>0?1:-1;const now=performance.now();
       if(want!==held&&(held===0||now-since>=200)){if(held)fire('keyup',held<0?'ArrowLeft':'ArrowRight');if(want)fire('keydown',want<0?'ArrowLeft':'ArrowRight');held=want;since=now}
       const hz=v.obstacles.find(o=>(o.kind==='barrier'||o.kind==='hole')&&o.z-v.depth>0&&o.z-v.depth<0.75);if(hz&&v.jump===0)fire('keydown',' ')};step()})()`);
   const filmed=new Set();
   const key=async(type,name)=>send('Input.dispatchKeyEvent',{type,key:name,code:name});
   for(const started=Date.now();Date.now()-started<180000;){
-    const s=await evaluate(`(()=>{const v=window.__backroomQA.view;if(!v)return null;return {saw:v.obstacles.some(o=>o.kind==='saw'&&o.z-v.depth>3.6&&o.z-v.depth<4.6),hole:v.obstacles.some(o=>o.kind==='hole'&&o.z-v.depth>3&&o.z-v.depth<5),pack:(v.pickups||[]).some(p=>p.z-v.depth>1.6&&p.z-v.depth<3.2),running:!!document.querySelector('.br-screen--running'),mistake:!!document.querySelector('.br-overlay--mistake'),off:!!document.querySelector('.is-camera-off'),over:!!document.querySelector('.br-overlay--gameOver,.br-overlay--levelClear')}})()`);
+    const s=await evaluate(`(()=>{const v=window.__backroomQA.view;if(!v)return null;return {drill:v.obstacles.some(o=>o.kind==='drill'&&o.z-v.depth>3.8&&o.z-v.depth<5),saw:v.obstacles.some(o=>o.kind==='saw'&&o.z-v.depth>3.6&&o.z-v.depth<4.6),hole:v.obstacles.some(o=>o.kind==='hole'&&o.z-v.depth>3&&o.z-v.depth<5),pack:(v.pickups||[]).some(p=>p.z-v.depth>1.6&&p.z-v.depth<3.2),running:!!document.querySelector('.br-screen--running'),mistake:!!document.querySelector('.br-overlay--mistake'),off:!!document.querySelector('.is-camera-off'),over:!!document.querySelector('.br-overlay--gameOver,.br-overlay--levelClear')}})()`);
     if(!s){await delay(60);continue;}
     if(s.over)break;
     if(s.mistake){await evaluate('document.querySelector(".br-overlay--mistake .br-primary").click()');await delay(80);continue;}
     // Screenshots are slow under software WebGL: pause, hide the pause card, shoot, resume.
-    for(const [flag,name] of [[s.saw,'tape-saw'],[s.hole,'tape-hole'],[s.pack,'battery-pickup'],[s.off,'camera-off']]){if(flag&&!filmed.has(name)&&s.running){filmed.add(name);await key('keyDown','Escape');await evaluate(`(()=>{const st=document.createElement('style');st.id='qa-still';st.textContent='.br-overlay--paused{display:none!important}';document.head.append(st)})()`);await delay(150);const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));await evaluate('document.getElementById("qa-still")?.remove()');await key('keyDown','Escape');}}
+    for(const [flag,name] of [[s.drill,'tape-drill'],[s.saw,'tape-saw'],[s.hole,'tape-hole'],[s.pack,'battery-pickup'],[s.off,'camera-off']]){if(flag&&!filmed.has(name)&&s.running){filmed.add(name);await key('keyDown','Escape');await evaluate(`(()=>{const st=document.createElement('style');st.id='qa-still';st.textContent='.br-overlay--paused{display:none!important}';document.head.append(st)})()`);await delay(150);const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${name}.png`),Buffer.from(shot.data,'base64'));await evaluate('document.getElementById("qa-still")?.remove()');await key('keyDown','Escape');}}
     await delay(60);
   }
   await evaluate('window.__backroomQA.pilot=false');
   const holesCleared=await evaluate('window.__backroomQA.holes');
   const outcome=await evaluate('document.querySelector(".br-overlay--gameOver,.br-overlay--levelClear")?.textContent||"still running"');
   assert(holesCleared>=1,`no hole cleared (${outcome.slice(0,80)})`);assert.doesNotMatch(outcome,/YOU FELL|YOU HIT|TOUCHED THE WALL/);
-  console.log(`PASS piloted tape 03: ${holesCleared} holes jumped, ${[...filmed].join(', ')} filmed, ${/CLEARED/.test(outcome)?'tape cleared':'signal lost in the dark'}`);
+  console.log(`PASS piloted tape 04: ${holesCleared} holes jumped, ${[...filmed].join(', ')} filmed, ${/CLEARED/.test(outcome)?'tape cleared':'signal lost in the dark'}`);
   }
   const checks=[];
   for(const size of [{name:'desktop',width:1366,height:900},{name:'ipad',width:1024,height:768},{name:'ipad-short',width:1024,height:694},{name:'phone',width:390,height:844}]){

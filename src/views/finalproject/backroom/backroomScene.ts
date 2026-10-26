@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { corridorCenterAt, holeHalfLength, mulberry32, sawEmerge, sawOut, sawReach, type CorridorObstacle } from './backroomEngine'
+import { corridorCenterAt, drillOut, drillStrike, drillWarn, holeHalfLength, mulberry32, sawEmerge, sawOut, sawReach, type CorridorObstacle } from './backroomEngine'
 import type { BackroomRendererHandle, BackroomView, GateSignal } from './backroomRenderer'
 
 // World units match the game: the corridor is 1.54 wide; one unit is roughly 2.4 m.
@@ -546,6 +546,56 @@ function box(width: number, height: number, depth: number, material: THREE.Mater
   return mesh
 }
 
+// The red target a ceiling drill paints on the floor of its lane.
+function drillMarkCanvas(): HTMLCanvasElement {
+  const [canvas, ctx] = makeCanvas(256, 256)
+  ctx.clearRect(0, 0, 256, 256)
+  ctx.strokeStyle = 'rgba(255,40,40,.95)'
+  ctx.shadowColor = '#ff2020'
+  ctx.shadowBlur = 18
+  ctx.lineWidth = 10
+  for (const radius of [104, 66]) { ctx.beginPath(); ctx.arc(128, 128, radius, 0, Math.PI * 2); ctx.stroke() }
+  ctx.lineWidth = 8
+  for (const [x0, y0, x1, y1] of [[128, 8, 128, 60], [128, 196, 128, 248], [8, 128, 60, 128], [196, 128, 248, 128]]) { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke() }
+  ctx.fillStyle = 'rgba(255,60,60,.95)'
+  ctx.beginPath(); ctx.arc(128, 128, 16, 0, Math.PI * 2); ctx.fill()
+  return canvas
+}
+
+// Glowing cracks where a floor drill is about to burst through.
+function drillCrackCanvas(random: () => number): HTMLCanvasElement {
+  const [canvas, ctx] = makeCanvas(256, 256)
+  ctx.clearRect(0, 0, 256, 256)
+  ctx.lineCap = 'round'
+  for (let crack = 0; crack < 9; crack += 1) {
+    let x = 128
+    let y = 128
+    const angle = (crack / 9) * Math.PI * 2 + random() * 0.4
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    for (let step = 0; step < 6; step += 1) {
+      x += Math.cos(angle + (random() - 0.5) * 0.9) * (14 + random() * 8)
+      y += Math.sin(angle + (random() - 0.5) * 0.9) * (14 + random() * 8)
+      ctx.lineTo(x, y)
+    }
+    ctx.strokeStyle = 'rgba(255,140,40,.9)'
+    ctx.shadowColor = '#ff7a10'
+    ctx.shadowBlur = 14
+    ctx.lineWidth = 5
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(255,230,160,.95)'
+    ctx.shadowBlur = 0
+    ctx.lineWidth = 1.6
+    ctx.stroke()
+  }
+  const glow = ctx.createRadialGradient(128, 128, 0, 128, 128, 60)
+  glow.addColorStop(0, 'rgba(255,150,50,.75)')
+  glow.addColorStop(1, 'rgba(255,150,50,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, 256, 256)
+  return canvas
+}
+
 // A saw blade: brushed steel, a ring of hooked teeth, a dark hub and vent holes.
 function sawCanvas(): HTMLCanvasElement {
   const [canvas, ctx] = makeCanvas(256, 256)
@@ -858,8 +908,80 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
   const sawRigs = [makeSaw(), makeSaw()]
   const sawGroups = sawRigs.map((rig) => rig.group)
 
-  // A corridor can hold two hazards, so barriers, holes and saws come in pairs.
-  const obstaclePools: Record<CorridorObstacle['kind'], THREE.Group[]> = { chair: [chair], trash: [bin], barrier: [barrier, barrier.clone()], hole: [hole, hole.clone()], saw: sawGroups }
+  // A giant electric drill: a gold twist bit with real flutes, a ribbed chuck, a yellow motor
+  // crackling with blue arcs. It marks its lane first, then punches through the ceiling or the floor.
+  const BIT_LENGTH = 1.0
+  const bitCore = track(new THREE.MeshStandardMaterial({ color: 0x8a7a55, metalness: 0.9, roughness: 0.3 }))
+  const bitFlute = track(new THREE.MeshStandardMaterial({ color: 0xe0b24a, metalness: 0.95, roughness: 0.22, emissive: 0x2a1a00 }))
+  const motorPaint = track(new THREE.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.5, metalness: 0.2 }))
+  const arcMaterial = track(new THREE.LineBasicMaterial({ color: new THREE.Color(1.2, 2.6, 4), toneMapped: false, transparent: true }))
+  const markMaterial = track(new THREE.MeshBasicMaterial({ map: texture(drillMarkCanvas(), true), transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4 }))
+  const crackMaterial = track(new THREE.MeshBasicMaterial({ map: texture(drillCrackCanvas(random), true), transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4 }))
+  const chunkMaterial = track(new THREE.MeshStandardMaterial({ color: 0x9c8452, roughness: 0.9 }))
+  const fluteGeometry = (phase: number) => {
+    const points: THREE.Vector3[] = []
+    for (let step = 0; step <= 80; step += 1) {
+      const t = step / 80
+      const radius = 0.03 + 0.17 * Math.min(1, t * 3.2)
+      const angle = phase + t * Math.PI * 2 * 4.5
+      points.push(new THREE.Vector3(Math.cos(angle) * radius, t * BIT_LENGTH * 0.92, Math.sin(angle) * radius))
+    }
+    return track(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 160, 0.042, 8, false))
+  }
+  const makeDrill = () => {
+    const group = new THREE.Group()
+    // Built tip-down from the origin; floor drills are flipped over.
+    const rig = new THREE.Group()
+    const spin = new THREE.Group()
+    const core = new THREE.Mesh(track(new THREE.ConeGeometry(0.16, BIT_LENGTH, 28, 1)), bitCore)
+    core.rotation.x = Math.PI
+    core.position.y = BIT_LENGTH / 2
+    spin.add(core, new THREE.Mesh(fluteGeometry(0), bitFlute), new THREE.Mesh(fluteGeometry(Math.PI), bitFlute))
+    const chuck = new THREE.Group()
+    const chuckBody = new THREE.Mesh(track(new THREE.CylinderGeometry(0.2, 0.17, 0.22, 28)), darkMetal)
+    chuckBody.position.y = BIT_LENGTH + 0.1
+    chuck.add(chuckBody)
+    for (let ring = 0; ring < 3; ring += 1) {
+      const rib = new THREE.Mesh(track(new THREE.TorusGeometry(0.2, 0.012, 6, 28)), chrome)
+      rib.rotation.x = Math.PI / 2
+      rib.position.y = BIT_LENGTH + 0.03 + ring * 0.07
+      chuck.add(rib)
+    }
+    spin.add(chuck)
+    const motor = new THREE.Mesh(track(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 32)), motorPaint)
+    motor.position.y = BIT_LENGTH + 0.46
+    rig.add(spin, motor)
+    // Electric arcs around the motor: jagged lines redrawn every frame.
+    const arcs = Array.from({ length: 3 }, () => {
+      const geometry = track(new THREE.BufferGeometry())
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3))
+      const line = new THREE.Line(geometry, arcMaterial)
+      rig.add(line)
+      return line
+    })
+    group.add(rig)
+    const mark = new THREE.Mesh(track(new THREE.PlaneGeometry(0.7, 0.7)), markMaterial)
+    mark.rotation.x = -Math.PI / 2
+    mark.position.y = 0.006
+    const cracks = new THREE.Mesh(track(new THREE.PlaneGeometry(0.85, 0.85)), crackMaterial)
+    cracks.rotation.x = -Math.PI / 2
+    cracks.position.y = 0.007
+    group.add(mark, cracks)
+    const chunks = Array.from({ length: 9 }, (_, index) => {
+      const chunk = box(0.05 + (index % 3) * 0.02, 0.02, 0.05, chunkMaterial)
+      group.add(chunk)
+      return { mesh: chunk, angle: (index / 9) * Math.PI * 2 + index * 0.37, speed: 0.6 + (index % 4) * 0.25 }
+    })
+    const flash = new THREE.PointLight(0xffa040, 0, 2.6, 2)
+    const zap = new THREE.PointLight(0x6fb8ff, 0, 2.2, 2)
+    group.add(flash, zap)
+    scene.add(group)
+    return { group, rig, spin, arcs, mark, cracks, chunks, flash, zap }
+  }
+  const drillRigs = [makeDrill(), makeDrill()]
+
+  // A corridor can hold two hazards, so barriers, holes, saws and drills come in pairs.
+  const obstaclePools: Record<CorridorObstacle['kind'], THREE.Group[]> = { chair: [chair], trash: [bin], barrier: [barrier, barrier.clone()], hole: [hole, hole.clone()], saw: sawGroups, drill: drillRigs.map((rig) => rig.group) }
   for (const pool of Object.values(obstaclePools)) scene.add(...pool)
 
   // Spare batteries: a white pack with four green charge LEDs, glowing on the carpet.
@@ -1120,6 +1242,55 @@ export function createBackroomScene(canvas: HTMLCanvasElement): BackroomRenderer
       used[obstacle.kind] = (used[obstacle.kind] ?? 0) + 1
       mesh.visible = true
       mesh.position.set(obstacle.kind === 'barrier' || obstacle.kind === 'hole' ? center(view, obstacle.z) : obstacle.x, 0, w(obstacle.z))
+      if (obstacle.kind === 'drill') {
+        const rig = drillRigs[drillRigs.findIndex((item) => item.group === mesh)]
+        const fromCeiling = obstacle.side > 0
+        // warn: 0..1 while the lane is marked; strike: 0..1 as the bit comes through (with a little overshoot).
+        const warn = Math.min(1, Math.max(0, (drillWarn - distance) / (drillWarn - drillStrike)))
+        const strike = Math.min(1, Math.max(0, (drillStrike - distance) / (drillStrike - drillOut)))
+        const reach = strike >= 1 ? 1 : 1 + 2.7 * (strike - 1) ** 3 + 1.7 * (strike - 1) ** 2
+        const after = Math.max(0, drillStrike - distance)
+        if (fromCeiling) {
+          rig.rig.rotation.z = 0
+          rig.rig.position.y = HEIGHT + 0.1 - reach * (HEIGHT + 0.08)
+        } else {
+          rig.rig.rotation.z = Math.PI
+          rig.rig.position.y = -0.1 + reach * (HEIGHT - 0.15)
+        }
+        rig.rig.position.x = view.reduced || strike <= 0 ? 0 : (Math.random() - 0.5) * 0.012
+        rig.spin.rotation.y = view.reduced ? 0 : view.time * (strike > 0 ? 34 : 6)
+        const pulse = view.reduced ? 1 : 0.55 + 0.45 * Math.sin(view.time * 14)
+        rig.mark.visible = fromCeiling && warn > 0 && strike < 1
+        ;(rig.mark.material as THREE.MeshBasicMaterial).opacity = warn * pulse
+        rig.cracks.visible = !fromCeiling && warn > 0
+        ;(rig.cracks.material as THREE.MeshBasicMaterial).opacity = Math.min(1, warn * (strike > 0 ? 1 : pulse))
+        // Debris: ceiling tiles fall, carpet and concrete burst up.
+        rig.chunks.forEach((chunk) => {
+          chunk.mesh.visible = strike > 0 && after < 2.4
+          const t = after * 0.55 * chunk.speed
+          const r = 0.08 + t * 0.55
+          chunk.mesh.position.set(Math.cos(chunk.angle) * r, fromCeiling ? HEIGHT - 0.05 - t * t * 2.2 : Math.max(0.01, 0.03 + t * 1.5 - t * t * 2.6), Math.sin(chunk.angle) * r)
+          chunk.mesh.rotation.set(t * 6, t * 4, 0)
+        })
+        rig.flash.position.set(0, fromCeiling ? 0.05 : 0.1, 0)
+        rig.flash.intensity = strike > 0 && after < 1.2 ? 3.2 * (1 - after / 1.2) + (view.reduced ? 0 : Math.random() * 0.8) : 0
+        // Blue arcs crackle around the motor while it runs.
+        const crackling = warn > 0 && !view.reduced
+        rig.zap.position.set(0, fromCeiling ? Math.min(HEIGHT - 0.1, rig.rig.position.y + BIT_LENGTH + 0.3) : Math.max(0.1, rig.rig.position.y - BIT_LENGTH - 0.3), 0)
+        rig.zap.intensity = crackling ? 0.6 + Math.random() * 1.6 : 0
+        rig.arcs.forEach((line, index) => {
+          line.visible = crackling && Math.random() > 0.35
+          if (!line.visible) return
+          const positions = line.geometry.getAttribute('position') as THREE.BufferAttribute
+          const start = (index / rig.arcs.length) * Math.PI * 2 + view.time * 3
+          for (let point = 0; point < 8; point += 1) {
+            const angle = start + point * 0.32
+            const radius = 0.31 + Math.random() * 0.07
+            positions.setXYZ(point, Math.cos(angle) * radius, BIT_LENGTH + 0.25 + (Math.random() - 0.5) * 0.4, Math.sin(angle) * radius)
+          }
+          positions.needsUpdate = true
+        })
+      }
       if (obstacle.kind === 'saw') {
         // The blade slides out of the wall as the runner closes in.
         const rig = sawRigs[sawGroups.indexOf(mesh)]

@@ -90,7 +90,7 @@ describe("Final project profile persistence and milestones",()=>{
     const summary=syncSummary(p);
     expect(summary).toMatchObject({endlessBest:12,flows:1,quizAnswered:2,quizRight:1,quizMissed:[2],built:[1,3],policies:1,reportDone:false,reflection:"Rules need review.",xp:xp(p)});
     expect(parseFinalProjectSync(JSON.parse(JSON.stringify(summary)))).toEqual(summary);
-    expect(parseFinalProjectSync({built:[99,-1,"x"],quizRight:500})).toMatchObject({built:[10],quizRight:20,tapes:[0,0,0,0,0,0]});
+    expect(parseFinalProjectSync({built:[99,-1,"x"],quizRight:500})).toMatchObject({built:[10],quizRight:20,tapes:[0,0,0,0]});
     expect(parseFinalProjectSync(null)).toBeNull();
   });
   it("never awards duplicate XP on replays",()=>{
@@ -104,14 +104,17 @@ describe("Final project profile persistence and milestones",()=>{
   });
   it("preserves the full game's best XP, gate count and operators on reload",()=>{
     const p=sanitizeProgress({...freshProgress(),best:4,backroom:{bestXp:55,gates:9,operators:[">","<=",">","bad"]}});
-    expect(p.backroom).toEqual({bestXp:55,gates:9,operators:[">","<="],levels:[0,0,0,0,0,0],skills:{},coach:[]});expect(xp(p)).toBe(55);
+    expect(p.backroom).toEqual({bestXp:55,gates:9,operators:[">","<="],levels:[0,0,0,0],skills:{},coach:[],layout:3});expect(xp(p)).toBe(55);
   });
   it("restores Backrooms tape stars, field notes and their XP",()=>{
     const p=sanitizeProgress({...freshProgress(),backroom:{bestXp:40,gates:12,operators:[],coach:["steer","bogus","energy"],levels:[3,2,0,9,"x"],skills:{">":{right:4,wrong:1},bad:{right:1,wrong:0},"&&":{right:-3,wrong:2.7}}}});
-    expect(p.backroom.levels).toEqual([3,2,0,3,0,0]);expect(p.backroom.coach).toEqual(["energy","steer"]);
+    // A save from before the tape reorder: its stars move with their tapes (old Two Doors 9→3 is now tape 02; Edge + Exactly merge).
+    expect(p.backroom.levels).toEqual([3,3,2,0]);expect(p.backroom.coach).toEqual(["energy","steer"]);
+    expect(sanitizeProgress({...freshProgress(),backroom:{...p.backroom,levels:[3,2,0,1,0,0],layout:2}}).backroom.levels).toEqual([3,2,1,0]);
+    expect(sanitizeProgress({...freshProgress(),backroom:{...p.backroom,levels:[3,2,1,0],layout:3}}).backroom.levels).toEqual([3,2,1,0]);
     expect(p.backroom.skills).toEqual({">":{right:4,wrong:1},"&&":{right:0,wrong:2}});
     expect(xp(p)).toBe(40+3*20);
     expect(stageOneDone(p)).toBe(false);
-    expect(stageOneDone({...p,backroom:{...p.backroom,levels:[1,1,1,1,1,1]}})).toBe(true);
+    expect(stageOneDone({...p,backroom:{...p.backroom,levels:[1,1,1,1]}})).toBe(true);
   });
 });
