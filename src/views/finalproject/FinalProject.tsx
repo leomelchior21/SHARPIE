@@ -20,6 +20,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const [loaded]=useState(()=>loadProgress(studentKey));
   const [p,setP]=useState(loaded.progress);const [preview,setPreview]=useState(false);const [previewProgress,setPreviewProgress]=useState(freshProgress);
   const [warning,setWarning]=useState(loaded.warning);
+  const [headerSlot,setHeaderSlot]=useState<HTMLDivElement|null>(null);
   // Backrooms Run saves on this device only; nothing from it is synced to the teacher.
   const [backroom,setBackroom]=useState(()=>loadBackroomProgress({username:studentKey,name,isTeacher}));
   const [previewBackroom,setPreviewBackroom]=useState(()=>createBackroomProgress(name,studentKey,true));
@@ -46,6 +47,8 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     <header className="fp-header">
       <Brand compact/>
       <div className="fp-header-title"><small>FINAL PROJECT {preview&&<span className="fp-preview-marker">· PREVIEW</span>}</small><b>{labels[activity]}</b></div>
+      {/* The Switchyard puts its level line here. */}
+      {activity==="yard"&&<div className="fp-header-slot" ref={setHeaderSlot}/>}
       <div className="fp-header-actions"><span className="fp-xp">ϟ {xp(active)} XP</span>
         {isTeacher&&<button className={preview?"preview-on":""} aria-label={preview?"Exit teacher preview":"Teacher preview"} aria-pressed={preview} onClick={()=>setPreview(!preview)}><Eye size={16}/></button>}
         <button className="fp-back" onClick={()=>activity==="overview"?onBack():go(inLab?"lab":"overview")}><ArrowLeft size={15}/> BACK</button>
@@ -75,7 +78,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
     {activity==="lab"&&<SwitchyardHome progress={active} allOpen={allOpen} onQuiz={()=>go("quiz-intro")} onYard={()=>go("yard")}/>}
     {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")}/>}
-    {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} onHub={()=>go("lab")}/>}
+    {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} headerSlot={headerSlot} onHub={()=>go("lab")}/>}
     {activity==="quiz"&&<Quiz progress={active} update={update} onYard={()=>go("yard")}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}

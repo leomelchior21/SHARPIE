@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, Blocks, Check, Clock3, FileCode2, Gauge, Keyboard, Lock, Radio, RotateCcw, Split, Star, Terminal, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowRight, Blocks, Clock3, FileCode2, Gauge, Keyboard, Lock, Radio, RotateCcw, Split, Star, Terminal, X } from "lucide-react";
 import { SyntaxLine } from "../../../components/SyntaxLine";
 import type { Input } from "../content";
 import { award, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
-import { levels, rushHour, stages, type Line, type YardLevel } from "./levels";
+import { levels, stages, type Line, type YardLevel } from "./levels";
 import { buildYard, dialLine, expected, firstWrong, provesEdge, readDial, readWritten, route, starsFor, swapStations, writtenCode, yardCode, type Route, type Yard } from "./yard";
 import { runYard, warmYard } from "./runYard";
 import { YardScene, type TrainState } from "./YardScene";
@@ -12,22 +13,29 @@ import "./switchyard.css";
 
 const slotNames = ["Create the variable", "Test a condition", "TRUE action", "ELSE path", "ELSE action"];
 type Side = "true" | "false";
-type Mode = "watch" | "test" | "proof" | "rush";
+type Mode = "watch" | "test";
 interface Row { value: Input; output: string; ok: boolean; route: Route; want: string }
 
 // The bank keeps the same shuffled order every visit.
 const hash = (text: string) => [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
 const shuffled = (lines: Line[], seed: string) => [...lines].sort((a, b) => hash(seed + a) - hash(seed + b));
 const edgeOf = (condition: string) => Number(/(-?\d+)\s*$/.exec(condition)?.[1] ?? 0);
+// The right "why?" answer moves around from level to level instead of always coming first.
+const whyOrder = (index: number, count: number, answer: number) => {
+  const order = Array.from({ length: count }, (_, i) => i).filter((i) => i !== answer);
+  order.splice((index * 2 + 1) % count, 0, answer);
+  return order;
+};
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // allOpen: the teacher, or the teacher preview, has every level open.
 export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1);
 
-export function Switchyard({ progress: p, update, allOpen, onHub }: { progress: Progress; update: Update; allOpen: boolean; onHub: () => void }) {
+/** headerSlot: a spot in the Final Project header where the level line goes, so the game keeps the whole screen. */
+export function Switchyard({ progress: p, update, allOpen, onHub, headerSlot = null }: { progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot?: HTMLElement | null }) {
   useEffect(() => { warmYard(); }, []);
   return <section className="sy">
-    <Level key={p.yardLevel} index={p.yardLevel} progress={p} update={update} allOpen={allOpen} onHub={onHub} />
+    <Level key={p.yardLevel} index={p.yardLevel} progress={p} update={update} allOpen={allOpen} onHub={onHub} headerSlot={headerSlot} />
   </section>;
 }
 
@@ -67,7 +75,7 @@ function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: 
   </div>;
 }
 
-function Level({ index, progress: p, update, allOpen, onHub }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void }) {
+function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot: HTMLElement | null }) {
   const level = levels[index];
   const writing = level.tool === "write";
   const shippedBefore = p.yardShipped.includes(index);
@@ -90,13 +98,13 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
   const [shipped, setShipped] = useState(false);
   const [why, setWhy] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const [stage, setStage] = useState<"write" | "timetable" | "rush">("write");
+  const [stage, setStage] = useState<"write" | "timetable">("write");
   const [picks, setPicks] = useState<number[]>([10, 20, 30]);
   const trip = useRef(0);
   const { run, busy, error } = useExecution();
   const [slow] = useState(() => !reducedMotion());
 
-  const timetable = writing ? (stage === "rush" ? rushHour : picks) : level.timetable;
+  const timetable = writing ? picks : level.timetable;
   const editable = [0, 1, 2, 3, 4].filter((slot) => !level.given.includes(slot));
   const locked = busy || !ran;
   const last = index === levels.length - 1;
@@ -133,7 +141,6 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
     if (bad.length) { setVerdict({ tone: "wrong", text: `${guess}${describe(bad[0])}` }); return; }
     const still = firstWrong(level, yard);
     if (still !== null) { setVerdict({ tone: "wrong", text: `${guess}The timetable passed, but train ${String(still)} would still go to the wrong place. Check the edge.` }); return; }
-    if (mode === "proof") { setStage("rush"); setBoard([]); setVerdict({ tone: "right", text: "Your timetable proves the edge. Now rush hour: 12 trains, fast." }); return; }
     setVerdict({ tone: "done", text: `${guess}Every train reached the right station.` });
     ship(starsFor(runs + 1));
   };
@@ -141,7 +148,7 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
   const go = (values: Input[], mode: Mode, side: Side | null = prediction) => run(async (signal) => {
     clear();
     if (mode !== "watch") setRuns((value) => value + 1);
-    const pace = (slow ? 1 : 0.2) * (mode === "rush" ? 0.35 : 1);
+    const pace = slow ? 1 : 0.2;
     const rows: Row[] = [];
     for (const value of values) {
       trip.current += 1;
@@ -178,7 +185,7 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
     if (!ran) return go(level.timetable, "watch");
     if (writing) {
       if (stage === "write") { setStage("timetable"); clear(); return; }
-      return go(timetable, stage === "rush" ? "rush" : "proof");
+      return go(timetable, "test");
     }
     if (needPredict) { setAsking(true); return; }
     return go(level.timetable, "test");
@@ -195,24 +202,20 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
   const show = (line: Line) => line === "decl" ? `${typeof level.spotlight === "boolean" ? "bool" : "int"} ${level.variable} = ${String(trainValue)};` : line;
   const lineState = (slot: number) => lever === null ? "" : slot === 1 ? "is-run" : slot === 2 ? (lever === "true" ? "is-run" : "is-skip") : slot >= 3 ? (lever === "false" ? "is-run" : "is-skip") : "is-run";
 
-  const steps = level.runFirst ? ["WATCH", "FIX", "RUN", "SHIP"] : writing ? ["WRITE", "TIMETABLE", "RUSH HOUR", "SHIP"] : ["BUILD", "PREDICT", "RUN", "SHIP"];
-  const step = shipped || shippedBefore && !busy && !board.length ? 4
-    : writing ? (stage === "write" ? 0 : stage === "timetable" ? 1 : 2)
-      : !ran ? 0 : asking ? 1 : busy ? 2 : level.runFirst ? 1 : 0;
   const hint = error ? error
     : verdict ? verdict.text
       : shippedBefore ? "Shipped. Replay any level, or move on to the next one."
         : !ran ? (level.incident ? "Incident report on your desk. Run the yard as it is and watch what happens." : "Somebody built this yard before you. Run it as it is and watch where the trains go.")
-          : writing ? (stage === "write" ? written!.next : stage === "timetable" ? proof ?? "Your three trains prove the edge. Run them." : "Rush hour: 12 trains, one after another.")
+          : writing ? (stage === "write" ? written!.next : proof ?? "Your three trains prove the edge. Run them.")
             : level.tool === "blocks" ? (target === undefined ? "Program complete. Run the timetable." : `Tap the code for line ${target + 1}${level.labels ? `: ${slotNames[target].toLowerCase()}` : ""}.`)
               : level.tool === "ifs" ? (lines[1] ? "Run the timetable, or pick another test." : "Pick the if line for the switch.")
                 : `Set the sensor: the operator${level.dialRange ? " and the number" : ""}${level.swap ? ", or swap the stations" : ""}.`;
   const tone = error ? "wrong" : verdict?.tone;
 
   const runLabel = !ran ? (level.incident ? "▶ WATCH THE INCIDENT" : "▶ RUN THE YARD AS IT IS")
-    : writing ? (stage === "write" ? "PICK YOUR TIMETABLE →" : stage === "timetable" ? "▶ RUN MY TIMETABLE" : "▶ START RUSH HOUR")
+    : writing ? (stage === "write" ? "PICK YOUR TIMETABLE →" : "▶ RUN MY TIMETABLE")
       : "▶ RUN THE TIMETABLE";
-  const canRun = !busy && !asking && !shipped && (writing ? (stage === "write" ? !!written?.complete : stage === "timetable" ? !!written?.complete && !proof : !!written?.complete) : true);
+  const canRun = !busy && !asking && !shipped && (writing ? (stage === "write" ? !!written?.complete : !!written?.complete && !proof) : true);
 
   const slot = (n: number) => {
     const line = lines[n];
@@ -234,13 +237,7 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
   const next = () => last ? onHub() : update((current) => ({ ...current, yardLevel: index + 1 }));
 
   return <>
-    <header className="sy-top">
-      <Rail progress={p} index={index} allOpen={allOpen} update={update} />
-      <div className={`sy-coach ${tone ? `is-${tone}` : ""}`}>
-        <ol aria-label="Steps">{steps.map((label, i) => <li key={label} className={i < step ? "is-done" : i === step ? "is-now" : ""}>{i < step ? <Check size={11} strokeWidth={3} /> : <b>{i + 1}</b>}{label}</li>)}</ol>
-        <p className="sy-verdict" role="status">{hint}</p>
-      </div>
-    </header>
+    {headerSlot ? createPortal(<Rail progress={p} index={index} allOpen={allOpen} update={update} />, headerSlot) : <header className="sy-top"><Rail progress={p} index={index} allOpen={allOpen} update={update} /></header>}
 
     <div className="sy-main">
       <aside className="sy-tower">
@@ -288,12 +285,12 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
                   <div className="sy-bank">{bank.map((line) => <button key={line} data-line={line} aria-pressed={lines[1] === line} disabled={locked || shipped} onClick={() => setLines(lines.map((item, m) => m === 1 ? line : item))}><code><SyntaxLine code={line} /></code></button>)}</div>
                   {level.swap && <button className="sy-swap" disabled={locked || shipped} onClick={() => setLines(swapStations(lines))}>⇅ SWAP STATIONS</button>}
                 </>
-                  : stage === "timetable" || stage === "rush" ? <div className="sy-picks">
+                  : stage === "timetable" ? <div className="sy-picks">
                     <small><Clock3 size={14} /> YOUR TIMETABLE · THREE TRAINS THAT PROVE THE RULE</small>
                     <div>{picks.map((value, i) => <div key={i} className="sy-number">
-                      <button aria-label={`Train ${i + 1} lower`} disabled={busy || stage === "rush" || value <= level.min} onClick={() => { setPicks(picks.map((v, j) => j === i ? v - 1 : v)); clear(); }}>−</button>
+                      <button aria-label={`Train ${i + 1} lower`} disabled={busy || value <= level.min} onClick={() => { setPicks(picks.map((v, j) => j === i ? v - 1 : v)); clear(); }}>−</button>
                       <output aria-label={`Train ${i + 1}`}>{value}</output>
-                      <button aria-label={`Train ${i + 1} higher`} disabled={busy || stage === "rush" || value >= level.max} onClick={() => { setPicks(picks.map((v, j) => j === i ? v + 1 : v)); clear(); }}>+</button>
+                      <button aria-label={`Train ${i + 1} higher`} disabled={busy || value >= level.max} onClick={() => { setPicks(picks.map((v, j) => j === i ? v + 1 : v)); clear(); }}>+</button>
                     </div>)}</div>
                   </div> : <p className="sy-locked is-info"><Keyboard size={15} /> Type the switch in Program.cs. The yard builds itself as you write.</p>}
         </div>
@@ -301,7 +298,9 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
 
       <div className="sy-yard">
         <div className="sy-scene-wrap">
-          <YardScene yard={yard} variable={level.variable} train={train} lever={lever} readout={readout} arrived={arrived} decorCount={p.yardShipped.length} duration={900 * (slow ? 1 : 0.2) * (stage === "rush" ? 0.35 : 1)} />
+          <YardScene yard={yard} variable={level.variable} train={train} lever={lever} readout={readout} arrived={arrived} decorCount={p.yardShipped.length} duration={900 * (slow ? 1 : 0.2)} />
+          {/* What to do now, or what just happened, in the yard's empty top corner. */}
+          <p className={`sy-verdict ${tone ? `is-${tone}` : ""}`} role="status">{hint}</p>
           {asking && <div className="sy-overlay sy-predict" role="group" aria-label="Predict the track">
             <small>BEFORE IT RUNS</small>
             <p>Train <b>{String(level.spotlight)}</b> is next. Which track will your switch send it down?</p>
@@ -311,8 +310,8 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
             <span className="sy-stamp is-ok">SHIPPED</span>
             <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={26} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
             <p className="sy-why-q">{level.why.question}</p>
-            <div className="sy-why">{level.why.options.map((option, i) => <button key={option} disabled={why === level.why.answer}
-              className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => setWhy(i)}>{option}</button>)}</div>
+            <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
+              className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => setWhy(i)}>{level.why.options[i]}</button>)}</div>
             {why !== null && <p className="sy-why-explain">{why === level.why.answer ? <><b>Right.</b> {level.why.explain} {level.note}</> : <><b>Not that one.</b> Read the trains on the board, then try again.</>}</p>}
             {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={15} /></button>}
           </div>}
@@ -322,7 +321,7 @@ function Level({ index, progress: p, update, allOpen, onHub }: { index: number; 
 
         <div className="sy-desk">
           <div className="sy-board" aria-label="Timetable">
-            <small><Clock3 size={14} /> TIMETABLE{stage === "rush" ? " · RUSH HOUR" : ""}</small>
+            <small><Clock3 size={14} /> TIMETABLE</small>
             <ol>{timetable.map((value, i) => {
               const row = board[i];
               return <li key={`${String(value)}-${i}`} className={row ? row.ok ? "is-ok" : "is-wrong" : train && board.length === i && busy ? "is-running" : ""}>

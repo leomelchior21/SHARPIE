@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 import { missions, program, questions } from "./content";
-import { levels, rushHour } from "./switchyard/levels";
+import { levels } from "./switchyard/levels";
 import { buildYard, domain, expected, readWritten, writtenCode, yardCode } from "./switchyard/yard";
 import { conditionResult } from "./logic";
 let handler;const messages=[];
@@ -26,9 +26,9 @@ describe("Final project uses the existing C# worker",()=>{
     expect(run(yardCode(fan.variable,29,yard))).toMatchObject({success:true,output:""});
     expect(run(yardCode(fan.variable,31,yard))).toMatchObject({success:true,output:"Fan on\n"});
   });
-  it("runs the switch a student types on the last level, rush hour included",()=>{
+  it("runs the switch a student types on the last level, for every water temperature",()=>{
     const pool=levels[9];const code='if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}';
-    for(const value of rushHour)expect(run(writtenCode(pool.variable,value,code)).output).toBe(`${expected(pool,value)}\n`);
+    for(let value=pool.min;value<=pool.max;value++)expect(run(writtenCode(pool.variable,value,code)).output).toBe(`${expected(pool,value)}\n`);
   });
   it("executes every broken and repaired audit rule",()=>{
     missions.forEach(m=>{for(const outputs of [m.broken,m.repaired])for(const input of [true,false]){

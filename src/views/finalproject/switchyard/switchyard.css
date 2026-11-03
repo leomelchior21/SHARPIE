@@ -18,49 +18,47 @@
 .fp-shell .sy small, .fp-shell .sy-hub small { display: inline-flex; align-items: center; gap: 6px; color: var(--sy-soft); font: 700 11px var(--sy-sans); letter-spacing: .08em; }
 .fp-shell .sy em, .fp-shell .sy-hub em { font-style: normal; }
 .fp-shell .sy p, .fp-shell .sy-hub p { color: var(--sy-soft); }
-.sy-coach, .sy-tools, .sy-line, .sy-program, .sy-memo, .sy-board, .sy-scene-wrap { border: 1px solid var(--sy-line); border-radius: 16px; background: var(--sy-card); box-shadow: var(--sy-shadow); }
+.sy-tools, .sy-line, .sy-program, .sy-memo, .sy-board, .sy-scene-wrap { border: 1px solid var(--sy-line); border-radius: 16px; background: var(--sy-card); box-shadow: var(--sy-shadow); }
 .fp-shell .sy button, .fp-shell .sy-hub .sy-card { min-height: 0; padding: 7px 13px; border: 1px solid var(--sy-line); border-radius: 10px; color: var(--sy-ink); background: #f6f8fb; box-shadow: 0 1px 0 rgba(31,42,55,.06); font: 600 14px var(--sy-sans); letter-spacing: 0; transition: background .15s, border-color .15s, transform .1s; }
 .fp-shell .sy button:hover:not(:disabled), .fp-shell .sy-hub .sy-card:hover:not(:disabled) { border-color: #c3cdd9; background: #edf1f6; }
 .fp-shell .sy button:active:not(:disabled) { transform: translateY(1px); }
 .fp-shell .sy button[aria-pressed=true] { border-color: var(--sy-blue); color: #fff; background: var(--sy-blue); }
 .fp-shell .sy button:disabled { opacity: .5; }
 
-.sy { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: clamp(8px, 1.2vh, 12px); height: 100%; min-height: 0; }
+.sy { display: flex; flex-direction: column; gap: clamp(8px, 1.2vh, 12px); height: 100%; min-height: 0; }
 
-/* Top: the level rail and the one thing to do now. */
-.sy-top { display: flex; gap: 12px; align-items: stretch; min-width: 0; }
-.sy-route { display: flex; flex: none; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 14px 5px; border: 1px solid var(--sy-line); border-radius: 16px; background: var(--sy-card); box-shadow: var(--sy-shadow); }
-.sy-route-head { display: flex; align-items: baseline; gap: 10px; }
-.sy-route-head b { font: 800 14px var(--sy-sans); }
-.sy-route-head b span { color: var(--sy-faint); font-weight: 600; }
-.fp-shell .sy .sy-route-head small { font-size: 10px; }
+/* The level line lives in the Final Project header: stops on one route, finished in green, the current one in yellow. */
+.fp-header-slot { display: flex; flex: 1; justify-content: center; min-width: 0; }
+.sy-top { display: flex; }
+.sy-route { display: flex; align-items: center; gap: 14px; min-width: 0; font-family: var(--sy-sans); }
+.sy-top .sy-route { padding: 6px 12px; border-radius: 14px; background: #1f2a37; }
+.sy-route-head { display: grid; gap: 1px; white-space: nowrap; }
+.sy-route-head b { color: #fff; font: 800 15px/1 var(--sy-sans); }
+.sy-route-head b span { color: #8d99a8; font-weight: 600; }
+.fp-shell .sy-route-head small { color: #93a6c0; font: 700 10px var(--sy-sans); letter-spacing: .08em; }
 .sy-route ol { display: flex; align-items: flex-start; margin: 0; padding: 0; list-style: none; }
 .sy-route li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding-left: 12px; }
 .sy-route li:first-child { padding-left: 0; }
 /* The track between two stops: green once the stop before it is shipped, dotted across a stage change. */
-.sy-route li::before { position: absolute; top: 11px; left: 0; width: 12px; height: 3px; border-radius: 2px; content: ""; background: #d3dae3; }
+.sy-route li::before { position: absolute; top: 12px; left: 0; width: 12px; height: 3px; border-radius: 2px; content: ""; background: #3a4a63; }
 .sy-route li:first-child::before { display: none; }
 .sy-route li.is-new-stage { padding-left: 22px; }
-.sy-route li.is-new-stage::before { width: 22px; background: repeating-linear-gradient(90deg, #c3cdd9 0 3px, transparent 3px 6px); }
+.sy-route li.is-new-stage::before { width: 22px; background: repeating-linear-gradient(90deg, #4a5b76 0 3px, transparent 3px 6px); }
 .sy-route li.is-linked::before { background: var(--sy-true); }
 .sy-route li.is-linked.is-new-stage::before { background: repeating-linear-gradient(90deg, var(--sy-true) 0 3px, transparent 3px 6px); }
-.fp-shell .sy .sy-route button { display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 2px solid #d3dae3; border-radius: 50%; color: var(--sy-soft); background: #fff; box-shadow: none; font: 800 11px var(--sy-sans); }
-.fp-shell .sy .sy-route button:disabled { color: #b3bdc9; background: #f1f4f8; opacity: 1; }
-.fp-shell .sy .sy-route li.is-done button { border-color: var(--sy-true); color: #fff; background: var(--sy-true); }
-.fp-shell .sy .sy-route li.is-now button { border-color: var(--sy-sun-dark); color: var(--sy-ink); background: var(--sy-sun); box-shadow: 0 0 0 3px rgba(255,194,61,.35); }
+.fp-shell .sy-route button, .fp-shell .sy-route button:hover:not(:disabled) { display: grid; place-items: center; width: 27px; min-height: 0; height: 27px; padding: 0; border: 2px solid #3a4a63; border-radius: 50%; color: #c6d4ea; background: #142033; box-shadow: none; font: 800 12px var(--sy-sans); letter-spacing: 0; }
+.fp-shell .sy-route button:hover:not(:disabled) { border-color: #7f93b3; }
+.fp-shell .sy-route button:disabled { color: #5c6b82; background: #101a2a; border-color: #26344a; opacity: 1; }
+.fp-shell .sy-route li.is-done button { border-color: var(--sy-true); color: #fff; background: var(--sy-true); }
+.fp-shell .sy-route li.is-now button { border-color: var(--sy-sun); color: var(--sy-ink); background: var(--sy-sun); box-shadow: 0 0 0 3px rgba(255,194,61,.3); }
 .sy-route i { display: flex; gap: 1.5px; height: 3px; }
-.sy-route i em { width: 3px; height: 3px; border-radius: 50%; background: #dfe5ec; }
-.fp-shell .sy .sy-route i em.is-on { background: var(--sy-sun-dark); }
-.sy-coach { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; padding: 6px 16px; border-left: 5px solid var(--sy-blue); }
-.sy-coach ol { display: flex; flex-wrap: wrap; gap: 3px 16px; margin: 0; padding: 0; list-style: none; }
-.sy-coach li { display: inline-flex; align-items: center; gap: 6px; color: var(--sy-faint); font: 700 11px var(--sy-sans); letter-spacing: .08em; }
-.sy-coach li b { display: grid; place-items: center; width: 17px; height: 17px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; }
-.sy-coach li.is-now { color: var(--sy-blue); }
-.sy-coach li.is-now b { color: #fff; background: var(--sy-blue); border-color: var(--sy-blue); }
-.sy-coach li.is-done { color: var(--sy-true); }
-.fp-shell .sy-coach .sy-verdict { margin: 0; color: var(--sy-ink); font: 600 clamp(14.5px, 2vh, 17px)/1.3 var(--sy-sans); }
-.sy-coach.is-wrong { border-left-color: var(--sy-false); background: linear-gradient(90deg, var(--sy-false-bg), #fff 70%); }
-.sy-coach.is-right, .sy-coach.is-done { border-left-color: var(--sy-true); background: linear-gradient(90deg, var(--sy-true-bg), #fff 70%); }
+.sy-route i em { width: 3px; height: 3px; border-radius: 50%; background: #2c3a52; }
+.fp-shell .sy-route i em.is-on { background: var(--sy-sun); }
+
+/* What to do now, or what just happened, on the yard's empty top corner. */
+.fp-shell .sy .sy-verdict { position: absolute; z-index: 1; top: 10px; right: 10px; max-width: min(56%, 540px); margin: 0; padding: 8px 14px; border: 1px solid var(--sy-line); border-left: 5px solid var(--sy-blue); border-radius: 12px; color: var(--sy-ink); background: rgba(255,255,255,.96); box-shadow: var(--sy-shadow); font: 600 clamp(14px, 1.9vh, 16.5px)/1.35 var(--sy-sans); animation: sy-pop-in .2s ease-out; }
+.fp-shell .sy .sy-verdict.is-wrong { border-color: #f5b7a6; border-left-color: var(--sy-false); background: #fff5f2; }
+.fp-shell .sy .sy-verdict.is-right, .fp-shell .sy .sy-verdict.is-done { border-color: #9fdcc3; border-left-color: var(--sy-true); background: #f1fbf6; }
 
 .sy-main { display: grid; grid-template-columns: minmax(300px, .78fr) minmax(0, 1.65fr); gap: clamp(10px, 1.2vw, 16px); min-height: 0; }
 
@@ -99,6 +97,8 @@
 .sy-tools { display: flex; flex: none; flex-direction: column; gap: 9px; padding: 12px; }
 .sy-bank { display: flex; flex-wrap: wrap; gap: 6px; }
 .fp-shell .sy .sy-bank button { flex: 1 1 auto; justify-content: flex-start; background: #fff; font: 500 clamp(12px, 1.6vh, 14px) var(--mono); text-align: left; box-shadow: 0 2px 0 #dfe5ec; }
+/* A code block never wraps: a C# line split in two reads like two lines. */
+.fp-shell .sy .sy-bank button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .fp-shell .sy .sy-bank button.is-used { opacity: .3; }
 .fp-shell .sy .sy-bank button[aria-pressed=true] { background: var(--sy-blue-bg); color: var(--sy-ink); box-shadow: inset 0 0 0 2px var(--sy-blue); }
 .sy-dial { display: flex; flex-direction: column; gap: 9px; }
@@ -254,8 +254,26 @@
 @keyframes sy-pulse { 0%, 100% { box-shadow: 0 4px 0 var(--sy-sun-dark), 0 0 0 0 rgba(255,194,61,.55); } 50% { box-shadow: 0 4px 0 var(--sy-sun-dark), 0 0 0 7px rgba(255,194,61,0); } }
 @keyframes sy-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,194,61,.5); } 50% { box-shadow: 0 0 0 4px rgba(255,194,61,0); } }
 @keyframes sy-shake { 25% { transform: translateX(1px); } 75% { transform: translateX(-1px); } }
+@keyframes sy-pop-in { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes sy-pop { from { opacity: 0; transform: translate(-50%, -46%) scale(.97); } }
 @keyframes sy-stamp { from { opacity: 0; transform: scale(1.6) rotate(-5deg); } }
+
+/* iPads: the header keeps the level line; the page title steps aside, then the stage name. */
+@media (max-width: 1100px) {
+  .fp-activity-yard .fp-header-title { display: none; }
+  /* iPad landscape: a wider control column so the longest Console.WriteLine fits on one line. */
+  .sy-main { grid-template-columns: minmax(350px, .95fr) minmax(0, 1.5fr); }
+}
+@media (max-width: 860px) {
+  .sy-route-head small { display: none; }
+  .sy-route { gap: 10px; }
+  .sy-route li { padding-left: 8px; } .sy-route li::before { width: 8px; }
+  .sy-route li.is-new-stage { padding-left: 14px; } .sy-route li.is-new-stage::before { width: 14px; }
+}
+@media (max-width: 700px) {
+  .fp-header-slot { justify-content: flex-start; overflow-x: auto; }
+  .sy-route-head { display: none; }
+}
 
 /* Short landscape screens. */
 @media (max-height: 760px) and (min-width: 981px) {
@@ -271,20 +289,26 @@
   .sy-brace { padding-left: 15px; }
   .sy-ln { flex-basis: 18px; padding-right: 5px; }
 }
-/* Tablets in portrait and phones: one column, and the page may scroll. */
+/* iPads in portrait: the yard across the top, then the program beside the dispatch and the tools beside the timetable. */
 @media (max-width: 980px) {
   .fp-activity-yard .fp-content { overflow-y: auto; }
-  .sy { height: auto; }
-  .sy-top { flex-direction: column; }
-  .sy-route { overflow-x: auto; }
-  .sy-main { grid-template-columns: 1fr; }
-  .sy-yard { order: -1; grid-template-rows: auto auto auto; }
-  .sy-scene-wrap { aspect-ratio: 384 / 262; }
-  .sy-tower { overflow: visible; }
-  .sy-desk { grid-template-columns: 1fr; }
+  .sy { height: auto; min-height: 100%; }
+  .sy-main { grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); grid-template-areas: "scene scene" "line line" "program memo" "tools desk"; align-items: start; }
+  .sy-yard, .sy-tower { display: contents; }
+  .sy-scene-wrap { grid-area: scene; height: min(40vh, 60vw); }
+  .sy-line { grid-area: line; }
+  .sy-memo { grid-area: memo; } .sy-program { grid-area: program; } .sy-tools { grid-area: tools; }
+  .sy-desk { grid-area: desk; grid-template-columns: 1fr; align-content: start; }
+  .sy-actions { gap: 8px; }
+  .sy-lines, .sy-write { font-size: 12.5px; }
   .sy-hub { height: auto; max-height: none; }
   .sy-hub-cards { grid-template-columns: 1fr; }
   .sy-card-art { aspect-ratio: 16 / 9; }
+}
+/* Phones: one column. */
+@media (max-width: 700px) {
+  .sy-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "scene" "line" "desk" "memo" "program" "tools"; }
+  .fp-shell .sy .sy-verdict { max-width: calc(100% - 20px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .sy *, .sy-hub * { animation: none !important; }

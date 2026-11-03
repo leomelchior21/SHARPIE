@@ -51,11 +51,11 @@ try{
   if(navigationOnly)assert.equal(await evaluate('document.querySelectorAll(".fp-header button").length'),1);
   await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".sy-hub")');
   assert.deepEqual(await evaluate('[...document.querySelectorAll(".sy-card")].map(b=>b.getAttribute("aria-label"))'),['Quiz','The Switchyard']);
-  assert.equal(await evaluate('document.querySelector(\'[aria-label="The Switchyard"]\').disabled'),true);
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="The Switchyard"]\').disabled'),navigationOnly);// Students wait for the quiz; the teacher fixture always has the yard open.
   await pressLabel('Quiz');await wait('!!document.querySelector(".lab-quiz-intro")');
   assert.match(await evaluate('document.querySelector(".lab-quiz-intro h1").textContent'),/Read it/);
   await click('START QUIZ');await wait('!!document.querySelector(".lab-answers")');
-  console.log('PASS Switchyard hub: the quiz first, the yard locked until every question is answered');
+  console.log('PASS Switchyard hub: the quiz first, the yard locked for students until every question is answered');
   if(!navigationOnly){
   await seed({transition:true,activity:'quiz'});
   for(let index=0;index<20;index++){
@@ -72,10 +72,9 @@ try{
   await evaluate(`(()=>{const t=document.querySelector('.sy-write textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(t,${JSON.stringify('if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}')});t.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await click('PICK YOUR TIMETABLE →');
   for(const [train,way,times] of [[1,'higher',15],[2,'higher',6],[3,'lower',3]])for(let n=0;n<times;n++)await pressLabel(`Train ${train} ${way}`);
-  await click('▶ RUN MY TIMETABLE');await wait('document.querySelector(".sy-verdict")?.textContent.includes("proves the edge")',40000);
-  await click('▶ START RUSH HOUR');await wait('!!document.querySelector(".sy-shipped")',90000);
+  await click('▶ RUN MY TIMETABLE');await wait('!!document.querySelector(".sy-shipped")',40000);
   assert.equal((await saved()).yardShipped.length,10);
-  console.log('PASS Switchyard level 1 from blocks and level 10 typed, its timetable and rush hour, through the real C# engine');
+  console.log('PASS Switchyard level 1 from blocks and level 10 typed with its own timetable, through the real C# engine');
   }
   }
   if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_YARD_ONLY){

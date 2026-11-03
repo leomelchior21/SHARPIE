@@ -44,6 +44,7 @@ export interface YardLevel {
   runFirst?: boolean;
   /** What went wrong, told as an incident report. */
   incident?: string;
+  /** Three trains per level: just below, at and just above the edge. */
   timetable: Input[];
   /** The train the student predicts before the first run. */
   spotlight: Input;
@@ -77,7 +78,7 @@ export const levels: YardLevel[] = [
     variable: "total", min: 0, max: 150, condition: "total >= 100", yes: "Free delivery", no: "Delivery fee",
     tool: "blocks", preset: ["", "", "", "", ""], given: [],
     bank: five("total >= 100", "Free delivery", "Delivery fee"),
-    timetable: [99, 100, 101, 150], spotlight: 100,
+    timetable: [99, 100, 101], spotlight: 100,
     why: { question: "Train 99 paid the delivery fee. Why?", options: ["99 >= 100 is false, so the else track runs.", "99 is too close to 100.", "The else track always runs last."], answer: 0, explain: "The test is false, so C# skips the IF block and runs the else block." },
     note: "C# reads the program from top to bottom. The test must come before the actions it controls.",
   },
@@ -97,7 +98,7 @@ export const levels: YardLevel[] = [
     variable: "battery", min: 0, max: 100, condition: "battery < 20", yes: "Low battery", no: "Battery OK",
     tool: "dial", preset: five("battery > 50", "Low battery", "Battery OK"), given: [0, 2, 3, 4],
     ops: [">", "<", ">=", "<=", "==", "!="], dialRange: [0, 100],
-    timetable: [18, 19, 20, 21], spotlight: 20,
+    timetable: [19, 20, 21], spotlight: 20,
     why: { question: "Why does battery 20 count as OK?", options: ["20 < 20 is false: < does not include 20.", "20 is a round number.", "The sensor rounds up."], answer: 0, explain: "< is strictly less than. 20 is not less than itself, so it goes to the else track." },
     note: "The edge belongs to one side only. < leaves it out; <= would take it in.",
   },
@@ -127,7 +128,7 @@ export const levels: YardLevel[] = [
     variable: "isRaining", min: 0, max: 1, condition: "isRaining", yes: "Take an umbrella", no: "Wear sunglasses",
     tool: "ifs", preset: ["decl", "", printLine("Take an umbrella"), "else", printLine("Wear sunglasses")], given: [0, 3], swap: true,
     bank: [ifLine("isRaining"), ifLine("isRaining == true"), ifLine("isRaining == false"), ifLine("isRaining = true")],
-    timetable: [true, false], spotlight: false,
+    timetable: [true, false, true], spotlight: false,
     why: { question: "Why does if (isRaining) work without == true?", options: ["isRaining is already true or false.", "C# adds == true when you forget it.", "It only works for rain."], answer: 0, explain: "A bool is already a condition. if (isRaining) and if (isRaining == true) ask the same thing." },
     note: "A bool can be the whole test. Its value is already true or false.",
   },
@@ -154,7 +155,7 @@ export const levels: YardLevel[] = [
     note: "A bug can hide in the action, not only in the test. Rerun every train after each fix.",
   },
   {
-    id: "pool", stage: 3, title: "Rush Hour", place: "Sunset pool",
+    id: "pool", stage: 3, title: "Write It Yourself", place: "Sunset pool",
     dispatch: "Water at 26 degrees or more: Pool open. Otherwise: Too cold. Write the whole switch yourself.",
     variable: "water", min: 0, max: 40, condition: "water >= 26", yes: "Pool open", no: "Too cold",
     tool: "write", preset: [], given: [0],
@@ -165,5 +166,3 @@ export const levels: YardLevel[] = [
 ];
 
 export const levelCount = levels.length;
-// The trains of rush hour: the edges come back between ordinary values.
-export const rushHour: number[] = [31, 25, 12, 26, 40, 27, 3, 26, 18, 33, 25, 0];

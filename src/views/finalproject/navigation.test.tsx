@@ -52,8 +52,8 @@ describe("Student Final project navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "The Switchyard" }));
     expect(screen.getByRole("heading", { name: "First Switch" })).toBeInTheDocument();
     for (let n = 2; n <= 10; n += 1) expect(screen.getByRole("button", { name: new RegExp(`^Level ${n}:`) })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Level 10: Rush Hour" }));
-    expect(screen.getByRole("heading", { name: "Rush Hour" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Level 10: Write It Yourself" }));
+    expect(screen.getByRole("heading", { name: "Write It Yourself" })).toBeInTheDocument();
   });
 
   it("sends a save that stopped in the old Code Builder back to the hub while the quiz is open", () => {
@@ -78,6 +78,8 @@ describe("Student Final project navigation", () => {
     expect(verdict(container)).toMatch(/You called train 12 right/);
     expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
     const dialog = screen.getByRole("dialog", { name: "Level shipped" });
+    // The right answer is not parked in the first spot.
+    expect(within(dialog).getAllByRole("button").map((b) => b.textContent)[1]).toMatch(/includes 12/);
     fireEvent.click(within(dialog).getByRole("button", { name: "12 is smaller than 12." }));
     expect(within(dialog).queryByRole("button", { name: /NEXT LEVEL/ })).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: /includes 12/ }));
@@ -137,7 +139,7 @@ describe("Student Final project navigation", () => {
     expect(saved().yardStars[7]).toBe(3);
   });
 
-  it("builds the pool's yard from typed code, checks the timetable, then runs rush hour", async () => {
+  it("builds the pool's yard from typed code and ships it on a timetable that proves the edge", async () => {
     vi.useFakeTimers();
     atLevel(9);
     const { container } = mount();
@@ -152,10 +154,7 @@ describe("Student Final project navigation", () => {
     step(1, "higher", 15); step(2, "higher", 6); step(3, "lower", 3);
     fireEvent.click(screen.getByRole("button", { name: "▶ RUN MY TIMETABLE" }));
     await playOut();
-    expect(verdict(container)).toMatch(/proves the edge/);
-    fireEvent.click(screen.getByRole("button", { name: "▶ START RUSH HOUR" }));
-    await playOut();
-    expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(12);
+    expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
     expect(saved().yardShipped).toContain(9);
     expect(saved().yardDrafts.pool[0]).toContain("Too cold");
   });
