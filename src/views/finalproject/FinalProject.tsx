@@ -35,8 +35,10 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   },[preview,studentKey,isTeacher]);
   // Saves from before the dashboard sync reach the teacher on the next visit.
   useEffect(()=>{if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(loaded.progress));},[isTeacher,studentKey,loaded]);
-  const activity=canOpen(active.activity,active,preview)?active.activity:"overview";
-  const go=(next:Activity)=>{if(canOpen(next,active,preview))update(p=>({...p,activity:next}));};
+  // Teachers always have the quiz and every Switchyard level open, preview or not.
+  const allOpen=preview||isTeacher;
+  const activity=canOpen(active.activity,active,allOpen)?active.activity:"overview";
+  const go=(next:Activity)=>{if(canOpen(next,active,allOpen))update(p=>({...p,activity:next}));};
   const one=backroomStageDone(activeBackroom),two=stageTwoDone(active),three=stageThreeDone(active);
   // Inside the Switchyard, Back returns to its two stations.
   const inLab=["yard","quiz-intro","quiz"].includes(activity);
@@ -71,9 +73,9 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     </button>)}</div><div className="fp-overview-bottom"><p>Welcome back, <b>{name}</b>. Your progress is saved in this browser.</p>{SHADOW_FEED_OPEN&&three&&<button onClick={()=>go("report")}>OPEN AUDIT REPORT →</button>}</div></>}
     {activity==="matrix"&&<MatrixRun progress={{...activeBackroom,isTeacher:isTeacher||preview}} onProgress={saveBackroom} preview={preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
-    {activity==="lab"&&<SwitchyardHome progress={active} preview={preview} onQuiz={()=>go("quiz-intro")} onYard={()=>go("yard")}/>}
+    {activity==="lab"&&<SwitchyardHome progress={active} allOpen={allOpen} onQuiz={()=>go("quiz-intro")} onYard={()=>go("yard")}/>}
     {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")}/>}
-    {activity==="yard"&&<Switchyard progress={active} update={update} preview={preview} onHub={()=>go("lab")}/>}
+    {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} onHub={()=>go("lab")}/>}
     {activity==="quiz"&&<Quiz progress={active} update={update} onYard={()=>go("yard")}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}

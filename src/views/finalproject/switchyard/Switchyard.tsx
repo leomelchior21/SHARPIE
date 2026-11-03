@@ -21,22 +21,23 @@ const shuffled = (lines: Line[], seed: string) => [...lines].sort((a, b) => hash
 const edgeOf = (condition: string) => Number(/(-?\d+)\s*$/.exec(condition)?.[1] ?? 0);
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export const levelOpen = (p: Progress, index: number, preview: boolean) => preview || index === 0 || p.yardShipped.includes(index - 1);
+// allOpen: the teacher, or the teacher preview, has every level open.
+export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1);
 
-export function Switchyard({ progress: p, update, preview, onHub }: { progress: Progress; update: Update; preview: boolean; onHub: () => void }) {
+export function Switchyard({ progress: p, update, allOpen, onHub }: { progress: Progress; update: Update; allOpen: boolean; onHub: () => void }) {
   useEffect(() => { warmYard(); }, []);
   return <section className="sy">
-    <Level key={p.yardLevel} index={p.yardLevel} progress={p} update={update} preview={preview} onHub={onHub} />
+    <Level key={p.yardLevel} index={p.yardLevel} progress={p} update={update} allOpen={allOpen} onHub={onHub} />
   </section>;
 }
 
 // The levels as stops on one route line: finished stops in green, the current one in yellow.
-function Rail({ progress: p, index, preview, update }: { progress: Progress; index: number; preview: boolean; update: Update }) {
+function Rail({ progress: p, index, allOpen, update }: { progress: Progress; index: number; allOpen: boolean; update: Update }) {
   const stage = stages[levels[index].stage];
   return <nav className="sy-route" aria-label="Switchyard levels">
     <div className="sy-route-head"><b>Level {index + 1} <span>/ {levels.length}</span></b><small>{stage.short} · {stage.name}</small></div>
     <ol>{levels.map((level, i) => {
-      const open = levelOpen(p, i, preview);
+      const open = levelOpen(p, i, allOpen);
       const stars = p.yardStars[i] ?? 0;
       return <li key={level.id} className={`${i > 0 && levels[i - 1].stage !== level.stage ? "is-new-stage" : ""} ${i > 0 && p.yardShipped.includes(i - 1) ? "is-linked" : ""} ${p.yardShipped.includes(i) ? "is-done" : ""} ${i === index ? "is-now" : ""}`}>
         <button aria-label={`Level ${i + 1}: ${level.title}`} title={`${i + 1} · ${level.title}`} aria-current={i === index ? "step" : undefined} disabled={!open}
@@ -66,7 +67,7 @@ function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: 
   </div>;
 }
 
-function Level({ index, progress: p, update, preview, onHub }: { index: number; progress: Progress; update: Update; preview: boolean; onHub: () => void }) {
+function Level({ index, progress: p, update, allOpen, onHub }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void }) {
   const level = levels[index];
   const writing = level.tool === "write";
   const shippedBefore = p.yardShipped.includes(index);
@@ -234,7 +235,7 @@ function Level({ index, progress: p, update, preview, onHub }: { index: number; 
 
   return <>
     <header className="sy-top">
-      <Rail progress={p} index={index} preview={preview} update={update} />
+      <Rail progress={p} index={index} allOpen={allOpen} update={update} />
       <div className={`sy-coach ${tone ? `is-${tone}` : ""}`}>
         <ol aria-label="Steps">{steps.map((label, i) => <li key={label} className={i < step ? "is-done" : i === step ? "is-now" : ""}>{i < step ? <Check size={11} strokeWidth={3} /> : <b>{i + 1}</b>}{label}</li>)}</ol>
         <p className="sy-verdict" role="status">{hint}</p>

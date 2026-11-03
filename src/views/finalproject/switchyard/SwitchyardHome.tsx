@@ -10,11 +10,11 @@ import "./switchyard.css";
 const finishedYard = buildYard(["decl", "if (age <= 12)", 'Console.WriteLine("Child discount");', "else", 'Console.WriteLine("Regular ticket");']);
 
 /** The Switchyard's front door: the quiz first, then the game it unlocks. */
-export function SwitchyardHome({ progress: p, preview, onQuiz, onYard }: { progress: Progress; preview: boolean; onQuiz: () => void; onYard: () => void }) {
+export function SwitchyardHome({ progress: p, allOpen, onQuiz, onYard }: { progress: Progress; allOpen: boolean; onQuiz: () => void; onYard: () => void }) {
   const answered = questions.filter((q) => p.answers[q.id] !== undefined).length;
   const right = questions.filter((q) => p.answers[q.id] === q.answer).length;
   const licensed = quizDone(p);
-  const open = licensed || preview;
+  const open = licensed || allOpen;
   const shipped = p.yardShipped.length;
   const stars = p.yardStars.reduce((a, b) => a + b, 0);
   return <section className="sy-hub">
@@ -36,13 +36,13 @@ export function SwitchyardHome({ progress: p, preview, onQuiz, onYard }: { progr
         <span className="sy-card-bar"><i style={{ width: `${Math.round(answered / questions.length * 100)}%` }} /></span>
         <span className="sy-card-foot">{right} right · {answered} / {questions.length} answered{!licensed && <span className="sy-card-go">{answered ? "RESUME" : "START"} <ArrowRight size={13} /></span>}</span>
       </button>
-      <button className={`sy-card sy-card--yard ${open ? licensed && !shipped ? "is-next" : "" : "is-locked"} ${shipped === levelCount ? "is-done" : ""}`} disabled={!open} onClick={onYard} aria-label="The Switchyard">
+      <button className={`sy-card sy-card--yard ${open ? (licensed || allOpen) && !shipped ? "is-next" : "" : "is-locked"} ${shipped === levelCount ? "is-done" : ""}`} disabled={!open} onClick={onYard} aria-label="The Switchyard">
         <span className="sy-card-n">02</span>
         <span className="sy-card-art" aria-hidden="true"><YardScene yard={finishedYard} variable="age" train={null} lever={null} readout={[]} arrived={null} decorCount={shipped} duration={0} /></span>
         <strong>The Switchyard</strong>
         <em>Lay track, set sensors, fix incidents, write it yourself.</em>
         <span className="sy-card-bar"><i style={{ width: `${Math.round(shipped / levelCount * 100)}%` }} /></span>
-        <span className="sy-card-foot">{open ? <>{shipped} / {levelCount} levels · {stars}★{licensed && shipped < levelCount && <span className="sy-card-go">{shipped ? "RESUME" : "START"} <ArrowRight size={13} /></span>}</> : <><Lock size={13} /> FINISH THE QUIZ TO OPEN</>}</span>
+        <span className="sy-card-foot">{open ? <>{shipped} / {levelCount} levels · {stars}★{shipped < levelCount && <span className="sy-card-go">{shipped ? "RESUME" : "START"} <ArrowRight size={13} /></span>}</> : <><Lock size={13} /> FINISH THE QUIZ TO OPEN</>}</span>
       </button>
     </div>
   </section>;

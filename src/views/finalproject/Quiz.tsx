@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { ArrowRight, Check, Flame, ListChecks, RotateCcw, TrainFront, Trophy, X, Zap } from "lucide-react";
 import { questions, roundSize, rounds } from "./content";
 import { award, type Progress, type Update } from "./progress";
 import { LabCode } from "./LabParts";
 import { questionTrace } from "./labStories";
 
-const ADVANCE_MS = 2200;
 const letter = (index: number) => String.fromCharCode(65 + index);
 const roundOf = (index: number) => Math.floor(index / roundSize);
 const roundItems = (round: number) => questions.slice(round * roundSize, (round + 1) * roundSize);
@@ -25,15 +24,7 @@ export function Quiz({ progress: p, update, onYard }: { progress: Progress; upda
     if (next < questions.length && next % roundSize === 0) setCheckpoint(roundOf(next) - 1);
     update((current) => ({ ...current, quizIndex: Math.min(questions.length, current.quizIndex + 1) }));
   };
-  const advanceRef = useRef(advance);
-  advanceRef.current = advance;
-
-  // A right answer moves on by itself; a wrong one waits so the explanation can be read.
-  useEffect(() => {
-    if (!correct) return;
-    const timer = setTimeout(() => advanceRef.current(), ADVANCE_MS);
-    return () => clearTimeout(timer);
-  }, [correct]);
+  // Right or wrong, the next question waits for the student's NEXT tap, so every explanation gets read.
 
   useEffect(() => { if (p.quizIndex >= questions.length) setReview(true); }, [p.quizIndex]);
 
@@ -132,8 +123,7 @@ export function Quiz({ progress: p, update, onYard }: { progress: Progress; upda
         {feedback !== null && <div className={`lab-feedback ${correct ? "is-right" : "is-wrong"}`} role="status">
           <strong>{correct ? <><Check size={18} strokeWidth={3} /> Correct.</> : <><X size={18} strokeWidth={3} /> Not quite. The answer is {letter(q.answer)}.</>}</strong>
           <p><b>{correct ? "Because" : "Why"}</b> {q.explanation}</p>
-          {correct ? <i className="lab-timer" style={{ animationDuration: `${ADVANCE_MS}ms` }} /> : null}
-          <button className={`fp-primary ${correct ? "" : "is-cue"}`} onClick={advance}>{p.quizIndex + 1 >= questions.length ? "SEE RESULTS" : "NEXT"} <ArrowRight size={14} /></button>
+          <button className="fp-primary is-cue" onClick={advance}>{p.quizIndex + 1 >= questions.length ? "SEE RESULTS" : "NEXT"} <ArrowRight size={14} /></button>
         </div>}
       </div>
     </div>

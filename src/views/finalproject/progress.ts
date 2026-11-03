@@ -84,9 +84,10 @@ export const syncSummary = (p:Progress): FinalProjectSyncState => ({
 export const quizDone = (p:Progress) => questions.every(q=>p.answers[q.id]!==undefined);
 export const stageTwoDone = (p:Progress) => quizDone(p) && p.yardShipped.length===levelCount;
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
-export function canOpen(activity:Activity,p:Progress,preview:boolean) {
-  if(["shadow","report"].includes(activity))return SHADOW_FEED_OPEN&&(preview||stageTwoDone(p)&&(activity!=="report"||stageThreeDone(p)));
-  if(activity==="yard")return preview||quizDone(p);
+// allOpen: the teacher, or the teacher preview.
+export function canOpen(activity:Activity,p:Progress,allOpen:boolean) {
+  if(["shadow","report"].includes(activity))return SHADOW_FEED_OPEN&&(allOpen||stageTwoDone(p)&&(activity!=="report"||stageThreeDone(p)));
+  if(activity==="yard")return allOpen||quizDone(p);
   return true;
 }
 export const award = (p:Progress,id:string,value:number):Progress => ({...p,awards:{...p.awards,[id]:value}});

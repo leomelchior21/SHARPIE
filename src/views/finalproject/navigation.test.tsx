@@ -45,6 +45,17 @@ describe("Student Final project navigation", () => {
     expect(screen.getByRole("button", { name: /Switchyard.*Open stage/ })).toBeInTheDocument();
   });
 
+  it("keeps the quiz and every Switchyard level open for the teacher", () => {
+    render(<FinalProject name="Teacher" studentKey={student} isTeacher onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Switchyard.*Open stage/ }));
+    expect(screen.getByRole("button", { name: "Quiz" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "The Switchyard" }));
+    expect(screen.getByRole("heading", { name: "First Switch" })).toBeInTheDocument();
+    for (let n = 2; n <= 10; n += 1) expect(screen.getByRole("button", { name: new RegExp(`^Level ${n}:`) })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Level 10: Rush Hour" }));
+    expect(screen.getByRole("heading", { name: "Rush Hour" })).toBeInTheDocument();
+  });
+
   it("sends a save that stopped in the old Code Builder back to the hub while the quiz is open", () => {
     saveProgress(student, { ...freshProgress(), activity: "yard" });
     mount();
@@ -149,7 +160,7 @@ describe("Student Final project navigation", () => {
     expect(saved().yardDrafts.pool[0]).toContain("Too cold");
   });
 
-  it("shows the lines that ran after an answer, waits on a mistake and moves on after a right answer", async () => {
+  it("shows the lines that ran after an answer and waits for NEXT, right or wrong", async () => {
     vi.useFakeTimers();
     saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 12 });
     const { container } = mount();
@@ -162,7 +173,9 @@ describe("Student Final project navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: /NEXT/ }));
     fireEvent.click(screen.getByRole("button", { name: "A Unlocked" }));
     expect(screen.getByText("Correct.")).toBeInTheDocument();
-    await act(async () => { await vi.advanceTimersByTimeAsync(2300); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(screen.getByText(/QUESTION 14 \/ 20/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /NEXT/ }));
     expect(screen.getByText(/QUESTION 15 \/ 20/)).toBeInTheDocument();
     expect(saved().mastered).toEqual(["q14"]);
   });
@@ -172,7 +185,7 @@ describe("Student Final project navigation", () => {
     saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 4, answers: { q1: 1, q2: 0, q3: 2, q4: 3 } });
     mount();
     fireEvent.click(screen.getByRole("button", { name: "B False" }));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2300); });
+    fireEvent.click(screen.getByRole("button", { name: /NEXT/ }));
     expect(screen.getByRole("heading", { name: "Perfect round!" })).toBeInTheDocument();
     expect(saved().quizIndex).toBe(5);
     fireEvent.click(screen.getByRole("button", { name: /ROUND 2: TRUE OR FALSE/ }));
