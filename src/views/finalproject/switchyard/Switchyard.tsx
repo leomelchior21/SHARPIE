@@ -1,14 +1,14 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Blocks, Clock3, FileCode2, Gauge, Keyboard, Lock, Radio, RotateCcw, Split, Star, Terminal, X } from "lucide-react";
-import { SyntaxLine } from "../../../components/SyntaxLine";
+import { ArrowRight, Blocks, Check, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, X } from "lucide-react";
 import type { Input } from "../content";
 import { award, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
 import { levels, stages, type Line, type YardLevel } from "./levels";
 import { buildYard, dialLine, expected, firstWrong, provesEdge, readDial, readWritten, route, starsFor, swapStations, writtenCode, yardCode, type Route, type Yard } from "./yard";
 import { runYard, warmYard } from "./runYard";
-import { YardScene, type TrainState } from "./YardScene";
+import { TrackDiagram, type TrainState } from "./TrackDiagram";
+import { WorldArt } from "./WorldArt";
 import "./switchyard.css";
 
 const slotNames = ["Create the variable", "Test a condition", "TRUE action", "ELSE path", "ELSE action"];
@@ -27,6 +27,15 @@ const whyOrder = (index: number, count: number, answer: number) => {
   return order;
 };
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// C# coloured like the explainer video: keywords purple, types blue, numbers and bools teal, strings gold.
+const tokens = /("(?:[^"\\]|\\.)*"|\b(?:if|else)\b|\b(?:int|double|bool)\b|\b(?:true|false)\b|\b\d+(?:\.\d+)?\b|Console\.WriteLine)/;
+function Cs({ code }: { code: string }) {
+  return <>{code.split(tokens).filter(Boolean).map((part, i) => {
+    const kind = part.startsWith('"') ? "str" : /^(if|else)$/.test(part) ? "kw" : /^(int|double|bool)$/.test(part) ? "type" : /^(true|false|\d+(\.\d+)?)$/.test(part) ? "num" : part === "Console.WriteLine" ? "fn" : "";
+    return <span key={i} className={kind ? `cs-${kind}` : undefined}>{part}</span>;
+  })}</>;
+}
 
 // allOpen: the teacher, or the teacher preview, has every level open.
 export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1);
@@ -59,7 +68,7 @@ function Rail({ progress: p, index, allOpen, update }: { progress: Progress; ind
 function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: Yard; trains: Input[]; current: Input | null }) {
   const side = (value: Input) => route(yard, level.variable, value).side;
   if (typeof level.spotlight === "boolean") return <div className="sy-line sy-line--bool" aria-label="Where each value goes">
-    {[true, false].map((value) => <span key={String(value)} className={`is-${side(value) ?? "none"} ${current === value ? "is-current" : ""}`}><b>{String(value)}</b><small>{side(value) === "true" ? "TRUE TRACK" : side(value) === "false" ? "ELSE TRACK" : "NO TRACK"}</small></span>)}
+    {[true, false].map((value) => <span key={String(value)} className={`is-${side(value) ?? "none"} ${current === value ? "is-current" : ""}`}><b>{String(value)}</b><small>{side(value) === "true" ? "→ IF" : side(value) === "false" ? "→ ELSE" : "no track"}</small></span>)}
   </div>;
   const span = level.max - level.min;
   const count = Math.min(span + 1, 61);
@@ -67,9 +76,9 @@ function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: 
   // Positions inside the 12px padding the cells sit in.
   const at = (value: number) => `calc(12px + (100% - 24px) * ${(value - level.min) / span})`;
   const edge = yard.condition ? readDial(`if (${yard.condition})`) : null;
-  return <div className="sy-line" aria-label={`Number line from ${level.min} to ${level.max}: green values take the TRUE track`}>
+  return <div className="sy-line" aria-label={`Number line from ${level.min} to ${level.max}: green values reach the IF card`}>
     <div className="sy-line-cells">{Array.from({ length: count }, (_, i) => <i key={i} className={`is-${side(valueAt(i)) ?? "none"}`} />)}</div>
-    {edge && edge.op !== "=" && <span className={`sy-line-edge ${side(edge.n) === "true" ? "is-in" : "is-out"}`} style={{ left: at(edge.n) } as CSSProperties} title={`${edge.n} goes to the ${side(edge.n) === "true" ? "TRUE" : "ELSE"} track`}><b>{edge.n}</b></span>}
+    {edge && edge.op !== "=" && <span className={`sy-line-edge ${side(edge.n) === "true" ? "is-in" : "is-out"}`} style={{ left: at(edge.n) } as CSSProperties} title={`${edge.n} reaches the ${side(edge.n) === "true" ? "IF" : "ELSE"} card`}><b>{edge.n}</b></span>}
     {trains.map((value, i) => <span key={`${value}-${i}`} className={`sy-line-train ${current === value ? "is-current" : ""}`} style={{ left: at(value as number) } as CSSProperties}>{String(value)}</span>)}
     <div className="sy-line-ends"><span>{level.min}</span><span>{level.variable}</span><span>{level.max}</span></div>
   </div>;
@@ -164,9 +173,9 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       } else if (where.side !== null) {
         setTrain((t) => t && { ...t, leg: "decide" });
         setReadout(where.steps.slice(0, 2));
-        await waitStep(signal, 500 * pace);
+        await waitStep(signal, 600 * pace);
         setReadout(where.steps); setLever(where.side);
-        await waitStep(signal, 350 * pace);
+        await waitStep(signal, 450 * pace);
         setTrain((t) => t && { ...t, leg: "depart" });
         if (where.stop === "station" || where.stop === "buffer") output = await runYard(writing ? writtenCode(level.variable, value, code) : yardCode(level.variable, value, yard), signal);
         await waitStep(signal, 900 * pace);
@@ -176,7 +185,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       const want = expected(level, value);
       rows.push({ value, output, ok: where.stop === "station" && output === want, route: where, want });
       setBoard([...rows]);
-      await waitStep(signal, 450 * pace);
+      await waitStep(signal, 650 * pace);
     }
     finish(rows, mode, side);
   });
@@ -200,7 +209,10 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
   const dial = readDial(lines[1] ?? "") ?? { op: level.ops?.[0] ?? "==", n: level.dialRange?.[0] ?? edge };
   const trainValue = train?.value ?? (board.length ? board[board.length - 1].value : level.spotlight);
   const show = (line: Line) => line === "decl" ? `${typeof level.spotlight === "boolean" ? "bool" : "int"} ${level.variable} = ${String(trainValue)};` : line;
-  const lineState = (slot: number) => lever === null ? "" : slot === 1 ? "is-run" : slot === 2 ? (lever === "true" ? "is-run" : "is-skip") : slot >= 3 ? (lever === "false" ? "is-run" : "is-skip") : "is-run";
+  // The run, step by step: the value lands on line 1, the test lights up, then one block runs and the other is skipped.
+  const decided = lever !== null && !!train && train.leg !== "enter";
+  const entering = !!train && train.leg === "enter";
+  const blockState = (side: Side) => decided ? lever === side ? `is-${side}` : "is-skip" : "";
 
   const hint = error ? error
     : verdict ? verdict.text
@@ -217,22 +229,47 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       : "▶ RUN THE TIMETABLE";
   const canRun = !busy && !asking && !shipped && (writing ? (stage === "write" ? !!written?.complete : !!written?.complete && !proof) : true);
 
+  // Line 2 with its test marked true or false once the switch has decided.
+  const showLine = (n: number, line: Line): ReactNode => {
+    const test = /^if \((.+)\)$/.exec(line);
+    if (n === 1 && test && decided && readout[2]) return <><Cs code="if (" /><mark className={`sy-cond is-${readout[2]}`}><Cs code={test[1]} /></mark><Cs code=")" /><em className={`sy-cond-badge is-${readout[2]}`}>{readout[2]}</em></>;
+    return <Cs code={show(line)} />;
+  };
   const slot = (n: number) => {
     const line = lines[n];
     const given = level.given.includes(n);
-    const cls = `sy-pline ${n === 2 || n === 4 ? "is-indent" : ""} ${lineState(n)}`;
-    if (given || level.tool !== "blocks" && !(level.tool === "ifs" && n === 1)) return <div className={`${cls} ${given ? "is-given" : "is-set"}`} data-slot={n}>
-      <span className="sy-ln">{n + 1}</span><code>{line ? <SyntaxLine code={show(line)} /> : <span className="sy-empty">{slotNames[n]}</span>}</code>
-    </div>;
-    return <div className={cls}>
-      <span className="sy-ln">{n + 1}</span>
-      <button className={`sy-slot ${line ? "is-filled" : ""} ${target === n && level.tool === "blocks" ? "is-target" : ""}`} data-slot={n} disabled={locked || shipped}
-        aria-label={line ? `Line ${n + 1}: ${show(line)}. Remove` : `Line ${n + 1}: empty`}
-        onClick={() => { if (line) { setLines(lines.map((item, m) => m === n ? "" : item)); setSelected(n); } else setSelected(n); }}>
-        {line ? <><code className="sy-slot-code"><SyntaxLine code={show(line)} /></code><X size={12} className="sy-slot-x" /></> : <span>{level.labels ? slotNames[n] : "?"}</span>}
-      </button>
-    </div>;
+    const tappable = !given && (level.tool === "blocks" || level.tool === "ifs" && n === 1);
+    if (!tappable) return <code className={`sy-code-text ${line ? "" : "is-empty"}`} data-slot={n}>{line ? showLine(n, line) : slotNames[n]}</code>;
+    return <button className={`sy-slot ${line ? "is-filled" : ""} ${target === n && level.tool === "blocks" ? "is-target" : ""}`} data-slot={n} disabled={locked || shipped}
+      aria-label={line ? `Line ${n + 1}: ${show(line)}. Remove` : `Line ${n + 1}: empty`}
+      onClick={() => { if (line) { setLines(lines.map((item, m) => m === n ? "" : item)); setSelected(n); } else setSelected(n); }}>
+      {line ? <><code className="sy-slot-code">{showLine(n, line)}</code><X size={13} className="sy-slot-x" /></> : <span>{level.labels ? slotNames[n] : "?"}</span>}
+    </button>;
   };
+  // The program as the video shows it: numbered lines, braces included.
+  let lineNo = 0;
+  const row = (content: ReactNode, extra = "") => <div className={`sy-row ${extra}`}><span className="sy-ln">{++lineNo}</span>{content}</div>;
+  const brace = (text: string) => <code className="sy-code-text is-brace">{text}</code>;
+  const hasElse = lines[3] === "else" || editable.includes(3);
+  const program = <div className="sy-code">
+    {row(slot(0), entering ? "is-now" : "")}
+    {row(slot(1), decided ? "is-tested" : "")}
+    <div className={`sy-block ${blockState("true")}`}>
+      {row(brace("{"))}{row(<div className="sy-indent">{slot(2)}</div>)}{row(brace("}"))}
+      {decided && lever !== "true" && <i className="sy-skipped">SKIPPED</i>}
+    </div>
+    {hasElse && <div className={`sy-block ${blockState("false")}`}>
+      {row(slot(3))}
+      {lines[3] === "else" ? <>{row(brace("{"))}{row(<div className="sy-indent">{slot(4)}</div>)}{row(brace("}"))}</> : row(<div className="sy-indent">{slot(4)}</div>)}
+      {decided && lever !== "false" && <i className="sy-skipped">SKIPPED</i>}
+    </div>}
+  </div>;
+
+  const lastRow = board.length ? board[board.length - 1] : null;
+  // The client's picture shows the newest finished train; mid-trip it waits.
+  const printed = train && train.leg !== "done" ? null : lastRow ? lastRow.output : null;
+  const outputSide = lastRow?.route.side ?? null;
+  const caption = (text: string) => text.split(/(\btrue\b|\bfalse\b|\bTRUE\b|\bFALSE\b)/).map((part, i) => /^(true|TRUE)$/.test(part) ? <b key={i} className="is-true">{part}</b> : /^(false|FALSE)$/.test(part) ? <b key={i} className="is-false">{part}</b> : part);
 
   const next = () => last ? onHub() : update((current) => ({ ...current, yardLevel: index + 1 }));
 
@@ -240,102 +277,100 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
     {headerSlot ? createPortal(<Rail progress={p} index={index} allOpen={allOpen} update={update} />, headerSlot) : <header className="sy-top"><Rail progress={p} index={index} allOpen={allOpen} update={update} /></header>}
 
     <div className="sy-main">
-      <aside className="sy-tower">
-        <div className="sy-memo">
-          <small><Radio size={14} /> DISPATCH · LEVEL {String(index + 1).padStart(2, "0")} · {level.place.toUpperCase()}</small>
-          <h1>{level.title}</h1>
+      <aside className="sy-left">
+        <div className="sy-mission">
+          <div className="sy-mission-top"><span className="sy-cs">C#</span><small>Level {index + 1} · {level.place}</small></div>
+          <h1 className="sy-label">{level.title}</h1>
           <p>{level.dispatch}</p>
           {level.incident && <p className="sy-incident"><b>INCIDENT</b> {level.incident}</p>}
         </div>
 
-        <div className="sy-program">
-          <div className="sy-program-bar"><span><FileCode2 size={15} /> Program.cs</span><em>{writing ? "WRITE IT" : `${editable.filter((n) => lines[n]).length} / ${editable.length}`}</em></div>
+        <div className="sy-editor">
           {writing ? <div className="sy-write">
-            <div className="sy-pline is-given"><span className="sy-ln">1</span><code><SyntaxLine code={show("decl")} /></code></div>
+            <div className="sy-row"><span className="sy-ln">1</span><code className="sy-code-text" data-slot={0}><Cs code={show("decl")} /></code></div>
             <textarea aria-label="Your if / else" spellCheck={false} autoCapitalize="off" autoCorrect="off" value={code} disabled={busy}
               placeholder={"if (…)\n{\n    Console.WriteLine(\"…\");\n}\nelse\n{\n    …\n}"}
               onChange={(event) => { save([event.target.value]); setStage("write"); }} />
-          </div> : <div className="sy-lines">{[0, 1, 2, 3, 4].map((n) => <Fragment key={n}>
-            {slot(n)}
-            {(n === 1 || n === 3) && (lines[n] || n === 1) && <div className={`sy-brace ${lineState(n + 1)}`}>{"{"}</div>}
-            {(n === 2 || n === 4) && (lines[n - 1] || n === 2) && <div className={`sy-brace ${lineState(n)}`}>{"}"}</div>}
-          </Fragment>)}</div>}
+          </div> : program}
         </div>
+        <p className={`sy-output ${outputSide ? `is-${outputSide}` : ""}`} aria-live="polite"><span>Output</span><b>{lastRow ? lastRow.output || "(nothing)" : ""}</b><i aria-hidden="true" /></p>
 
         <div className="sy-tools">
-          {!ran ? <p className="sy-locked"><Lock size={13} /> {level.incident ? "LOCKED UNTIL YOU WATCH THE INCIDENT" : "LOCKED UNTIL THE YARD HAS RUN ONCE"}</p>
+          {!ran ? <p className="sy-locked"><Lock size={15} /> {level.incident ? "LOCKED UNTIL YOU WATCH THE INCIDENT" : "LOCKED UNTIL THE YARD HAS RUN ONCE"}</p>
             : level.tool === "blocks" ? <>
-              <small><Blocks size={14} /> CODE BLOCKS · {target === undefined ? "TAP A LINE TO SEND IT BACK" : `FOR LINE ${target + 1}`}</small>
+              <small><Blocks size={15} /> Code blocks · {target === undefined ? "tap a line to send it back" : `for line ${target + 1}`}</small>
               <div className="sy-bank">{bank.map((line) => <button key={line} data-line={line} className={used.has(line) ? "is-used" : ""} disabled={locked || shipped || used.has(line) || target === undefined}
-                onClick={() => { setLines(lines.map((item, m) => m === target ? line : item)); setSelected(null); }}><code><SyntaxLine code={show(line)} /></code></button>)}</div>
-              <button className="sy-small" disabled={locked || shipped} onClick={() => { setLines([...level.preset]); setSelected(null); }}><RotateCcw size={13} /> RESET</button>
+                onClick={() => { setLines(lines.map((item, m) => m === target ? line : item)); setSelected(null); }}><code><Cs code={show(line)} /></code></button>)}</div>
+              <button className="sy-small" disabled={locked || shipped} onClick={() => { setLines([...level.preset]); setSelected(null); }}><RotateCcw size={14} /> Reset</button>
             </>
               : level.tool === "dial" ? <div className="sy-dial">
-                <small><Gauge size={14} /> SENSOR DIAL · <code>{level.variable} <b>{dial.op}</b> {dial.n}</code></small>
+                <small><Gauge size={15} /> Sensor dial · <code><Cs code={`${level.variable} ${dial.op} ${dial.n}`} /></code></small>
                 <div className="sy-ops" role="group" aria-label="Operator">{level.ops!.map((op) => <button key={op} aria-pressed={dial.op === op} disabled={locked || shipped} onClick={() => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, op, dial.n) : item))}>{op}</button>)}</div>
                 {level.dialRange && <div className="sy-number">
-                  <button aria-label={`Lower the number`} disabled={locked || shipped || dial.n <= level.dialRange[0]} onClick={() => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, dial.op, dial.n - 1) : item))}>−</button>
+                  <button aria-label="Lower the number" disabled={locked || shipped || dial.n <= level.dialRange[0]} onClick={() => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, dial.op, dial.n - 1) : item))}>−</button>
                   <input type="range" aria-label="Sensor number" min={level.dialRange[0]} max={level.dialRange[1]} value={dial.n} disabled={locked || shipped} onChange={(event) => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, dial.op, Number(event.target.value)) : item))} />
-                  <button aria-label={`Raise the number`} disabled={locked || shipped || dial.n >= level.dialRange[1]} onClick={() => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, dial.op, dial.n + 1) : item))}>+</button>
+                  <button aria-label="Raise the number" disabled={locked || shipped || dial.n >= level.dialRange[1]} onClick={() => setLines(lines.map((item, m) => m === 1 ? dialLine(level.variable, dial.op, dial.n + 1) : item))}>+</button>
                 </div>}
                 {level.swap && <button className="sy-swap" disabled={locked || shipped} onClick={() => setLines(swapStations(lines))}>⇅ SWAP STATIONS</button>}
               </div>
                 : level.tool === "ifs" ? <>
-                  <small><Split size={14} /> SWITCH TESTS · PICK ONE</small>
-                  <div className="sy-bank">{bank.map((line) => <button key={line} data-line={line} aria-pressed={lines[1] === line} disabled={locked || shipped} onClick={() => setLines(lines.map((item, m) => m === 1 ? line : item))}><code><SyntaxLine code={line} /></code></button>)}</div>
+                  <small><Split size={15} /> Switch tests · pick one</small>
+                  <div className="sy-bank">{bank.map((line) => <button key={line} data-line={line} aria-pressed={lines[1] === line} disabled={locked || shipped} onClick={() => setLines(lines.map((item, m) => m === 1 ? line : item))}><code><Cs code={line} /></code></button>)}</div>
                   {level.swap && <button className="sy-swap" disabled={locked || shipped} onClick={() => setLines(swapStations(lines))}>⇅ SWAP STATIONS</button>}
                 </>
                   : stage === "timetable" ? <div className="sy-picks">
-                    <small><Clock3 size={14} /> YOUR TIMETABLE · THREE TRAINS THAT PROVE THE RULE</small>
+                    <small><Clock3 size={15} /> Your timetable · three trains that prove the rule</small>
                     <div>{picks.map((value, i) => <div key={i} className="sy-number">
                       <button aria-label={`Train ${i + 1} lower`} disabled={busy || value <= level.min} onClick={() => { setPicks(picks.map((v, j) => j === i ? v - 1 : v)); clear(); }}>−</button>
                       <output aria-label={`Train ${i + 1}`}>{value}</output>
                       <button aria-label={`Train ${i + 1} higher`} disabled={busy || value >= level.max} onClick={() => { setPicks(picks.map((v, j) => j === i ? v + 1 : v)); clear(); }}>+</button>
                     </div>)}</div>
-                  </div> : <p className="sy-locked is-info"><Keyboard size={15} /> Type the switch in Program.cs. The yard builds itself as you write.</p>}
+                  </div> : <p className="sy-locked is-info"><Keyboard size={16} /> Type the switch. The track builds itself as you write.</p>}
         </div>
       </aside>
 
-      <div className="sy-yard">
-        <div className="sy-scene-wrap">
-          <YardScene yard={yard} variable={level.variable} train={train} lever={lever} readout={readout} arrived={arrived} decorCount={p.yardShipped.length} duration={900 * (slow ? 1 : 0.2)} />
-          {/* What to do now, or what just happened, in the yard's empty top corner. */}
-          <p className={`sy-verdict ${tone ? `is-${tone}` : ""}`} role="status">{hint}</p>
+      <div className="sy-right">
+        <div className="sy-stage">
+          <TrackDiagram yard={yard} train={train} lever={lever} readout={readout} arrived={arrived} duration={900 * (slow ? 1 : 0.2)} />
+          <NumberLine level={level} yard={yard} trains={timetable} current={train?.value ?? null} />
+          {/* The caption: what to do now, or what just happened. */}
+          <p className={`sy-verdict ${tone ? `is-${tone}` : ""}`} role="status">{caption(hint)}</p>
           {asking && <div className="sy-overlay sy-predict" role="group" aria-label="Predict the track">
             <small>BEFORE IT RUNS</small>
-            <p>Train <b>{String(level.spotlight)}</b> is next. Which track will your switch send it down?</p>
+            <p>Train <b>{String(level.spotlight)}</b> is next. Which card will it reach?</p>
             <div><button className="is-true" onClick={() => predict("true")}>▲ TRUE TRACK</button><button className="is-false" onClick={() => predict("false")}>▼ ELSE TRACK</button></div>
           </div>}
           {shipped && <div className="sy-overlay sy-shipped" role="dialog" aria-label="Level shipped">
-            <span className="sy-stamp is-ok">SHIPPED</span>
-            <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={26} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
+            <span className="sy-stamp">SHIPPED</span>
+            <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={28} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
             <p className="sy-why-q">{level.why.question}</p>
             <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
               className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => setWhy(i)}>{level.why.options[i]}</button>)}</div>
             {why !== null && <p className="sy-why-explain">{why === level.why.answer ? <><b>Right.</b> {level.why.explain} {level.note}</> : <><b>Not that one.</b> Read the trains on the board, then try again.</>}</p>}
-            {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={15} /></button>}
+            {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={16} /></button>}
           </div>}
         </div>
 
-        <NumberLine level={level} yard={yard} trains={timetable} current={train?.value ?? null} />
-
-        <div className="sy-desk">
-          <div className="sy-board" aria-label="Timetable">
-            <small><Clock3 size={14} /> TIMETABLE</small>
-            <ol>{timetable.map((value, i) => {
-              const row = board[i];
-              return <li key={`${String(value)}-${i}`} className={row ? row.ok ? "is-ok" : "is-wrong" : train && board.length === i && busy ? "is-running" : ""}>
-                <b>{String(value)}</b>
-                <span>{row ? row.route.stop === "station" ? `“${row.output || "nothing"}”` : row.route.stop === "buffer" ? "DEAD END" : row.route.stop === "jam" ? "JAMMED" : "NO TRACK" : "…"}</span>
-                {row && <i className={`sy-mini-stamp ${row.ok ? "is-ok" : "is-wrong"}`}>{row.ok ? "OK" : "WRONG"}</i>}
-              </li>;
-            })}</ol>
+        <div className="sy-bottom">
+          <div className={`sy-world ${lastRow && printed !== null ? lastRow.ok ? "is-ok" : "is-wrong" : ""}`}>
+            <div className="sy-world-head"><small>{level.place}</small>{lastRow && printed !== null && <em>{lastRow.ok ? <><Check size={13} strokeWidth={3} /> matches the rule</> : <><X size={13} strokeWidth={3} /> the rule wants “{lastRow.want}”</>}</em>}</div>
+            <WorldArt level={level} value={trainValue} printed={printed} />
           </div>
-          <div className="sy-actions">
-            <p className="sy-console" aria-live="polite"><span><Terminal size={14} /> CONSOLE</span> {board.length ? board[board.length - 1].output || "(nothing printed)" : "…"}</p>
+          <div className="sy-desk">
+            <div className="sy-board" aria-label="Timetable">
+              <small><Clock3 size={15} /> Timetable</small>
+              <ol>{timetable.map((value, i) => {
+                const done = board[i];
+                return <li key={`${String(value)}-${i}`} className={done ? done.ok ? "is-ok" : "is-wrong" : train && board.length === i && busy ? "is-running" : ""}>
+                  <b>{String(value)}</b>
+                  <span>{done ? done.route.stop === "station" ? `“${done.output || "nothing"}”` : done.route.stop === "buffer" ? "DEAD END" : done.route.stop === "jam" ? "JAMMED" : "NO TRACK" : "…"}</span>
+                  {done && <i className={`sy-mini-stamp ${done.ok ? "is-ok" : "is-wrong"}`}>{done.ok ? "OK" : "WRONG"}</i>}
+                </li>;
+              })}</ol>
+            </div>
             {shippedBefore && !shipped ? <div className="sy-replay">
               <button className="sy-go" disabled={!canRun} onClick={start}>{runLabel}</button>
-              <button className="sy-small" onClick={next}>{last ? "SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={13} /></button>
+              <button className="sy-small" onClick={next}>{last ? "SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={14} /></button>
             </div> : <button className={`sy-go ${canRun && !board.length ? "is-cue" : ""}`} disabled={!canRun} onClick={start}>{busy ? "RUNNING…" : runLabel}</button>}
           </div>
         </div>

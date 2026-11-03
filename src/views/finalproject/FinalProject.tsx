@@ -43,7 +43,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const one=backroomStageDone(activeBackroom),two=stageTwoDone(active),three=stageThreeDone(active);
   // Inside the Switchyard, Back returns to its two stations.
   const inLab=["yard","quiz-intro","quiz"].includes(activity);
-  return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""} ${["lab","yard"].includes(activity)?"fp-yard-theme":""}`}>
+  return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""} ${["lab","yard","quiz-intro","quiz"].includes(activity)?"fp-yard-theme":""}`}>
     <header className="fp-header">
       <Brand compact/>
       <div className="fp-header-title"><small>FINAL PROJECT {preview&&<span className="fp-preview-marker">· PREVIEW</span>}</small><b>{labels[activity]}</b></div>
