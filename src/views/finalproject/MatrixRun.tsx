@@ -1,50 +1,15 @@
 import { BackroomRun } from './backroom/BackroomRun';
 import type { BackroomProgress } from './backroom/types';
-import { award, levelXp, type Progress, type Update } from './progress';
 
-// The complete PixPy game lives in ./backroom. This adapter only connects its
-// player identity, score records, and navigation to the Sharpie module.
-export function MatrixRun({ progress, update, name, studentKey, isTeacher, preview = false, onBack, paused = false }: {
-  progress: Progress;
-  update: Update;
-  name: string;
-  studentKey: string;
-  isTeacher: boolean;
+// The complete game lives in ./backroom, shared with PixPy. In Sharpie it is a plain web
+// game: its progress is kept by FinalProject in backroomStore, on this device only, and is
+// never sent to Supabase or the teacher dashboard.
+export function MatrixRun({ progress, onProgress, preview = false, onBack, paused = false }: {
+  progress: BackroomProgress;
+  onProgress: (next: BackroomProgress) => void;
   preview?: boolean;
   onBack: () => void;
   paused?: boolean;
 }) {
-  const gameProgress: BackroomProgress = {
-    username: studentKey,
-    name,
-    isTeacher,
-    unlockAll: preview,
-    backroomRunBest: progress.best,
-    backroomRunXp: progress.backroom.bestXp,
-    backroomRunGates: progress.backroom.gates,
-    backroomRunOperators: progress.backroom.operators,
-    levelStars: progress.backroom.levels,
-    skills: progress.backroom.skills,
-    coachSeen: progress.backroom.coach,
-  };
-  const save = (next: BackroomProgress) => update(p => {
-    const bestXp = Math.max(p.backroom.bestXp, next.backroomRunXp);
-    const levels = p.backroom.levels.map((stars, i) => Math.max(stars, next.levelStars[i] ?? 0));
-    let saved = award({
-      ...p,
-      best: Math.max(p.best, next.backroomRunBest),
-      backroom: {
-        bestXp,
-        gates: Math.max(p.backroom.gates, next.backroomRunGates),
-        operators: [...new Set([...p.backroom.operators, ...next.backroomRunOperators])],
-        levels,
-        skills: next.skills,
-        coach: [...new Set([...p.backroom.coach, ...next.coachSeen])],
-        layout: 3,
-      },
-    }, 'backroom:best-run', bestXp);
-    levels.forEach((stars, i) => { if (stars > 0) saved = award(saved, `backroom:level:${i}`, levelXp); });
-    return saved;
-  });
-  return <BackroomRun progress={gameProgress} onProgress={save} onBack={onBack} paused={paused} />;
+  return <BackroomRun progress={{ ...progress, unlockAll: preview }} onProgress={onProgress} onBack={onBack} paused={paused} />;
 }

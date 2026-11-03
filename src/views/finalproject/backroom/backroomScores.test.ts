@@ -1,8 +1,7 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { createBackroomProgress as createSession } from './types'
 import { playerKey, rankBackroomScores, rememberBackroomScore } from './backroomScores'
 
-vi.mock('../../../lib/supabase', () => ({ supabase: null }))
 
 describe('backroom top scores', () => {
   beforeEach(() => localStorage.clear())

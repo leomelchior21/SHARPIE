@@ -9,10 +9,11 @@ import { backroomLevels, batteryChance, endlessUnlocked, hazardChance, hazardsFo
 import { BackroomAudio, loadAudioPreference, saveAudioPreference } from './backroomAudio'
 import { createBackroomRenderer, type BackroomEntity, type BackroomView, type GateSignal } from './backroomRenderer'
 import { advanceBackroomLighting, createBackroomLighting } from './backroomLighting'
-import { isGuestName, loadBackroomScores, playerKey, rememberBackroomScore, type BackroomScore } from './backroomScores'
+import { isGuestName, playerKey, rememberBackroomScore, type BackroomScore } from './backroomScores'
 import { BackroomMenu, Stars } from './BackroomMenu'
 import { CodePanel, CodeTokens, type CodeTruth } from './BackroomCode'
 import { BackroomChampionAward, BackroomChampionBadge } from './BackroomChampion'
+import { BackroomBoot } from './BackroomBoot'
 import { TapeDeck } from './BackroomTape'
 import type { TapeCue, TapeKind, TapeLabel } from './tapeTimeline'
 import type { BackroomProgress, SkillRecord } from './types'
@@ -215,6 +216,9 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   const [dateStamp] = useState(() => { const now = new Date(); return `${now.toLocaleString('en-US', { month: 'short' }).toUpperCase()}.${now.getDate()} ${now.getFullYear()}` })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The loading tape covers the screen until the corridor's first frame is drawn.
+  const [booted, setBooted] = useState(false)
+  const [bootGone, setBootGone] = useState(false)
   const screenRef = useRef<HTMLElement>(null)
   const game = useRef(createGameState())
   const progressRef = useRef(progress)
@@ -256,7 +260,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   useEffect(() => { progressRef.current = progress }, [progress])
 
   useEffect(() => {
-    if (status === 'menu') loadBackroomScores(rememberBackroomScore(progressRef.current), setScores)
+    if (status === 'menu') setScores(rememberBackroomScore(progressRef.current))
   }, [status])
 
   useEffect(() => {
@@ -556,7 +560,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     })
     if (current.type === 'endless') {
       const entry = playerRef.current && !progressRef.current.isTeacher ? { username: askName ? playerKey(playerRef.current) : progressRef.current.username, name: playerRef.current, gates: r.gates, xp: r.xp } : undefined
-      loadBackroomScores(rememberBackroomScore(progressRef.current, askName ? entry : undefined), setScores, entry)
+      setScores(rememberBackroomScore(progressRef.current, askName ? entry : undefined))
     }
     setResult({
       mode: current,
@@ -761,7 +765,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const view = createBackroomRenderer(canvas)
+    const view = createBackroomRenderer(canvas, () => setBooted(true))
     const g = game.current
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
     const motionPreference = () => { g.reduced = !!media?.matches }
@@ -1357,6 +1361,7 @@ export function BackroomRun({ progress, onProgress, onBack, paused = false }: Pr
     onPointerDown={focusScreen}
   >
     <canvas ref={canvasRef} className="br-canvas" aria-hidden="true" />
+    {!bootGone && <BackroomBoot done={booted} onGone={() => setBootGone(true)} />}
     <div className="br-wall-warning" aria-hidden="true"><i /><i /></div>
     <div className="br-film" aria-hidden="true"><i className="br-grain" /><i className="br-scan" /><i className="br-vignette" /></div>
 

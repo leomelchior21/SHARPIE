@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TAPES, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, RUSH_ROUNDS, formatWhen, isActiveNow, percent, relativeTime } from "./progress";
 import type { ModuleKey, StudentProgress } from "./progress";
 import { ModuleBar, ProgressRing, stateOf } from "./visuals";
@@ -92,11 +92,10 @@ export function StudentPanel({ progress, now, onClose }: StudentPanelProps) {
         <Section module="final" title="MODULE 08 · FINAL PROJECT" share={final.share} note={record?.updatedAt ? `updated ${formatWhen(record.updatedAt)}` : "not opened"}>
           {record ? (
             <>
-              <Step label="01 · BACKROOMS" share={final.parts[0]} value={`${final.tapes} / ${FINAL_TAPES} tapes · ${final.stars}★ · Deep ${record.endlessBest}`} />
-              <Step label="02 · LIVE FLOW" share={record.flows / FINAL_FLOWS} value={`${record.flows} / ${FINAL_FLOWS} tickets`} />
-              <Step label="02 · QUIZ" share={record.quizAnswered / FINAL_QUESTIONS} value={`${record.quizRight} right · ${record.quizAnswered} / ${FINAL_QUESTIONS} answered`} />
-              <Step label="02 · BUILDER" share={record.built.length / FINAL_TICKETS} value={`${record.built.length} / ${FINAL_TICKETS} shipped`} />
-              <Step label="03 · SHADOW FEED" share={final.parts[2]} value={`${record.policies} / ${FINAL_POLICIES} policies${record.reportDone ? " · REPORT ✓" : ""}`} />
+              <Step label="01 · LIVE FLOW" share={record.flows / FINAL_FLOWS} value={`${record.flows} / ${FINAL_FLOWS} tickets`} />
+              <Step label="01 · QUIZ" share={record.quizAnswered / FINAL_QUESTIONS} value={`${record.quizRight} right · ${record.quizAnswered} / ${FINAL_QUESTIONS} answered`} />
+              <Step label="01 · BUILDER" share={record.built.length / FINAL_TICKETS} value={`${record.built.length} / ${FINAL_TICKETS} shipped`} />
+              <Step label="02 · SHADOW FEED" share={final.parts[1]} value={`${record.policies} / ${FINAL_POLICIES} policies${record.reportDone ? " · REPORT ✓" : ""}`} />
               {record.quizMissed.length > 0 && (
                 <p className="tdb-note">
                   Quiz to review: <b>{record.quizMissed.map((n) => `Q${n}`).join(" · ")}</b>

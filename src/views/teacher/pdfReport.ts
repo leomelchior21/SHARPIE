@@ -5,7 +5,7 @@ import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
 import { CLASS_CODES } from "../../data/roster";
 import type { ClassCode } from "../../data/roster";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TAPES, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, MODULES, RUSH_ROUNDS, formatWhen, summarizeClass } from "./progress";
 import type { ClassSummary, ModuleKey, StudentProgress } from "./progress";
 
@@ -255,7 +255,7 @@ function overviewPage(doc: jsPDF, students: StudentProgress[], generated: string
   setText(doc, 7.2, SOFT);
   doc.text(
     doc.splitTextToSize(
-      `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of Backrooms tapes, the IF / ELSE Lab (Live Flow, Quiz, Builder) and Shadow Feed (policies + report). Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their submitted code.`,
+      `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of the IF / ELSE Lab (Live Flow, Quiz, Builder) and Shadow Feed (policies + report). Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their submitted code.`,
       CONTENT_W - 8,
     ),
     MARGIN + 4,
@@ -272,7 +272,6 @@ function stepText(item: StudentProgress) {
     translate: mathler.steps ? `${mathler.warmup}/${WARMUP_TOTAL} · ${mathler.rushDone ? "rush ok" : `rush ${mathler.rushRounds}/${RUSH_ROUNDS}`}` : "-",
     warmUp: mathler.steps ? `${mathler.target}/${TARGET_PUZZLES.length}` : "-",
     game: mathler.game && mathler.parts[2] > 0 ? `TA ${mathler.game.time_attack_best} · SV ${mathler.game.best_streak}` : "-",
-    tapes: record ? `${final.tapes}/${FINAL_TAPES}` : "-",
     lab: record ? `${record.flows}/${FINAL_FLOWS} · ${record.quizAnswered}/${FINAL_QUESTIONS} · ${record.built.length}/${FINAL_TICKETS}` : "-",
     shadow: record ? `${record.policies}/${FINAL_POLICIES}${record.reportDone ? " · rep." : ""}` : "-",
   };
@@ -301,17 +300,17 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
   );
   const shares = students.map((item) => [
     item.mathler.parts[0], item.mathler.parts[1], item.mathler.parts[2], item.mathler.share,
-    item.bosses.share, item.final.parts[0], item.final.parts[1], item.final.parts[2], item.final.share, item.overall,
+    item.bosses.share, item.final.parts[0], item.final.parts[1], item.final.share, item.overall,
   ]);
   // Column index -> position in the shares row above.
-  const shareColumn: Record<number, number> = { 2: 0, 3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8, 11: 9 };
-  const barColumn: Record<number, RGB> = { 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 10: MODULE_RGB.final, 11: INK };
-  const moduleHead: Record<number, RGB> = { 2: MODULE_RGB.mathler, 3: MODULE_RGB.mathler, 4: MODULE_RGB.mathler, 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 7: MODULE_RGB.final, 8: MODULE_RGB.final, 9: MODULE_RGB.final, 10: MODULE_RGB.final };
+  const shareColumn: Record<number, number> = { 2: 0, 3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8 };
+  const barColumn: Record<number, RGB> = { 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 9: MODULE_RGB.final, 10: INK };
+  const moduleHead: Record<number, RGB> = { 2: MODULE_RGB.mathler, 3: MODULE_RGB.mathler, 4: MODULE_RGB.mathler, 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 7: MODULE_RGB.final, 8: MODULE_RGB.final, 9: MODULE_RGB.final };
 
   autoTable(doc, {
     startY: 38,
     margin: { left: MARGIN, right: MARGIN, top: 18, bottom: 12 },
-    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Tapes", "Lab flow·quiz·build", "Shadow", "Final project", "Overall", "Last active"]],
+    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Lab flow·quiz·build", "Shadow", "Final project", "Overall", "Last active"]],
     body: students.map((item) => {
       const text = stepText(item);
       return [
@@ -322,7 +321,6 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
         text.game,
         pct(item.mathler.share),
         `${item.bosses.passed.length}/${BOSS_TOTAL}`,
-        text.tapes,
         text.lab,
         text.shadow,
         pct(item.final.share),
@@ -341,12 +339,11 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
       4: { cellWidth: 20 },
       5: { cellWidth: 22, halign: "right" },
       6: { cellWidth: 22, halign: "right" },
-      7: { cellWidth: 12, halign: "center" },
-      8: { cellWidth: 26, halign: "center" },
-      9: { cellWidth: 17, halign: "center" },
-      10: { cellWidth: 22, halign: "right" },
-      11: { cellWidth: 19, halign: "right", fontStyle: "bold" },
-      12: { cellWidth: 18, textColor: SOFT },
+      7: { cellWidth: 32, halign: "center" },
+      8: { cellWidth: 23, halign: "center" },
+      9: { cellWidth: 22, halign: "right" },
+      10: { cellWidth: 19, halign: "right", fontStyle: "bold" },
+      11: { cellWidth: 18, textColor: SOFT },
     },
     didParseCell: (data: CellHookData) => {
       if (data.section === "head" && moduleHead[data.column.index]) data.cell.styles.textColor = moduleHead[data.column.index];
@@ -456,11 +453,10 @@ function studentPage(doc: jsPDF, item: StudentProgress) {
 
   moduleCard(doc, MARGIN + (cardW + 5) * 2, cardY, cardW, cardH, "final", "MODULE 08 · FINAL PROJECT", final.share, record
     ? [
-        { label: "01 · BACKROOMS", value: `${final.tapes}/${FINAL_TAPES} tapes · ${final.stars} star${final.stars === 1 ? "" : "s"} · deep ${record.endlessBest}`, share: final.parts[0] },
-        { label: "02 · LIVE FLOW", value: `${record.flows}/${FINAL_FLOWS} tickets`, share: record.flows / FINAL_FLOWS },
-        { label: "02 · QUIZ", value: `${record.quizRight} right · ${record.quizAnswered}/${FINAL_QUESTIONS} answered`, share: record.quizAnswered / FINAL_QUESTIONS },
-        { label: "02 · BUILDER", value: `${record.built.length}/${FINAL_TICKETS} shipped`, share: record.built.length / FINAL_TICKETS },
-        { label: "03 · SHADOW FEED", value: `${record.policies}/${FINAL_POLICIES} policies · report ${record.reportDone ? "done" : "not yet"}`, share: final.parts[2] },
+        { label: "01 · LIVE FLOW", value: `${record.flows}/${FINAL_FLOWS} tickets`, share: record.flows / FINAL_FLOWS },
+        { label: "01 · QUIZ", value: `${record.quizRight} right · ${record.quizAnswered}/${FINAL_QUESTIONS} answered`, share: record.quizAnswered / FINAL_QUESTIONS },
+        { label: "01 · BUILDER", value: `${record.built.length}/${FINAL_TICKETS} shipped`, share: record.built.length / FINAL_TICKETS },
+        { label: "02 · SHADOW FEED", value: `${record.policies}/${FINAL_POLICIES} policies · report ${record.reportDone ? "done" : "not yet"}`, share: final.parts[1] },
       ]
     : [{ label: "STATUS", value: "not opened yet", share: 0 }]);
 

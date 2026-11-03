@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Check, Eye, Footprints, GitBranch, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Brand } from "../../components/Brand";
-import { canOpen, enterLab, freshProgress, loadProgress, saveProgress, stageOneDone, stageThreeDone, stageTwoDone, syncSummary, xp, type Activity, type Progress } from "./progress";
+import { canOpen, enterLab, freshProgress, loadProgress, saveProgress, stageThreeDone, stageTwoDone, syncSummary, xp, type Activity, type Progress } from "./progress";
 import { queueFinalProjectSync } from "../../lib/finalProjectSync";
 import { Code, useExecution } from "./shared";
 import { executeCSharp } from "../../lib/runner";
 import { MatrixRun } from "./MatrixRun";
+import { backroomStageDone, loadBackroomProgress, saveBackroomProgress } from "./backroomStore";
+import { createBackroomProgress, type BackroomProgress } from "./backroom/types";
 import { LiveFlow } from "./LiveFlow";
 import { CodeBuilder } from "./CodeBuilder";
 import { Quiz } from "./Quiz";
@@ -19,6 +21,14 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const [loaded]=useState(()=>loadProgress(studentKey));
   const [p,setP]=useState(loaded.progress);const [preview,setPreview]=useState(false);const [previewProgress,setPreviewProgress]=useState(freshProgress);
   const [warning,setWarning]=useState(loaded.warning);
+  // Backrooms Run saves on this device only; nothing from it is synced to the teacher.
+  const [backroom,setBackroom]=useState(()=>loadBackroomProgress({username:studentKey,name,isTeacher}));
+  const [previewBackroom,setPreviewBackroom]=useState(()=>createBackroomProgress(name,studentKey,true));
+  const activeBackroom=preview?previewBackroom:backroom;
+  const saveBackroom=useCallback((next:BackroomProgress)=>{
+    if(preview){setPreviewBackroom(next);return;}
+    saveBackroomProgress(next);setBackroom(next);
+  },[preview]);
   const active=preview?previewProgress:p;
   const update=useCallback((change:(p:Progress)=>Progress)=>{
     if(preview){setPreviewProgress(change);return;}
@@ -30,7 +40,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   const go=(next:Activity)=>{if(canOpen(next,active,preview))update(p=>({...p,activity:next}));};
   const openLab=()=>update(enterLab);
   const openFlow=()=>update(p=>({...p,activity:"flow",flowIndex:[0,1,2].every(i=>p.flowPaths[i]?.length===2)?0:p.flowIndex}));
-  const one=stageOneDone(active),two=stageTwoDone(active),three=stageThreeDone(active);
+  const one=backroomStageDone(activeBackroom),two=stageTwoDone(active),three=stageThreeDone(active);
   // Inside the lab, Back returns to the lab's three stations.
   const inLab=["flow","builder","quiz-intro","quiz"].includes(activity);
   return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""}`}>
@@ -45,7 +55,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {warning&&<div className="fp-save-warning" role="status">{warning}</div>}
     <div className="fp-content" key={`${preview}-${activity}`}>
     {activity==="overview"&&<><div className="fp-stage-grid memory-experience-grid">{[
-      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple fp-stage--backrooms",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${active.backroom.levels.filter(stars=>stars>0).length}/${active.backroom.levels.length} · Endless best: ${active.best} gates`},
+      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple fp-stage--backrooms",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${activeBackroom.levelStars.filter(stars=>stars>0).length}/${activeBackroom.levelStars.length} · Endless best: ${activeBackroom.backroomRunBest} gates`},
       {n:"02",title:"IF / ELSE Lab",copy:"Follow a decision. Build and test your C# code.",icon:GitBranch,color:"",activity:"lab" as Activity,enabled:true,done:two,unlock:"",detail:`${Object.values(active.flowPaths).filter(v=>v.length===2).length}/3 flows · ${active.built.length}/10 builds · ${Object.keys(active.answers).length}/20 quiz`},
       {n:"03",title:"Shadow Feed",copy:"Operation White Hat. Audit the rules behind the feed.",icon:ShieldCheck,color:"memory-card-red",activity:"shadow" as Activity,enabled:two||preview,done:three,unlock:"IF / ELSE LAB",detail:`${active.repaired.length}/4 policies repaired · ${three?"Report ready":"Audit pending"}`},
     ].map(s=><button
@@ -61,7 +71,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
       <span className="memory-card-status">{s.enabled?s.done?<><Check size={14}/> COMPLETE</>:<><i/> {s.n!=="03"?"AVAILABLE":"UNLOCKED"}</>:<><LockKeyhole size={14}/> UNLOCK: {s.unlock}</>}</span>
       {s.enabled&&<span className="memory-card-enter">ENTER <ArrowUpRight size={18}/></span>}
     </button>)}</div><div className="fp-overview-bottom"><p>Welcome back, <b>{name}</b>. Your progress is saved in this browser.</p>{three&&<button onClick={()=>go("report")}>OPEN AUDIT REPORT →</button>}</div></>}
-    {activity==="matrix"&&<MatrixRun progress={active} update={update} name={name} studentKey={studentKey} isTeacher={isTeacher||preview} preview={preview} onBack={()=>go("overview")}/>}
+    {activity==="matrix"&&<MatrixRun progress={{...activeBackroom,isTeacher:isTeacher||preview}} onProgress={saveBackroom} preview={preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
     {activity==="lab"&&<LabHome progress={active} onFlow={openFlow} onBuilder={()=>go("builder")} onQuiz={()=>go("quiz-intro")}/>}
     {activity==="flow"&&<LiveFlow progress={active} update={update} onComplete={()=>go("quiz-intro")}/>}

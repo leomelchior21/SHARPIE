@@ -3,7 +3,7 @@ import { finalBosses } from "../../data/finalBosses";
 import type { ClassCode, RosterStudent } from "../../data/roster";
 import type { MathlerProgressRow, MathlerScoreRow } from "../../lib/basicOps/survivalLeaderboard";
 import type { ClassProgressRow } from "../../lib/bossSync";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TAPES, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 
 // One reading of every student's progress, shared by the dashboard and the
@@ -44,10 +44,8 @@ export type StudentProgress = {
   };
   final: {
     record: FinalProjectSyncState | null;
-    tapes: number;
-    stars: number;
-    /** Share of each stage: Backrooms tapes, IF / ELSE Lab, Shadow Feed. */
-    parts: [number, number, number];
+    /** Share of each stage: IF / ELSE Lab, Shadow Feed. Backrooms Run stays on the student's device. */
+    parts: [number, number];
     stagesDone: number;
     share: number;
   };
@@ -104,14 +102,12 @@ export function buildStudentProgress(
   ];
 
   const record = row.finalProject ?? null;
-  const tapes = record ? record.tapes.filter((stars) => stars > 0).length : 0;
-  const finalParts: [number, number, number] = record
+  const finalParts: [number, number] = record
     ? [
-        clampShare(tapes / FINAL_TAPES),
         clampShare((record.flows / FINAL_FLOWS + record.quizAnswered / FINAL_QUESTIONS + record.built.length / FINAL_TICKETS) / 3),
         record.reportDone ? 1 : clampShare(record.policies / (FINAL_POLICIES + 1)),
       ]
-    : [0, 0, 0];
+    : [0, 0];
 
   const mathlerShare = average(mathlerParts);
   const bossShare = clampShare(row.completedBosses.length / BOSS_TOTAL);
@@ -135,8 +131,6 @@ export function buildStudentProgress(
     bosses: { passed: row.completedBosses, attempts: row.attempts, codes: row.codes, xp: row.xp, share: bossShare },
     final: {
       record,
-      tapes,
-      stars: record ? record.tapes.reduce((total, stars) => total + stars, 0) : 0,
       parts: finalParts,
       stagesDone: finalParts.filter((part) => part >= 1).length,
       share: finalShare,
@@ -187,7 +181,7 @@ export function summarizeClass(code: ClassCode | "ALL", students: StudentProgres
     overall: average(students.map((item) => item.overall)),
     mathlerComplete: students.filter((item) => item.mathler.stepsDone === 3).length,
     bossesComplete: students.filter((item) => item.bosses.passed.length === BOSS_TOTAL).length,
-    finalComplete: students.filter((item) => item.final.stagesDone === 3).length,
+    finalComplete: students.filter((item) => item.final.stagesDone === 2).length,
   };
 }
 

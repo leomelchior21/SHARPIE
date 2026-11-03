@@ -118,11 +118,13 @@ try{
   }
   }
   if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_FLOW_ONLY){
+  // Backrooms Run keeps its own device save, apart from the Final Project one.
+  await evaluate(`localStorage.removeItem('sharpie.backroom.v1.final-qa')`);
   await seed({activity:'matrix'});await startTutorial();
   assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/MAKE IT TRUE/);
   await energyTo(61);await wait('!document.querySelector(".br-coach")',5000);
   await pressLabel('Pause run');assert.match(await evaluate('document.querySelector(".br-overlay").textContent'),/PAUSE/);await click('KEEP RUNNING');
-  await wait('JSON.parse(localStorage.getItem(finalQA.storageKey("final-qa")))?.backroom?.gates>=1',15000);
+  await wait('JSON.parse(localStorage.getItem("sharpie.backroom.v1.final-qa"))?.backroomRunGates>=1',15000);
   await wait('!!document.querySelector(".br-coach")',20000);assert.match(await evaluate('document.querySelector(".br-coach").textContent'),/FOLLOW THE CORRIDOR[\s\S]*Touch a wall/);
   // Walls end the run on the spot.
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
@@ -135,7 +137,8 @@ try{
 
   // Tape 04 with a steering pilot: jumps over holes and barriers, films the dark corridor,
   // the camera going off and a spare battery bringing it back.
-  await seed({activity:'matrix',backroom:{bestXp:0,gates:0,operators:[],levels:[1,1,1,0],skills:{},coach:['energy','steer','fork','jump','saw','hole','drill'],layout:3}});
+  await evaluate(`localStorage.setItem('sharpie.backroom.v1.final-qa',JSON.stringify({backroomRunBest:0,backroomRunXp:0,backroomRunGates:0,backroomRunOperators:[],levelStars:[1,1,1,0],skills:{},coachSeen:['energy','steer','fork','jump','saw','hole','drill']}))`);
+  await seed({activity:'matrix'});
   await evaluate('window.__backroomQA={}');
   await wait('!!document.querySelector(".br-tape")',15000);await evaluate('document.querySelectorAll(".br-tape")[3].click()');
   await wait('!!document.querySelector(".br-deck-skip")',5000);await evaluate('document.querySelector(".br-deck-skip").click()');

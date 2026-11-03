@@ -2,11 +2,10 @@ import { canSyncProgress, saveProgress } from "./progressStore";
 
 // The Final project keeps its full save in the browser. A compact summary is
 // mirrored inside sharpie_progress.codes so the teacher dashboard can show it
-// without a dedicated table.
+// without a dedicated table. Backrooms Run is not part of it: the game keeps its
+// progress on the device only.
 export type FinalProjectSyncState = {
   xp: number;
-  tapes: number[];
-  endlessBest: number;
   flows: number;
   quizAnswered: number;
   quizRight: number;
@@ -18,7 +17,6 @@ export type FinalProjectSyncState = {
   updatedAt: string | null;
 };
 
-export const FINAL_TAPES = 4;
 export const FINAL_FLOWS = 3;
 export const FINAL_QUESTIONS = 20;
 export const FINAL_TICKETS = 10;
@@ -38,8 +36,6 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
   const raw = value as Record<string, unknown>;
   return {
     xp: count(raw.xp, 10_000_000),
-    tapes: Array.from({ length: FINAL_TAPES }, (_, index) => count(Array.isArray(raw.tapes) ? raw.tapes[index] : 0, 3)),
-    endlessBest: count(raw.endlessBest, 100_000),
     flows: count(raw.flows, FINAL_FLOWS),
     quizAnswered: count(raw.quizAnswered, FINAL_QUESTIONS),
     quizRight: count(raw.quizRight, FINAL_QUESTIONS),

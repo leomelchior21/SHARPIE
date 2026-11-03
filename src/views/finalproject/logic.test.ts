@@ -3,7 +3,7 @@ import { challenges, flows, missions, printLine, questions, solution } from "./c
 import { compare, conditionResult, linesToPieces, validateLines, validatePieces } from "./logic";
 import { boundaryCases, substitute, traceProgram } from "./labStories";
 import { parseFinalProjectSync } from "../../lib/finalProjectSync";
-import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageOneDone, stageTwoDone, storageKey, syncSummary, xp } from "./progress";
+import { award, canOpen, enterLab, freshProgress, loadProgress, sanitizeProgress, saveProgress, stageTwoDone, storageKey, syncSummary, xp } from "./progress";
 describe("Final project curriculum and behavioral validation",()=>{
   it("contains exactly the requested activities and answer key",()=>{
     expect(flows).toHaveLength(3);expect(challenges).toHaveLength(10);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
@@ -61,7 +61,6 @@ describe("Final project profile persistence and milestones",()=>{
   it("makes Backrooms and IF / ELSE available without a previous run",()=>{
     const p=freshProgress();
     for(const activity of ["matrix","lab","flow","builder","quiz-intro","quiz"] as const)expect(canOpen(activity,p,false)).toBe(true);
-    expect(stageOneDone({...p,best:3})).toBe(true);
   });
   it("starts the first lab visit in Live Flow and later visits at its three options",()=>{
     const first=enterLab(freshProgress());expect(first).toMatchObject({activity:"flow",labVisited:true});
@@ -71,7 +70,7 @@ describe("Final project profile persistence and milestones",()=>{
   });
   it("unlocks core learning without requiring all practice",()=>{
     let p=freshProgress();expect(canOpen("shadow",p,false)).toBe(false);expect(canOpen("shadow",p,true)).toBe(true);
-    p={...p,best:3,transition:true};expect(stageOneDone(p)).toBe(true);expect(canOpen("flow",p,false)).toBe(true);
+    p={...p,transition:true};expect(canOpen("flow",p,false)).toBe(true);
     p={...p,flowPaths:{0:["true","false"],1:["true","false"],2:["true","false"]},built:[0,1,2]};
     expect(stageTwoDone(p)).toBe(true);expect(canOpen("shadow",p,false)).toBe(true);expect(canOpen("report",p,false)).toBe(false);
     expect(p.answers).toEqual({});
@@ -82,39 +81,25 @@ describe("Final project profile persistence and milestones",()=>{
     localStorage.removeItem(storageKey("ana"));
   });
   it("recovers malformed fields and reports inaccessible or corrupt storage",()=>{
-    expect(sanitizeProgress({version:1,best:NaN,activity:"other",built:[0,0,-1,11],flowPaths:{0:null},answers:{q1:8}})).toMatchObject({best:0,activity:"overview",built:[0],answers:{}});
+    expect(sanitizeProgress({version:1,activity:"other",built:[0,0,-1,11],flowPaths:{0:null},answers:{q1:8}})).toMatchObject({activity:"overview",built:[0],answers:{}});
     localStorage.setItem(storageKey("broken"),"{");expect(loadProgress("broken").warning).not.toBe("");expect(localStorage.getItem(storageKey("broken"))).toBe("{");localStorage.removeItem(storageKey("broken"));
   });
   it("summarizes progress for the teacher dashboard and survives the round trip",()=>{
-    const p=sanitizeProgress({...freshProgress(),best:12,flowPaths:{0:["true","false"]},built:[2,0],answers:{q1:1,q2:1},repaired:[0],reflection:"Rules need review."});
+    const p=sanitizeProgress({...freshProgress(),flowPaths:{0:["true","false"]},built:[2,0],answers:{q1:1,q2:1},repaired:[0],reflection:"Rules need review."});
     const summary=syncSummary(p);
-    expect(summary).toMatchObject({endlessBest:12,flows:1,quizAnswered:2,quizRight:1,quizMissed:[2],built:[1,3],policies:1,reportDone:false,reflection:"Rules need review.",xp:xp(p)});
+    expect(summary).toMatchObject({flows:1,quizAnswered:2,quizRight:1,quizMissed:[2],built:[1,3],policies:1,reportDone:false,reflection:"Rules need review.",xp:xp(p)});
     expect(parseFinalProjectSync(JSON.parse(JSON.stringify(summary)))).toEqual(summary);
-    expect(parseFinalProjectSync({built:[99,-1,"x"],quizRight:500})).toMatchObject({built:[10],quizRight:20,tapes:[0,0,0,0]});
+    expect(parseFinalProjectSync({built:[99,-1,"x"],quizRight:500})).toMatchObject({built:[10],quizRight:20});
+    // Backrooms Run never reaches the teacher, even from an older summary that carried it.
+    expect(summary).not.toHaveProperty("tapes");expect(parseFinalProjectSync({tapes:[3,3,3,3],endlessBest:9})).not.toHaveProperty("endlessBest");
     expect(parseFinalProjectSync(null)).toBeNull();
   });
   it("never awards duplicate XP on replays",()=>{
     const p=award(award(freshProgress(),"quiz:q1",10),"quiz:q1",10);expect(xp(p)).toBe(10);
   });
   it("migrates retired Boolean Check saves without losing XP or other activities",()=>{
-    const p=sanitizeProgress({...freshProgress(),activity:"warmup",best:3,backroom:undefined,warmup:[0,1,2],legacyXp:undefined,transition:true,built:[0,1,2],answers:{q1:1}});
-    expect(p.activity).toBe("transition");expect(p.legacyXp).toBe(30);expect(p.backroom.bestXp).toBe(45);
-    expect(p.built).toEqual([0,1,2]);expect(p.answers).toEqual({q1:1});expect(xp(p)).toBe(165);
-    expect(stageOneDone(p)).toBe(true);
-  });
-  it("preserves the full game's best XP, gate count and operators on reload",()=>{
-    const p=sanitizeProgress({...freshProgress(),best:4,backroom:{bestXp:55,gates:9,operators:[">","<=",">","bad"]}});
-    expect(p.backroom).toEqual({bestXp:55,gates:9,operators:[">","<="],levels:[0,0,0,0],skills:{},coach:[],layout:3});expect(xp(p)).toBe(55);
-  });
-  it("restores Backrooms tape stars, field notes and their XP",()=>{
-    const p=sanitizeProgress({...freshProgress(),backroom:{bestXp:40,gates:12,operators:[],coach:["steer","bogus","energy"],levels:[3,2,0,9,"x"],skills:{">":{right:4,wrong:1},bad:{right:1,wrong:0},"&&":{right:-3,wrong:2.7}}}});
-    // A save from before the tape reorder: its stars move with their tapes (old Two Doors 9→3 is now tape 02; Edge + Exactly merge).
-    expect(p.backroom.levels).toEqual([3,3,2,0]);expect(p.backroom.coach).toEqual(["energy","steer"]);
-    expect(sanitizeProgress({...freshProgress(),backroom:{...p.backroom,levels:[3,2,0,1,0,0],layout:2}}).backroom.levels).toEqual([3,2,1,0]);
-    expect(sanitizeProgress({...freshProgress(),backroom:{...p.backroom,levels:[3,2,1,0],layout:3}}).backroom.levels).toEqual([3,2,1,0]);
-    expect(p.backroom.skills).toEqual({">":{right:4,wrong:1},"&&":{right:0,wrong:2}});
-    expect(xp(p)).toBe(40+3*20);
-    expect(stageOneDone(p)).toBe(false);
-    expect(stageOneDone({...p,backroom:{...p.backroom,levels:[1,1,1,1]}})).toBe(true);
+    const p=sanitizeProgress({...freshProgress(),activity:"warmup",warmup:[0,1,2],legacyXp:undefined,transition:true,built:[0,1,2],answers:{q1:1}});
+    expect(p.activity).toBe("transition");expect(p.legacyXp).toBe(30);
+    expect(p.built).toEqual([0,1,2]);expect(p.answers).toEqual({q1:1});expect(xp(p)).toBe(120);
   });
 });
