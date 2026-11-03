@@ -3,23 +3,25 @@ import { canSyncProgress, saveProgress } from "./progressStore";
 // The Final project keeps its full save in the browser. A compact summary is
 // mirrored inside sharpie_progress.codes so the teacher dashboard can show it
 // without a dedicated table. Backrooms Run is not part of it: the game keeps its
-// progress on the device only.
+// progress on the device only. Live Flow and the Code Builder were retired for the
+// Switchyard, so `flows` and `built` from older summaries are ignored.
 export type FinalProjectSyncState = {
   xp: number;
-  flows: number;
   quizAnswered: number;
   quizRight: number;
   quizMissed: number[];
-  built: number[];
+  /** Switchyard levels shipped, numbered from 1, and the stars earned on them. */
+  levels: number[];
+  stars: number;
   policies: number;
   reportDone: boolean;
   reflection: string;
   updatedAt: string | null;
 };
 
-export const FINAL_FLOWS = 3;
 export const FINAL_QUESTIONS = 20;
-export const FINAL_TICKETS = 10;
+export const FINAL_LEVELS = 10;
+export const FINAL_STARS = FINAL_LEVELS * 3;
 export const FINAL_POLICIES = 4;
 
 function count(value: unknown, max: number): number {
@@ -36,11 +38,11 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
   const raw = value as Record<string, unknown>;
   return {
     xp: count(raw.xp, 10_000_000),
-    flows: count(raw.flows, FINAL_FLOWS),
     quizAnswered: count(raw.quizAnswered, FINAL_QUESTIONS),
     quizRight: count(raw.quizRight, FINAL_QUESTIONS),
     quizMissed: numbers(raw.quizMissed, FINAL_QUESTIONS),
-    built: numbers(raw.built, FINAL_TICKETS),
+    levels: numbers(raw.levels, FINAL_LEVELS),
+    stars: count(raw.stars, FINAL_STARS),
     policies: count(raw.policies, FINAL_POLICIES),
     reportDone: raw.reportDone === true,
     reflection: typeof raw.reflection === "string" ? raw.reflection.slice(0, 600) : "",

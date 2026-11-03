@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
-import { challenges, flows, missions, program, questions } from "./content";
+import { missions, program, questions } from "./content";
+import { levels, rushHour } from "./switchyard/levels";
+import { buildYard, domain, expected, readWritten, writtenCode, yardCode } from "./switchyard/yard";
 import { conditionResult } from "./logic";
 let handler;const messages=[];
 vm.runInNewContext(readFileSync("public/sharpie-runner.worker.js","utf8"),{performance,setTimeout:callback=>callback(),self:{addEventListener:(_name,callback)=>{handler=callback;},postMessage:message=>messages.push(message)}});
@@ -12,23 +14,26 @@ describe("Final project uses the existing C# worker",()=>{
       const result=run(q.code);expect(result.success,q.id).toBe(true);const expected=q.options[q.answer];expect(result.output.trim(),q.id).toBe(expected==="Nothing prints"?"":expected);
     });expect(run(questions[19].code).output).toBe("HIDE\n");
   });
-  it("executes every Live Flow and builder in both branches and at boundaries",()=>{
-    [...flows,...challenges].forEach(s=>{
-      const inputs=typeof s.initial==="boolean"?[true,false]:[s.min,s.initial,s.max,...(s.condition.match(/\d+$/)?[-1,0,1].map(n=>Number(s.condition.match(/\d+$/)[0])+n):[])];
-      for(const input of inputs){const result=run(program(s,input));expect(result.success,`${s.title} ${input}`).toBe(true);expect(result.output.trim()).toBe(conditionResult(s.condition,s.variable,input)?s.yes:s.no);}
-    });
+  it("runs every Switchyard level's rule for every train it could carry",()=>{
+    const written=level=>`if (${level.condition})\n{\n    Console.WriteLine("${level.yes}");\n}\nelse\n{\n    Console.WriteLine("${level.no}");\n}`;
+    for(const level of levels){
+      const yard=level.tool==="write"?readWritten(written(level)):buildYard(["decl",`if (${level.condition})`,`Console.WriteLine(${JSON.stringify(level.yes)});`,"else",`Console.WriteLine(${JSON.stringify(level.no)});`]);
+      for(const value of domain(level)){const result=run(yardCode(level.variable,value,yard));expect(result,`${level.title} ${value}`).toMatchObject({success:true,output:`${expected(level,value)}\n`});}
+    }
+  });
+  it("runs a yard with no else track and prints nothing for its FALSE trains",()=>{
+    const fan=levels[2];const yard=buildYard(fan.preset);
+    expect(run(yardCode(fan.variable,29,yard))).toMatchObject({success:true,output:""});
+    expect(run(yardCode(fan.variable,31,yard))).toMatchObject({success:true,output:"Fan on\n"});
+  });
+  it("runs the switch a student types on the last level, rush hour included",()=>{
+    const pool=levels[9];const code='if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}';
+    for(const value of rushHour)expect(run(writtenCode(pool.variable,value,code)).output).toBe(`${expected(pool,value)}\n`);
   });
   it("executes every broken and repaired audit rule",()=>{
     missions.forEach(m=>{for(const outputs of [m.broken,m.repaired])for(const input of [true,false]){
       const result=run(program({variable:m.variable,initial:input,condition:m.variable,yes:outputs[0],no:outputs[1]}));expect(result).toMatchObject({success:true,output:`${outputs[input?0:1]}\n`});
     }});
-  });
-  it("executes every quarter-point grade with a valid C# double declaration",()=>{
-    const school=flows[0];
-    for(let grade=0;grade<=10;grade+=0.25){
-      const code=program(school,grade);expect(code).toContain(`double grade = ${grade};`);
-      expect(run(code)).toMatchObject({success:true,output:`${grade>=7?school.yes:school.no}\n`});
-    }
   });
   it("handles quoted delimiters, comments, assignments, and IF without ELSE",()=>{
     expect(run('string message = "if (x) { yes; }"; bool flag = true; if (flag) { Console.WriteLine(message); } // else\nConsole.WriteLine("Done");')).toMatchObject({success:true,output:"if (x) { yes; }\nDone\n"});

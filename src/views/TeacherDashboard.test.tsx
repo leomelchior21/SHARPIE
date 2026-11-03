@@ -153,22 +153,23 @@ describe("Teacher dashboard", () => {
         codes: {},
         attempts: {},
         finalProject: {
-          xp: 640, flows: 3, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
-          built: [1, 2, 3, 4], policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
+          xp: 640, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
+          levels: [1, 2, 3, 4], stars: 10, policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
         },
       },
     ]);
     render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
     await waitFor(() => expect(screen.getByText("Alan Turing")).toBeInTheDocument());
 
-    expect(segments("Alan Turing", "final")).toEqual(["is-progress", "is-progress"]);
-    expect(within(screen.getByText("Alan Turing").closest(".tdb-row") as HTMLElement).getByText("0/2 stages")).toBeInTheDocument();
+    expect(segments("Alan Turing", "final")).toEqual(["is-done", "is-progress"]);
+    expect(within(screen.getByText("Alan Turing").closest(".tdb-row") as HTMLElement).getByText("1/2 stages")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Alan Turing"));
     expect(screen.getByText("MODULE 08 · FINAL PROJECT")).toBeInTheDocument();
     expect(screen.queryByText(/BACKROOMS/)).not.toBeInTheDocument();
     expect(screen.getByText("17 right · 20 / 20 answered")).toBeInTheDocument();
-    expect(screen.getByText("4 / 10 shipped")).toBeInTheDocument();
+    expect(screen.getByText("4 / 10 levels · 10★")).toBeInTheDocument();
+    expect(screen.queryByText(/SHADOW FEED|LIVE FLOW/)).not.toBeInTheDocument();
     expect(screen.getByText("Q4 · Q13 · Q16")).toBeInTheDocument();
     expect(screen.getByText("A rule can be followed and still be unfair.")).toBeInTheDocument();
   });

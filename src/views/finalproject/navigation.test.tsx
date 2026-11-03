@@ -2,171 +2,197 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FinalProject } from "./FinalProject";
 import { conditionResult } from "./logic";
-import { freshProgress, saveProgress, storageKey } from "./progress";
+import { freshProgress, saveProgress, storageKey, type Progress } from "./progress";
+import { questions } from "./content";
+import { readWritten } from "./switchyard/yard";
+import { runYard } from "./switchyard/runYard";
 
-vi.mock("./logic",async importOriginal=>({
-  ...await importOriginal<typeof import("./logic")>(),
-  runProgram:vi.fn(async(s:import("./content").Scenario,value:number,pieces?:string[])=>conditionResult(pieces?.[0]??s.condition,s.variable,value)?(pieces?.[1]??s.yes):(pieces?.[2]??s.no)),
-}));
+// The C# engine runs in a worker the test browser does not have; this stands in for it.
+vi.mock("./switchyard/runYard", () => ({ runYard: vi.fn(), warmYard: vi.fn() }));
+const simulate = async (code: string) => {
+  const [, variable, raw] = /^(?:int|bool) (\w+) = (\w+);/.exec(code)!;
+  const value = raw === "true" ? true : raw === "false" ? false : Number(raw);
+  const yard = readWritten(code.slice(code.indexOf("\n\n") + 2));
+  return (conditionResult(yard.condition!, variable, value) ? yard.yes : yard.hasElse ? yard.no : "") ?? "";
+};
 
-const student="navigation-test";
-const mount=()=>render(<FinalProject name="Ada" studentKey={student} isTeacher={false} onBack={vi.fn()}/>);
-const back=()=>fireEvent.click(screen.getByRole("button",{name:"BACK"}));
-const saved=()=>JSON.parse(localStorage.getItem(storageKey(student))!);
-describe("Student Final project navigation",()=>{
-  beforeEach(()=>{localStorage.removeItem(storageKey(student));});
-  afterEach(()=>{cleanup();vi.useRealTimers();localStorage.removeItem(storageKey(student));});
+const student = "navigation-test";
+const mount = () => render(<FinalProject name="Ada" studentKey={student} isTeacher={false} onBack={vi.fn()} />);
+const back = () => fireEvent.click(screen.getByRole("button", { name: "BACK" }));
+const saved = () => JSON.parse(localStorage.getItem(storageKey(student))!) as Progress;
+const licensed = Object.fromEntries(questions.map((q) => [q.id, q.answer]));
+const atLevel = (yardLevel: number, extra: Partial<Progress> = {}) => saveProgress(student, { ...freshProgress(), activity: "yard", answers: licensed, quizIndex: 20, yardLevel, yardShipped: Array.from({ length: yardLevel }, (_, i) => i), yardStars: Array.from({ length: 10 }, (_, i) => i < yardLevel ? 1 : 0), ...extra });
+const playOut = () => act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+const verdict = (container: HTMLElement) => container.querySelector(".sy-verdict")?.textContent ?? "";
 
-  it("opens Live Flow on the first visit, then the lab home with its three stations",()=>{
-    const {container}=mount();
-    expect(screen.getByRole("button",{name:/Backrooms Run.*Open stage/})).toBeEnabled();
-    const lab=screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/});expect(lab).toBeEnabled();fireEvent.click(lab);
-    expect(screen.getByRole("heading",{name:"The school result"})).toBeInTheDocument();
-    expect(container.querySelector(".lab-flow-grid")).toBeNull();
-    expect(screen.getByText(/Report cards go out tonight/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:"START LIVE FLOW"}));
-    expect(container.querySelector(".fp-flow-svg")).not.toBeNull();
-    expect(container.querySelectorAll(".fp-header button")).toHaveLength(1);
-    back();
-    expect(screen.getByRole("heading",{name:"Every client needs a rule with two paths."})).toBeInTheDocument();
-    expect([...container.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))).toEqual(["Live Flow","Quiz","Code Builder"]);
-    fireEvent.click(screen.getByRole("button",{name:"Quiz"}));
-    expect(screen.getByRole("heading",{name:"Read it. Say what it prints."})).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:"START QUIZ"}));expect(container.querySelector(".lab-answers")).not.toBeNull();
-    back();back();
-    expect(screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/})).toBeInTheDocument();
+describe("Student Final project navigation", () => {
+  beforeEach(() => { localStorage.removeItem(storageKey(student)); vi.mocked(runYard).mockImplementation(simulate); });
+  afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.removeItem(storageKey(student)); });
+
+  it("opens the Switchyard hub with the quiz first and the game locked until it is done", () => {
+    const { container } = mount();
+    expect(screen.getByRole("button", { name: /Backrooms Run.*Open stage/ })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Shadow Feed/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Switchyard.*Open stage/ }));
+    expect(screen.getByRole("heading", { name: "SWITCHYARD" })).toBeInTheDocument();
+    expect([...container.querySelectorAll(".sy-card")].map((card) => card.getAttribute("aria-label"))).toEqual(["Quiz", "The Switchyard"]);
+    expect(screen.getByRole("button", { name: "The Switchyard" })).toBeDisabled();
+    expect(screen.getByText(/FINISH THE QUIZ TO OPEN/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Quiz" }));
+    expect(screen.getByRole("heading", { name: "Read it. Say what it prints." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "START QUIZ" })); expect(container.querySelector(".lab-answers")).not.toBeNull();
+    back(); back();
+    expect(screen.getByRole("button", { name: /Switchyard.*Open stage/ })).toBeInTheDocument();
   });
 
-  it("asks for a prediction before each run and moves on to the quiz after three stories",async()=>{
-    vi.useFakeTimers();const {container}=mount();fireEvent.click(screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/}));
-    for(const [index,[label,values,next]] of ([["grade",[6.75,7],"NEXT TICKET →"],["age",[12,13],"NEXT TICKET →"],["views",[1000,1100],"TAKE THE QUIZ →"]] as const).entries()){
-      fireEvent.click(screen.getByRole("button",{name:"START LIVE FLOW"}));
-      for(const value of values){
-        fireEvent.change(screen.getByRole("slider",{name:label}),{target:{value}});
-        fireEvent.click(screen.getByRole("button",{name:/PREDICT & RUN/}));
-        const result=label==="grade"?value>=7:label==="age"?value<=12:value>1000;
-        // Predict TRUE every time: half the runs check the wrong-prediction feedback.
-        fireEvent.click(within(screen.getByRole("group",{name:"Predict the path"})).getByRole("button",{name:/TRUE/}));
-        await act(async()=>{await vi.advanceTimersByTimeAsync(3600);});
-        expect(container.querySelector(`[data-segment="${result?"true":"false"}-output"]`)).not.toBeNull();
-        expect(container.querySelector(`[data-segment="${result?"false":"true"}-output"]`)).toBeNull();
-        if(!result)expect(container.querySelector(".lab-verdict")?.textContent).toMatch(/You predicted TRUE, but .* is false/);
-      }
-      expect(screen.getByText("Both paths explored")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button",{name:next}));
-      if(index<2)expect(container.querySelector(".lab-intro")).not.toBeNull();
-    }
-    expect(saved().flowPaths).toEqual({0:["false","true"],1:["true","false"],2:["false","true"]});
-    expect(screen.getByRole("heading",{name:"Read it. Say what it prints."})).toBeInTheDocument();
+  it("sends a save that stopped in the old Code Builder back to the hub while the quiz is open", () => {
+    saveProgress(student, { ...freshProgress(), activity: "yard" });
+    mount();
+    expect(screen.queryByRole("navigation", { name: "Switchyard levels" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Switchyard.*Open stage/ })).toBeInTheDocument();
   });
 
-  it("checks the spec at the boundary and ships a correct rule",async()=>{
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:2,drafts:{heat:["decl","if (temperature >= 30)",'Console.WriteLine("Turn on the fan");',"else",'Console.WriteLine("Fan stays off");']}});
-    const {container}=mount();
-    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
-    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
-    expect(container.querySelector(".lab-spec tr.is-fail")?.textContent).toContain("30");
-    expect(screen.getByText(/With temperature = 30, your code prints "Turn on the fan"/)).toBeInTheDocument();
-    // A wrong line goes back to the bank; the next tap fills the gap it left.
-    fireEvent.click(screen.getByRole("button",{name:/^Line 2: if \(temperature >= 30\)/}));
-    expect(screen.getByRole("button",{name:"Line 2: empty"})).toBeInTheDocument();
-    fireEvent.click(container.querySelector<HTMLButtonElement>('.lab-pieces [data-line="if (temperature > 30)"]')!);
-    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
-    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
-    expect(screen.getByText(/Shipped. Every test passes./)).toBeInTheDocument();
-    expect(container.querySelectorAll(".lab-spec tr.is-pass")).toHaveLength(3);
-    expect(saved().built).toEqual([2]);
-  });
-
-  it("builds a whole program from a bank in order, and asks for a prediction first on ticket 4",async()=>{
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:0});
-    const {container}=mount();
-    const tap=(line:string)=>fireEvent.click(container.querySelector<HTMLButtonElement>(`.lab-pieces [data-line='${line}']`)!);
-    expect(screen.getByRole("button",{name:/RUN TESTS/})).toBeDisabled();
-    for(const line of ["decl","if (age <= 12)",'Console.WriteLine("You get a child discount!");',"else",'Console.WriteLine("Regular ticket price applies");'])tap(line);
-    expect(container.querySelector("[data-slot='0']")?.textContent).toBe("int age = 12;");
-    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
-    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
-    expect(saved().built).toEqual([0]);
-    fireEvent.click(screen.getByRole("button",{name:"Challenge 4: Low battery"}));
-    expect(container.querySelector(".lab-pieces")).toBeNull();
-    fireEvent.click(within(screen.getByRole("group",{name:"Predict the output"})).getByRole("button",{name:/Low battery/}));
-    expect(container.querySelector(".lab-pieces")).not.toBeNull();
-  });
-
-  it("runs a broken program before its lines can be repaired",async()=>{
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"builder",builderIndex:6});
-    const {container}=mount();
-    expect(screen.getByRole("button",{name:/^Line 2: if \(views >= 1000\)/})).toBeDisabled();
-    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
-    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
-    expect(screen.getByText(/With views = 1000, your code prints "BOOST"/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:/^Line 2: if \(views >= 1000\)/}));
-    fireEvent.click(container.querySelector<HTMLButtonElement>('.lab-pieces [data-line="if (views > 1000)"]')!);
-    fireEvent.click(screen.getByRole("button",{name:/RUN TESTS/}));
-    await act(async()=>{await new Promise(r=>setTimeout(r,0));});
-    expect(screen.getByText(/Shipped. Every test passes./)).toBeInTheDocument();
-  });
-
-  it("shows the lines that ran after an answer, waits on a mistake and moves on after a right answer",async()=>{
+  it("lays the track for level 1, asks for a prediction, ships it and checks why", async () => {
     vi.useFakeTimers();
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:12});
-    const {container}=mount();
+    atLevel(0);
+    const { container } = mount();
+    expect(screen.getByRole("button", { name: "Level 2: No Labels" })).toBeDisabled();
+    const tap = (line: string) => fireEvent.click(container.querySelector<HTMLButtonElement>(`.sy-bank [data-line='${line}']`)!);
+    for (const line of ["decl", "if (age <= 12)", 'Console.WriteLine("Child discount");', "else", 'Console.WriteLine("Regular ticket");']) tap(line);
+    expect(container.querySelector("[data-slot='0']")?.textContent).toBe("int age = 12;");
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Predict the track" })).getByRole("button", { name: /TRUE TRACK/ }));
+    await playOut();
+    expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
+    expect(verdict(container)).toMatch(/You called train 12 right/);
+    expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    const dialog = screen.getByRole("dialog", { name: "Level shipped" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "12 is smaller than 12." }));
+    expect(within(dialog).queryByRole("button", { name: /NEXT LEVEL/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: /includes 12/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /NEXT LEVEL/ }));
+    expect(screen.getByRole("heading", { name: "No Labels" })).toBeInTheDocument();
+    expect(saved().yardLevel).toBe(1);
+  });
+
+  it("stops a train at the dead end until the else track is laid", async () => {
+    vi.useFakeTimers();
+    atLevel(2);
+    const { container } = mount();
+    expect(container.querySelector(".sy-bank")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE YARD AS IT IS" }));
+    await playOut();
+    expect(verdict(container)).toMatch(/Train 29 hit the dead end: nothing printed/);
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".sy-bank [data-line='else']")!);
+    fireEvent.click(container.querySelector<HTMLButtonElement>(`.sy-bank [data-line='Console.WriteLine("Fan off");']`)!);
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    await playOut();
+    expect(saved().yardShipped).toContain(2);
+  });
+
+  it("jams on = and opens the vault with == on the sensor dial", async () => {
+    vi.useFakeTimers();
+    atLevel(4);
+    const { container } = mount();
+    const ops = within(screen.getByRole("group", { name: "Operator" }));
+    fireEvent.click(ops.getByRole("button", { name: "=" }));
+    fireEvent.change(screen.getByRole("slider", { name: "Sensor number" }), { target: { value: 42 } });
+    // A jammed switch has no track to predict yet.
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    expect(screen.queryByRole("group", { name: "Predict the track" })).toBeNull();
+    await playOut();
+    expect(verdict(container)).toMatch(/jammed: = stores a value/);
+    fireEvent.click(ops.getByRole("button", { name: "==" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Predict the track" })).getByRole("button", { name: /ELSE TRACK/ }));
+    await playOut();
+    expect(verdict(container)).toMatch(/You said train 42 would take the ELSE track/);
+    expect(saved()).toMatchObject({ yardShipped: [0, 1, 2, 3, 4] });
+    expect(saved().yardStars[4]).toBe(2);
+  });
+
+  it("replays the incident before the ride's sensor can be fixed", async () => {
+    vi.useFakeTimers();
+    atLevel(7);
+    const { container } = mount();
+    expect(screen.getByText(/LOCKED UNTIL YOU WATCH THE INCIDENT/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "▶ WATCH THE INCIDENT" }));
+    await playOut();
+    expect(verdict(container)).toMatch(/Incident confirmed\. Train 140 printed “Too short”\. The rule wants “Ride open”/);
+    fireEvent.click(within(screen.getByRole("group", { name: "Operator" })).getByRole("button", { name: ">=" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    await playOut();
+    expect(saved().yardShipped).toContain(7);
+    expect(saved().yardStars[7]).toBe(3);
+  });
+
+  it("builds the pool's yard from typed code, checks the timetable, then runs rush hour", async () => {
+    vi.useFakeTimers();
+    atLevel(9);
+    const { container } = mount();
+    const editor = screen.getByRole("textbox", { name: "Your if / else" });
+    fireEvent.change(editor, { target: { value: "if (water >= 26)" } });
+    expect(verdict(container)).toMatch(/Open the TRUE block/);
+    fireEvent.change(editor, { target: { value: 'if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}' } });
+    fireEvent.click(screen.getByRole("button", { name: "PICK YOUR TIMETABLE →" }));
+    expect(verdict(container)).toMatch(/never tries the edge itself: 26/);
+    expect(screen.getByRole("button", { name: "▶ RUN MY TIMETABLE" })).toBeDisabled();
+    const step = (train: number, name: "higher" | "lower", times: number) => { for (let i = 0; i < times; i += 1) fireEvent.click(screen.getByRole("button", { name: `Train ${train} ${name}` })); };
+    step(1, "higher", 15); step(2, "higher", 6); step(3, "lower", 3);
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN MY TIMETABLE" }));
+    await playOut();
+    expect(verdict(container)).toMatch(/proves the edge/);
+    fireEvent.click(screen.getByRole("button", { name: "▶ START RUSH HOUR" }));
+    await playOut();
+    expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(12);
+    expect(saved().yardShipped).toContain(9);
+    expect(saved().yardDrafts.pool[0]).toContain("Too cold");
+  });
+
+  it("shows the lines that ran after an answer, waits on a mistake and moves on after a right answer", async () => {
+    vi.useFakeTimers();
+    saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 12 });
+    const { container } = mount();
     expect(screen.getByText(/QUESTION 13 \/ 20/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:"A Fan on"}));
+    fireEvent.click(screen.getByRole("button", { name: "A Fan on" }));
     expect(container.querySelector(".lab-eval")?.textContent).toContain("30 > 30");
     expect(container.querySelectorAll(".lab-line.is-skip").length).toBeGreaterThan(0);
-    await act(async()=>{await vi.advanceTimersByTimeAsync(5000);});
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
     expect(screen.getByText(/QUESTION 13 \/ 20/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:/NEXT/}));
-    fireEvent.click(screen.getByRole("button",{name:"A Unlocked"}));
+    fireEvent.click(screen.getByRole("button", { name: /NEXT/ }));
+    fireEvent.click(screen.getByRole("button", { name: "A Unlocked" }));
     expect(screen.getByText("Correct.")).toBeInTheDocument();
-    await act(async()=>{await vi.advanceTimersByTimeAsync(2300);});
+    await act(async () => { await vi.advanceTimersByTimeAsync(2300); });
     expect(screen.getByText(/QUESTION 15 \/ 20/)).toBeInTheDocument();
     expect(saved().mastered).toEqual(["q14"]);
   });
 
-  it("pauses between rounds of five and offers the Code Builder after the last answer",async()=>{
+  it("pauses between rounds of five and opens the Switchyard after the last answer", async () => {
     vi.useFakeTimers();
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:4,answers:{q1:1,q2:0,q3:2,q4:3}});
+    saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 4, answers: { q1: 1, q2: 0, q3: 2, q4: 3 } });
     mount();
-    fireEvent.click(screen.getByRole("button",{name:"B False"}));
-    await act(async()=>{await vi.advanceTimersByTimeAsync(2300);});
-    expect(screen.getByRole("heading",{name:"Perfect round!"})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "B False" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2300); });
+    expect(screen.getByRole("heading", { name: "Perfect round!" })).toBeInTheDocument();
     expect(saved().quizIndex).toBe(5);
-    fireEvent.click(screen.getByRole("button",{name:/ROUND 2: TRUE OR FALSE/}));
+    fireEvent.click(screen.getByRole("button", { name: /ROUND 2: TRUE OR FALSE/ }));
     expect(screen.getByText(/QUESTION 6 \/ 20/)).toBeInTheDocument();
     cleanup();
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:20,answers:{q1:1}});
-    mount();fireEvent.click(screen.getByRole("button",{name:/RESUME QUIZ/}));
+    saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 20, answers: { q1: 1 } });
+    mount(); expect(screen.queryByRole("button", { name: /OPEN THE SWITCHYARD/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /RESUME QUIZ/ }));
     expect(screen.getByText(/QUESTION 2 \/ 20/)).toBeInTheDocument();
     cleanup();
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz",quizIndex:20,answers:Object.fromEntries(Array.from({length:20},(_,i)=>[`q${i+1}`,0]))});
-    mount();fireEvent.click(screen.getByRole("button",{name:/CODE BUILDER/}));
-    expect(screen.getByRole("navigation",{name:"Code Builder challenges"})).toBeInTheDocument();
+    saveProgress(student, { ...freshProgress(), activity: "quiz", quizIndex: 20, answers: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`q${i + 1}`, 0])) });
+    mount(); fireEvent.click(screen.getByRole("button", { name: /OPEN THE SWITCHYARD/ }));
+    expect(screen.getByRole("navigation", { name: "Switchyard levels" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "First Switch" })).toBeInTheDocument();
   });
 
-  it("resumes the quiz from its introduction without losing saved answers",()=>{
-    saveProgress(student,{...freshProgress(),labVisited:true,activity:"quiz-intro",quizIndex:4,answers:{q1:1,q2:0,q3:2,q4:3}});
-    mount();fireEvent.click(screen.getByRole("button",{name:"RESUME QUIZ"}));
+  it("resumes the quiz from its introduction without losing saved answers", () => {
+    saveProgress(student, { ...freshProgress(), activity: "quiz-intro", quizIndex: 4, answers: { q1: 1, q2: 0, q3: 2, q4: 3 } });
+    mount(); fireEvent.click(screen.getByRole("button", { name: "RESUME QUIZ" }));
     expect(saved().quizIndex).toBe(4);
     expect(screen.getByText(/QUESTION 5 \/ 20/)).toBeInTheDocument();
-  });
-
-  it("changes grades by quarter points and restores the fractional grade after reentry",()=>{
-    const page=mount();fireEvent.click(screen.getByRole("button",{name:/IF \/ ELSE Lab.*Open stage/}));
-    fireEvent.click(screen.getByRole("button",{name:"START LIVE FLOW"}));
-    fireEvent.click(screen.getByRole("button",{name:"Increase grade"}));
-    expect(screen.getByRole("slider",{name:"grade"})).toHaveValue("5.25");
-    fireEvent.click(screen.getByRole("button",{name:"Decrease grade"}));
-    expect(screen.getByRole("slider",{name:"grade"})).toHaveValue("5");
-    fireEvent.click(within(screen.getByRole("group",{name:"Try the edge"})).getByRole("button",{name:"6.75"}));
-    expect(page.container.querySelector(".lab-code")?.textContent).toContain("double grade = 6.75;");
-    page.unmount();mount();fireEvent.click(screen.getByRole("button",{name:"START LIVE FLOW"}));
-    expect(screen.getByRole("slider",{name:"grade"})).toHaveValue("6.75");
-    fireEvent.click(screen.getByRole("button",{name:"Increase grade"}));
-    expect(screen.getByRole("slider",{name:"grade"})).toHaveValue("7");
-    fireEvent.change(screen.getByRole("slider",{name:"grade"}),{target:{value:10}});
-    expect(screen.getByRole("button",{name:"Increase grade"})).toBeDisabled();
   });
 });

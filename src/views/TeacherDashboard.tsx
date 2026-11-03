@@ -7,7 +7,7 @@ import { fetchClassMathlerProgress, fetchClassMathlerScores } from "../lib/basic
 import type { MathlerProgressRow, MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_TICKETS } from "../lib/finalProjectSync";
+import { FINAL_LEVELS } from "../lib/finalProjectSync";
 import { supabase } from "../lib/supabase";
 import {
   BOSS_TOTAL,
@@ -48,7 +48,7 @@ const SORTS: { key: SortMode; label: string }[] = [
 const AUTO_REFRESH_MS = 20_000;
 const CLOCK_MS = 15_000;
 const MATHLER_STEPS = ["Translate", "Warm up", "Mathler game"];
-const FINAL_STAGES = ["IF / ELSE Lab", "Shadow Feed"];
+const FINAL_STAGES = ["Quiz", "Switchyard"];
 
 async function fetchDashboardData(): Promise<DashboardData> {
   const [rows, scores, steps] = await Promise.all([
@@ -154,7 +154,7 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
   const selected = students.find((item) => item.student.login === selectedLogin) ?? null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "overall_pct", "mathler_pct", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_pct", "final_live_flows", "final_quiz_right", "final_quiz_answered", "final_builder", "final_policies", "final_report", "final_xp", "final_reflection", "last_active"];
+    const header = ["name", "login", "class", "group", "overall_pct", "mathler_pct", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_pct", "final_quiz_right", "final_quiz_answered", "final_switchyard_levels", "final_switchyard_stars", "final_xp", "last_active"];
     const lines = filtered.map((item) => {
       const { mathler, final } = item;
       const record = final.record;
@@ -177,16 +177,13 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
         String(Math.round(final.share * 100)),
         ...(record
           ? [
-              `${record.flows}/${FINAL_FLOWS}`,
               String(record.quizRight),
               String(record.quizAnswered),
-              `${record.built.length}/${FINAL_TICKETS}`,
-              `${record.policies}/${FINAL_POLICIES}`,
-              record.reportDone ? "yes" : "no",
+              `${record.levels.length}/${FINAL_LEVELS}`,
+              String(record.stars),
               String(record.xp),
-              record.reflection,
             ]
-          : Array.from({ length: 8 }, () => "")),
+          : Array.from({ length: 5 }, () => "")),
         item.lastActive ?? "",
       ]
         .map(csvCell)

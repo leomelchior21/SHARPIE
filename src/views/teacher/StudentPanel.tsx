@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_LEVELS, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, RUSH_ROUNDS, formatWhen, isActiveNow, percent, relativeTime } from "./progress";
 import type { ModuleKey, StudentProgress } from "./progress";
 import { ModuleBar, ProgressRing, stateOf } from "./visuals";
@@ -92,16 +92,14 @@ export function StudentPanel({ progress, now, onClose }: StudentPanelProps) {
         <Section module="final" title="MODULE 08 · FINAL PROJECT" share={final.share} note={record?.updatedAt ? `updated ${formatWhen(record.updatedAt)}` : "not opened"}>
           {record ? (
             <>
-              <Step label="01 · LIVE FLOW" share={record.flows / FINAL_FLOWS} value={`${record.flows} / ${FINAL_FLOWS} tickets`} />
-              <Step label="01 · QUIZ" share={record.quizAnswered / FINAL_QUESTIONS} value={`${record.quizRight} right · ${record.quizAnswered} / ${FINAL_QUESTIONS} answered`} />
-              <Step label="01 · BUILDER" share={record.built.length / FINAL_TICKETS} value={`${record.built.length} / ${FINAL_TICKETS} shipped`} />
-              <Step label="02 · SHADOW FEED" share={final.parts[1]} value={`${record.policies} / ${FINAL_POLICIES} policies${record.reportDone ? " · REPORT ✓" : ""}`} />
+              <Step label="01 · QUIZ" share={final.parts[0]} value={`${record.quizRight} right · ${record.quizAnswered} / ${FINAL_QUESTIONS} answered`} />
+              <Step label="02 · SWITCHYARD" share={final.parts[1]} value={`${record.levels.length} / ${FINAL_LEVELS} levels · ${record.stars}★`} />
               {record.quizMissed.length > 0 && (
                 <p className="tdb-note">
                   Quiz to review: <b>{record.quizMissed.map((n) => `Q${n}`).join(" · ")}</b>
                 </p>
               )}
-              {record.built.length > 0 && record.built.length < FINAL_TICKETS && <p className="tdb-note">Builder tickets shipped: {record.built.join(", ")}</p>}
+              {record.levels.length > 0 && record.levels.length < FINAL_LEVELS && <p className="tdb-note">Switchyard levels shipped: {record.levels.join(", ")}</p>}
               {record.reflection.trim() && (
                 <blockquote className="tdb-reflection">
                   <small>WHITE HAT REFLECTION</small>

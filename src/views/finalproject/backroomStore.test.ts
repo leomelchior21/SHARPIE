@@ -25,9 +25,9 @@ describe("Backrooms Run device save", () => {
   });
 
   it("moves Backrooms out of an older Final Project save once, keeping the rest", () => {
-    localStorage.setItem(storageKey("ana"), JSON.stringify({ ...freshProgress(), best: 4, built: [0], backroom: { bestXp: 55, gates: 9, operators: [">", "<=", ">", "bad"], coach: ["steer", "bogus", "energy"], levels: [3, 2, 1, 0], layout: 3, skills: { ">": { right: 4, wrong: 1 }, bad: { right: 1, wrong: 0 }, "&&": { right: -3, wrong: 2.7 } } } }));
+    localStorage.setItem(storageKey("ana"), JSON.stringify({ ...freshProgress(), best: 4, yardShipped: [0], backroom: { bestXp: 55, gates: 9, operators: [">", "<=", ">", "bad"], coach: ["steer", "bogus", "energy"], levels: [3, 2, 1, 0], layout: 3, skills: { ">": { right: 4, wrong: 1 }, bad: { right: 1, wrong: 0 }, "&&": { right: -3, wrong: 2.7 } } } }));
     const { progress } = loadProgress("ana");
-    expect(progress.built).toEqual([0]);
+    expect(progress.yardShipped).toEqual([0]);
     expect(progress).not.toHaveProperty("backroom");
     expect(progress).not.toHaveProperty("best");
     expect(xp(progress)).toBe(30);

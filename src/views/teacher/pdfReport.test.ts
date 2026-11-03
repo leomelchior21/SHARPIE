@@ -24,7 +24,7 @@ const students = buildClassProgress(
     row("grace", "Grace Hopper", "9B", {
       updatedAt: "2026-10-26T11:00:00Z",
       finalProject: {
-        xp: 640, flows: 3, quizAnswered: 20, quizRight: 17, quizMissed: [4], built: [1, 2], policies: 4, reportDone: true,
+        xp: 640, quizAnswered: 20, quizRight: 17, quizMissed: [4], levels: [1, 2], stars: 5, policies: 4, reportDone: true,
         reflection: "Regras “justas” — nem sempre são.", updatedAt: "2026-10-26T11:00:00Z",
       },
     }),

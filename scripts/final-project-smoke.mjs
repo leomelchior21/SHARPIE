@@ -19,7 +19,8 @@ const evaluate=async expression=>{const r=await send('Runtime.evaluate',{express
 const wait=async(expression,timeout=10000)=>{const start=Date.now();while(Date.now()-start<timeout){if(await evaluate(`Boolean(${expression})`))return;await delay(120);}throw new Error(`Timed out: ${expression}`);};
 const click=async text=>{await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)});if(!b)throw new Error('Button missing: '+${JSON.stringify(text)});if(b.disabled)throw new Error('Button disabled: '+${JSON.stringify(text)});b.click();})()`);await delay(120);};
 const seed=async patch=>{await evaluate(`localStorage.setItem(finalQA.storageKey('final-qa'),JSON.stringify({...finalQA.freshProgress(),...${JSON.stringify(patch)}})); window.__qaReloading=true`);await send('Page.navigate',{url:fixture});await wait('!window.__qaReloading && !!document.querySelector(".fp-header") && !!window.finalQA');await delay(150);};
-const core={best:3,transition:true,flowPaths:{0:['true','false'],1:['true','false'],2:['true','false']},built:[0,1,2]};
+// Every quiz question answered: the Switchyard game is open.
+const core={transition:true,quizIndex:20,answers:Object.fromEntries([1,0,2,3,1,2,1,0,2,1,2,1,2,0,3,1,2,0,3,0].map((answer,i)=>[`q${i+1}`,answer]))};
 const range=async(label,value)=>{await evaluate(`(()=>{const input=document.querySelector('input[aria-label="${label}"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));})()`);await delay(80);};
 const saved=()=>evaluate(`JSON.parse(localStorage.getItem(finalQA.storageKey('final-qa')))`);
 const energyTo=async target=>{
@@ -45,79 +46,39 @@ try{
   await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});
   await send('Page.navigate',{url:fixture});await wait('!!window.finalQA && !!document.querySelector(".fp-header")');
   if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_BACKROOM_ONLY){
-  await seed({});assert.equal(await evaluate('document.querySelectorAll(".fp-stage:disabled").length'),1);
-  if(!navigationOnly){await pressLabel('Teacher preview');await evaluate('document.querySelectorAll(".fp-stage")[2].click()');await wait('!!document.querySelector(".fp-shadow-layout")');await pressLabel('Exit teacher preview');assert.equal((await saved()).activity,'overview');}
-  else assert.equal(await evaluate('document.querySelectorAll(".fp-header button").length'),1);
-  await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".lab-intro")');
-  assert.equal((await saved()).labVisited,true);
-  await click('BACK');await wait('!!document.querySelector(".lab-home")');
-  assert.deepEqual(await evaluate('[...document.querySelectorAll(".lab-station")].map(b=>b.getAttribute("aria-label"))'),['Live Flow','Quiz','Code Builder']);
-  await pressLabel('Live Flow');
-  console.log('PASS first visit Live Flow, lab home with three stations on reentry, and immediate stage access');
-  for(let i=0;i<3;i++){
-    await click('START LIVE FLOW');await wait('!!document.querySelector(".fp-flow-svg")');
-    if(i===0){await pressLabel('Increase grade');assert.equal(await evaluate('Number(document.querySelector(".lab-stepper output").textContent)'),5.25);}
-    const label=['grade','age','views'][i];
-    for(const [j,value] of [[6.75,7],[12,13],[1000,1100]][i].entries()){
-      await range(label,value);await click('PREDICT & RUN');await evaluate('document.querySelector(".lab-predict .is-true").click()');
-      const branch=(i===0?value>=7:i===1?value<=12:value>1000)?'true':'false';
-      await wait('!!document.querySelector(\'[data-segment="'+branch+'-end"]\')');
-      assert.equal(await evaluate('document.querySelectorAll(".fp-wire-fill").length'),4);
-      if(j===0)await wait('[...document.querySelectorAll("button")].some(b=>b.textContent.trim()==="PREDICT & RUN"&&!b.disabled)');
-      else await wait('!!document.querySelector(".lab-done")');
-    }
-    await click(i===2?'TAKE THE QUIZ →':'NEXT TICKET →');
-  }
-  assert.deepEqual((await saved()).flowPaths,{0:['false','true'],1:['true','false'],2:['false','true']});
-  await wait('!!document.querySelector(".lab-quiz-intro")');
-  await click('BACK');await wait('!!document.querySelector(".lab-home")');await pressLabel('Quiz');
+  // Shadow Feed is hidden for now: the overview shows Backrooms Run and the Switchyard.
+  await seed({});assert.equal(await evaluate('document.querySelectorAll(".fp-stage").length'),2);assert.equal(await evaluate('document.querySelectorAll(".fp-stage:disabled").length'),0);
+  if(navigationOnly)assert.equal(await evaluate('document.querySelectorAll(".fp-header button").length'),1);
+  await evaluate('document.querySelectorAll(".fp-stage")[1].click()');await wait('!!document.querySelector(".sy-hub")');
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".sy-card")].map(b=>b.getAttribute("aria-label"))'),['Quiz','The Switchyard']);
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="The Switchyard"]\').disabled'),true);
+  await pressLabel('Quiz');await wait('!!document.querySelector(".lab-quiz-intro")');
   assert.match(await evaluate('document.querySelector(".lab-quiz-intro h1").textContent'),/Read it/);
   await click('START QUIZ');await wait('!!document.querySelector(".lab-answers")');
-  console.log('PASS predicted flow branches, bold selected wires, worker output, the quiz next and from the lab home');
+  console.log('PASS Switchyard hub: the quiz first, the yard locked until every question is answered');
   if(!navigationOnly){
-  await seed({...core,activity:'builder'});
-  for(let index=0;index<10;index++){
-    await evaluate(`document.querySelectorAll('.lab-ticket-group button')[${index}].click()`);await delay(100);
-    const c=await evaluate(`finalQA.challenges[${index}]`);
-    if(c.level.predict){await evaluate(`document.querySelector('[aria-label="Predict the output"] button').click()`);await delay(50);}
-    if(c.level.repair.length){await click('RUN TESTS');await wait('!!document.querySelector(".lab-coach.is-wrong")');}
-    const lines=['decl',`if (${c.condition})`,`Console.WriteLine(${JSON.stringify(c.yes)});`,'else',`Console.WriteLine(${JSON.stringify(c.no)});`];
-    const open=[0,1,2,3,4].filter(n=>!c.level.given.includes(n));
-    for(const n of open){await evaluate(`(()=>{const s=document.querySelector('[data-slot="${n}"]');if(s.classList.contains('is-filled'))s.click();})()`);await delay(50);}
-    for(const n of open){
-      await evaluate(`document.querySelector('[data-slot="${n}"]').click()`);await delay(50);
-      await evaluate(`(()=>{const b=[...document.querySelectorAll('.lab-pieces button')].find(b=>b.dataset.line===${JSON.stringify(lines[n])});if(!b||b.disabled)throw new Error('Missing code piece');b.click();})()`);await delay(50);
-    }
-    await click('RUN TESTS');await wait('!!document.querySelector(".lab-done") && document.querySelectorAll(".lab-spec tr.is-pass").length===document.querySelectorAll(".lab-spec tbody tr").length');
-  }
-  assert.equal((await saved()).built.length,10);console.log('PASS building all ten programs from the code bank, with prediction and debugging, and real execution');
-  await seed({...core,activity:'quiz'});
+  await seed({transition:true,activity:'quiz'});
   for(let index=0;index<20;index++){
     const answer=await evaluate(`finalQA.questions[${index}].answer`);await evaluate(`document.querySelectorAll('.lab-answers button')[${answer}].click()`);await delay(60);await click(index===19?'SEE RESULTS':'NEXT');
     if(index%5===4&&index<19){await wait('!!document.querySelector(".lab-checkpoint")');await evaluate('document.querySelector(".lab-checkpoint .fp-primary").click()');await delay(60);}
   }
   assert.equal((await saved()).mastered.length,20);assert.equal((await saved()).quizIndex,20);await send('Page.reload');await wait('!!document.querySelector(".lab-review")');console.log('PASS twenty answers, saved quiz results and resume');
-  await seed({...core,activity:'shadow'});
-  for(let index=0;index<4;index++){
-    assert.equal(await evaluate('document.querySelector("fieldset").disabled'),true);
-    await click('01 · RUN BROKEN SYSTEM');await wait('!document.querySelector("fieldset").disabled && ![...document.querySelectorAll("button")].some(b=>b.textContent==="RUNNING…")');
-    const m=await evaluate(`finalQA.missions[${index}]`);
-    for(let n=0;n<2;n++){
-      await evaluate(`document.querySelectorAll('.fp-patch-controls .fp-toggle button')[${n}].click()`);await delay(50);
-      await evaluate(`[...document.querySelectorAll('.fp-patch-controls .fp-pieces button')].find(b=>b.textContent===${JSON.stringify(m.repaired[n])}).click()`);await delay(50);
-    }
-    await click('03 · RUN SIMULATION');await wait('document.querySelector(".fp-feedback")?.textContent.includes("PATCH SUCCESSFUL")');
-    await click(index===3?'GENERATE AUDIT REPORT →':'NEXT CASE →');
-  }
-  await wait('!!document.querySelector(".fp-report")');assert.equal((await saved()).repaired.length,4);
-  await evaluate(`(()=>{const t=document.querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(t,'A rule can run correctly while hiding legitimate criticism.');t.dispatchEvent(new Event('input',{bubbles:true}));})()`);await delay(100);
-  await send('Page.reload');await wait('!!document.querySelector(".fp-report")');assert.match(await evaluate('document.querySelector("textarea").value'),/legitimate criticism/);
-  await send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:output});await click('↓ Export image');await delay(500);assert(existsSync(path.join(output,'Sharpie-White-Hat-Audit.svg')));
-  const pdf=await send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});writeFileSync(path.join(output,'audit-report.pdf'),Buffer.from(pdf.data,'base64'));console.log('PASS broken systems, four repairs, feed updates, reflection reload, SVG/PDF exports');
-
+  // The yard through the real C# engine: level 1 from code blocks, then the pool written from scratch.
+  await seed({...core,activity:'yard'});
+  for(const line of ['decl','if (age <= 12)','Console.WriteLine("Child discount");','else','Console.WriteLine("Regular ticket");'])await evaluate(`document.querySelector(${JSON.stringify(`.sy-bank [data-line='${line}']`)}).click()`);
+  await click('▶ RUN THE TIMETABLE');await wait('!!document.querySelector(".sy-predict")');await evaluate('document.querySelector(".sy-predict .is-true").click()');
+  await wait('!!document.querySelector(".sy-shipped")',40000);assert.equal(await evaluate('document.querySelectorAll(".sy-board li.is-ok").length'),3);
+  await seed({...core,activity:'yard',yardLevel:9,yardShipped:[0,1,2,3,4,5,6,7,8],yardStars:[3,3,3,3,3,3,3,3,3,0]});
+  await evaluate(`(()=>{const t=document.querySelector('.sy-write textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(t,${JSON.stringify('if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}')});t.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await click('PICK YOUR TIMETABLE →');
+  for(const [train,way,times] of [[1,'higher',15],[2,'higher',6],[3,'lower',3]])for(let n=0;n<times;n++)await pressLabel(`Train ${train} ${way}`);
+  await click('▶ RUN MY TIMETABLE');await wait('document.querySelector(".sy-verdict")?.textContent.includes("proves the edge")',40000);
+  await click('▶ START RUSH HOUR');await wait('!!document.querySelector(".sy-shipped")',90000);
+  assert.equal((await saved()).yardShipped.length,10);
+  console.log('PASS Switchyard level 1 from blocks and level 10 typed, its timetable and rush hour, through the real C# engine');
   }
   }
-  if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_FLOW_ONLY){
+  if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_YARD_ONLY){
   // Backrooms Run keeps its own device save, apart from the Final Project one.
   await evaluate(`localStorage.removeItem('sharpie.backroom.v1.final-qa')`);
   await seed({activity:'matrix'});await startTutorial();
@@ -177,7 +138,7 @@ try{
   for(const size of [{name:'desktop',width:1366,height:900},{name:'ipad',width:1024,height:768},{name:'ipad-short',width:1024,height:694},{name:'phone',width:390,height:844}]){
     if(process.env.SHARPIE_QA_VIEWPORT&&process.env.SHARPIE_QA_VIEWPORT!==size.name)continue;
     await send('Emulation.setDeviceMetricsOverride',{width:size.width,height:size.height,deviceScaleFactor:1,mobile:false});
-    for(const activity of navigationOnly?['overview','matrix','lab','flow','quiz-intro']:process.env.SHARPIE_QA_HUB_ONLY?[]:process.env.SHARPIE_QA_OVERVIEW_ONLY?['overview']:process.env.SHARPIE_QA_BACKROOM_ONLY?['overview','matrix']:['overview','matrix','lab','flow','builder','quiz-intro','quiz','shadow','report']){
+    for(const activity of navigationOnly?['overview','matrix','lab','quiz-intro']:process.env.SHARPIE_QA_HUB_ONLY?[]:process.env.SHARPIE_QA_OVERVIEW_ONLY?['overview']:process.env.SHARPIE_QA_BACKROOM_ONLY?['overview','matrix']:['overview','matrix','lab','yard','quiz-intro','quiz']){
       await seed({...core,activity,repaired:[0,1,2,3],observed:[0,1,2,3],completedAt:'2026-10-13T12:00:00Z'});
       if(activity==='matrix'){
         await startTutorial();await energyTo(75);
@@ -193,10 +154,6 @@ try{
         }
         if(size.name==='ipad-short'){await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});assert.equal(await evaluate('matchMedia("(prefers-reduced-motion: reduce)").matches'),true);}
       }
-      if(activity==='flow'){
-        const intro=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-flow-intro.png`),Buffer.from(intro.data,'base64'));checks.push(`${size.name}/flow-intro`);
-        await click('START LIVE FLOW');await click('PREDICT & RUN');await evaluate('document.querySelector(".lab-predict .is-false").click()');await wait('!!document.querySelector(\'[data-segment="false-end"]\')');await delay(650);
-      }
       if(activity==='quiz'){
         // Answers deal in after a pause; the layout checks then run on the taller feedback state.
         await delay(1300);const question=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-quiz-question.png`),Buffer.from(question.data,'base64'));checks.push(`${size.name}/quiz-question`);
@@ -206,19 +163,9 @@ try{
       const layout=await evaluate(`(()=>{const el=document.querySelector('.fp-content');const wide=[...document.querySelectorAll('.fp-content button')].filter(b=>{const r=b.getBoundingClientRect();return r.width&& (r.left < -1||r.right>innerWidth+1)}).map(b=>b.textContent);return {scroll:el.scrollWidth>el.clientWidth+2,wide,viewport:[innerWidth,innerHeight]};})()`);
       assert.equal(await evaluate('document.querySelector(".fp-header").getBoundingClientRect().height'),44);
       assert.equal(layout.scroll,false,`${size.name}/${activity} horizontal page overflow`);
-      // The IF / ELSE Lab is designed to fit the screen: no vertical scrolling outside phones.
-      if(size.name!=='phone'&&['lab','flow','builder','quiz-intro','quiz'].includes(activity))assert.equal(await evaluate('(()=>{const el=document.querySelector(".fp-content");return el.scrollHeight<=el.clientHeight+2&&document.scrollingElement.scrollHeight<=innerHeight+2})()'),true,`${size.name}/${activity} scrolls vertically`);assert.deepEqual(layout.wide,[],`${size.name}/${activity} clipped buttons`);
+      // The Switchyard is designed to fit the screen: no vertical scrolling outside phones.
+      if(size.name!=='phone'&&['lab','yard','quiz-intro','quiz'].includes(activity))assert.equal(await evaluate('(()=>{const el=document.querySelector(".fp-content");return el.scrollHeight<=el.clientHeight+2&&document.scrollingElement.scrollHeight<=innerHeight+2})()'),true,`${size.name}/${activity} scrolls vertically`);assert.deepEqual(layout.wide,[],`${size.name}/${activity} clipped buttons`);
       const shot=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-${activity}.png`),Buffer.from(shot.data,'base64'));checks.push(`${size.name}/${activity}`);
-      if(activity==='flow'&&size.name==='ipad-short'){
-        for(const flowIndex of [1,2]){
-          await seed({...core,activity:'flow',flowIndex});
-          await click('START LIVE FLOW');
-          await click('PREDICT & RUN');await evaluate(`document.querySelector(".lab-predict .is-${flowIndex===1?'true':'false'}").click()`);
-          await wait(`!!document.querySelector('[data-segment="${flowIndex===1?'true':'false'}-end"]')`);await delay(650);
-          assert(await evaluate('document.querySelector(".lab-col--chart").getBoundingClientRect().bottom<=innerHeight'),`Flow ${flowIndex+1} output below tablet viewport`);
-          const extra=await send('Page.captureScreenshot',{format:'png'});writeFileSync(path.join(output,`${size.name}-flow-${flowIndex+1}.png`),Buffer.from(extra.data,'base64'));checks.push(`${size.name}/flow-${flowIndex+1}`);
-        }
-      }
       await send('Emulation.setEmulatedMedia',{features:[]});
     }
     await send('Page.navigate',{url:`${base}/scripts/final-project-preview.html?hub`});await wait('!!document.querySelector(".module-grid-six")');

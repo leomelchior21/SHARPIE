@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, Check, Flame, RotateCcw, Trophy, Wrench, X, Zap } from "lucide-react";
+import { ArrowRight, Check, Flame, ListChecks, RotateCcw, TrainFront, Trophy, X, Zap } from "lucide-react";
 import { questions, roundSize, rounds } from "./content";
 import { award, type Progress, type Update } from "./progress";
 import { LabCode } from "./LabParts";
@@ -10,7 +10,7 @@ const letter = (index: number) => String.fromCharCode(65 + index);
 const roundOf = (index: number) => Math.floor(index / roundSize);
 const roundItems = (round: number) => questions.slice(round * roundSize, (round + 1) * roundSize);
 
-export function Quiz({ progress: p, update, onBuilder }: { progress: Progress; update: Update; onBuilder: () => void }) {
+export function Quiz({ progress: p, update, onYard }: { progress: Progress; update: Update; onYard: () => void }) {
   const [review, setReview] = useState(p.quizIndex >= questions.length);
   const [feedback, setFeedback] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
@@ -59,10 +59,10 @@ export function Quiz({ progress: p, update, onBuilder }: { progress: Progress; u
         <div>
           <small>QUIZ · SAVED RESULTS</small>
           <h1>{right === questions.length ? "Perfect score!" : `${right} of ${questions.length} right.`}</h1>
-          <p>{firstWrong >= 0 ? "Red tiles are worth another look. Practice never removes XP." : "Next station: build the rules yourself."}</p>
+          <p>{firstWrong >= 0 ? "Red tiles are worth another look. Practice never removes XP." : "Your yard license is ready. Next: the Switchyard."}</p>
         </div>
         <div className="lab-review-actions">
-          {firstOpen < 0 && <button className="fp-primary is-cue" onClick={onBuilder}><Wrench size={14} /> CODE BUILDER →</button>}
+          {firstOpen < 0 && <button className="fp-primary is-cue" onClick={onYard}><TrainFront size={14} /> OPEN THE SWITCHYARD →</button>}
           {firstOpen >= 0 && <button className="fp-primary is-cue" onClick={() => practice(firstOpen)}>RESUME QUIZ</button>}
           {firstWrong >= 0 && <button onClick={() => practice(firstWrong)}><RotateCcw size={14} /> Practice mistakes</button>}
         </div>
@@ -137,5 +137,27 @@ export function Quiz({ progress: p, update, onBuilder }: { progress: Progress; u
         </div>}
       </div>
     </div>
+  </section>;
+}
+
+export function QuizIntro({ progress: p, onStart }: { progress: Progress; onStart: () => void }) {
+  const index = p.quizIndex;
+  return <section className="lab-quiz-intro">
+    <small><ListChecks size={14} /> SWITCHYARD · STATION 01 · QUIZ</small>
+    <h1>Read it. Say what it prints.</h1>
+    <p>Read the code first. The answers show up a moment later. Answer all 20 to open the Switchyard.</p>
+    <ol className="lab-rounds">{rounds.map((round, r) => {
+      const items = questions.slice(r * roundSize, (r + 1) * roundSize);
+      const answered = items.filter((q) => p.answers[q.id] !== undefined).length;
+      const right = items.filter((q) => p.answers[q.id] === q.answer).length;
+      const now = index >= r * roundSize && index < (r + 1) * roundSize;
+      return <li key={round.name} className={`${now ? "is-now" : ""} ${answered === items.length ? "is-done" : ""}`}>
+        <small>ROUND {r + 1}</small>
+        <strong>{round.name}</strong>
+        <span>{round.focus}</span>
+        <i>{answered === items.length ? <><Check size={13} strokeWidth={3} /> {right} / {items.length}</> : now && answered ? `${answered} / ${items.length}` : `${items.length} questions`}</i>
+      </li>;
+    })}</ol>
+    <button className="fp-primary lab-cta is-cue" onClick={onStart}>{index >= questions.length ? "SEE RESULTS" : index > 0 ? "RESUME QUIZ" : "START QUIZ"}</button>
   </section>;
 }

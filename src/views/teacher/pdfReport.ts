@@ -5,7 +5,7 @@ import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
 import { CLASS_CODES } from "../../data/roster";
 import type { ClassCode } from "../../data/roster";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_LEVELS, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, MODULES, RUSH_ROUNDS, formatWhen, summarizeClass } from "./progress";
 import type { ClassSummary, ModuleKey, StudentProgress } from "./progress";
 
@@ -255,7 +255,7 @@ function overviewPage(doc: jsPDF, students: StudentProgress[], generated: string
   setText(doc, 7.2, SOFT);
   doc.text(
     doc.splitTextToSize(
-      `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of the IF / ELSE Lab (Live Flow, Quiz, Builder) and Shadow Feed (policies + report). Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their submitted code.`,
+      `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of the Switchyard quiz (questions answered) and the Switchyard game (levels shipped). Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their submitted code.`,
       CONTENT_W - 8,
     ),
     MARGIN + 4,
@@ -272,8 +272,8 @@ function stepText(item: StudentProgress) {
     translate: mathler.steps ? `${mathler.warmup}/${WARMUP_TOTAL} · ${mathler.rushDone ? "rush ok" : `rush ${mathler.rushRounds}/${RUSH_ROUNDS}`}` : "-",
     warmUp: mathler.steps ? `${mathler.target}/${TARGET_PUZZLES.length}` : "-",
     game: mathler.game && mathler.parts[2] > 0 ? `TA ${mathler.game.time_attack_best} · SV ${mathler.game.best_streak}` : "-",
-    lab: record ? `${record.flows}/${FINAL_FLOWS} · ${record.quizAnswered}/${FINAL_QUESTIONS} · ${record.built.length}/${FINAL_TICKETS}` : "-",
-    shadow: record ? `${record.policies}/${FINAL_POLICIES}${record.reportDone ? " · rep." : ""}` : "-",
+    quiz: record ? `${record.quizAnswered}/${FINAL_QUESTIONS} · ${record.quizRight} right` : "-",
+    yard: record ? `${record.levels.length}/${FINAL_LEVELS} · ${record.stars} stars` : "-",
   };
 }
 
@@ -310,7 +310,7 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
   autoTable(doc, {
     startY: 38,
     margin: { left: MARGIN, right: MARGIN, top: 18, bottom: 12 },
-    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Lab flow·quiz·build", "Shadow", "Final project", "Overall", "Last active"]],
+    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Quiz", "Switchyard", "Final project", "Overall", "Last active"]],
     body: students.map((item) => {
       const text = stepText(item);
       return [
@@ -321,8 +321,8 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
         text.game,
         pct(item.mathler.share),
         `${item.bosses.passed.length}/${BOSS_TOTAL}`,
-        text.lab,
-        text.shadow,
+        text.quiz,
+        text.yard,
         pct(item.final.share),
         pct(item.overall),
         item.lastActive ? formatWhen(item.lastActive) : "never",
@@ -453,17 +453,15 @@ function studentPage(doc: jsPDF, item: StudentProgress) {
 
   moduleCard(doc, MARGIN + (cardW + 5) * 2, cardY, cardW, cardH, "final", "MODULE 08 · FINAL PROJECT", final.share, record
     ? [
-        { label: "01 · LIVE FLOW", value: `${record.flows}/${FINAL_FLOWS} tickets`, share: record.flows / FINAL_FLOWS },
-        { label: "01 · QUIZ", value: `${record.quizRight} right · ${record.quizAnswered}/${FINAL_QUESTIONS} answered`, share: record.quizAnswered / FINAL_QUESTIONS },
-        { label: "01 · BUILDER", value: `${record.built.length}/${FINAL_TICKETS} shipped`, share: record.built.length / FINAL_TICKETS },
-        { label: "02 · SHADOW FEED", value: `${record.policies}/${FINAL_POLICIES} policies · report ${record.reportDone ? "done" : "not yet"}`, share: final.parts[1] },
+        { label: "01 · QUIZ", value: `${record.quizRight} right · ${record.quizAnswered}/${FINAL_QUESTIONS} answered`, share: final.parts[0] },
+        { label: "02 · SWITCHYARD", value: `${record.levels.length}/${FINAL_LEVELS} levels · ${record.stars} stars`, share: final.parts[1] },
       ]
     : [{ label: "STATUS", value: "not opened yet", share: 0 }]);
 
   let y = cardY + cardH + 7;
   const notes: string[] = [];
   if (record?.quizMissed.length) notes.push(`Quiz to review: ${record.quizMissed.map((n) => `Q${n}`).join(", ")}`);
-  if (record && record.built.length > 0 && record.built.length < FINAL_TICKETS) notes.push(`Builder tickets shipped: ${record.built.join(", ")}`);
+  if (record && record.levels.length > 0 && record.levels.length < FINAL_LEVELS) notes.push(`Switchyard levels shipped: ${record.levels.join(", ")}`);
   const inProgress = finalBosses.filter((boss) => !bosses.passed.includes(boss.id) && (bosses.attempts[String(boss.id)] ?? 0) > 0);
   if (inProgress.length) notes.push(`Bosses tried but not passed: ${inProgress.map((boss) => `${boss.id} ${boss.title}`).join(", ")}`);
   if (notes.length) {

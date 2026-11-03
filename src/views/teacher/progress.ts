@@ -3,7 +3,7 @@ import { finalBosses } from "../../data/finalBosses";
 import type { ClassCode, RosterStudent } from "../../data/roster";
 import type { MathlerProgressRow, MathlerScoreRow } from "../../lib/basicOps/survivalLeaderboard";
 import type { ClassProgressRow } from "../../lib/bossSync";
-import { FINAL_FLOWS, FINAL_POLICIES, FINAL_QUESTIONS, FINAL_TICKETS } from "../../lib/finalProjectSync";
+import { FINAL_LEVELS, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 
 // One reading of every student's progress, shared by the dashboard and the
@@ -44,7 +44,7 @@ export type StudentProgress = {
   };
   final: {
     record: FinalProjectSyncState | null;
-    /** Share of each stage: IF / ELSE Lab, Shadow Feed. Backrooms Run stays on the student's device. */
+    /** Share of each stage: the Switchyard quiz and the Switchyard game. Backrooms Run stays on the student's device and Shadow Feed is hidden. */
     parts: [number, number];
     stagesDone: number;
     share: number;
@@ -104,8 +104,8 @@ export function buildStudentProgress(
   const record = row.finalProject ?? null;
   const finalParts: [number, number] = record
     ? [
-        clampShare((record.flows / FINAL_FLOWS + record.quizAnswered / FINAL_QUESTIONS + record.built.length / FINAL_TICKETS) / 3),
-        record.reportDone ? 1 : clampShare(record.policies / (FINAL_POLICIES + 1)),
+        clampShare(record.quizAnswered / FINAL_QUESTIONS),
+        clampShare(record.levels.length / FINAL_LEVELS),
       ]
     : [0, 0];
 
