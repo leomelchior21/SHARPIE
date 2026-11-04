@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Blocks, Check, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, X } from "lucide-react";
+import { ArrowRight, Blocks, Check, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
 import type { Input } from "../content";
 import { award, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
@@ -9,6 +9,7 @@ import { buildYard, dialLine, expected, firstWrong, provesEdge, readDial, readWr
 import { runYard, warmYard } from "./runYard";
 import { TrackDiagram, type TrainState } from "./TrackDiagram";
 import { WorldArt } from "./WorldArt";
+import { Fx, playFx, setSoundOn, soundOn, type FxKind, type FxState } from "./Fx";
 import "./switchyard.css";
 
 const slotNames = ["Create the variable", "Test a condition", "TRUE action", "ELSE path", "ELSE action"];
@@ -110,6 +111,18 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
   const [stage, setStage] = useState<"write" | "timetable">("write");
   const [picks, setPicks] = useState<number[]>([10, 20, 30]);
   const trip = useRef(0);
+  // Feedback: a stamp per train on the stage, a big one over the screen at the end of a run, and one for the "why?" answer.
+  const [fx, setFx] = useState<FxState | null>(null);
+  const [bigFx, setBigFx] = useState<FxState | null>(null);
+  const [whyFx, setWhyFx] = useState<FxState | null>(null);
+  const [shakes, setShakes] = useState(0);
+  const [whyShakes, setWhyShakes] = useState(0);
+  const [won, setWon] = useState(false);
+  const [sound, setSound] = useState(soundOn);
+  const fxId = useRef(0);
+  const showTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(showTimer.current), []);
+  const burst = (set: (value: FxState) => void, kind: FxKind, text: string) => { fxId.current += 1; set({ id: fxId.current, kind, text }); playFx(kind); };
   const { run, busy, error } = useExecution();
   const [slow] = useState(() => !reducedMotion());
 
@@ -127,7 +140,11 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
   const setLines = (next: Line[]) => save(next);
 
   const ship = (stars: number) => {
-    setShipped(true);
+    // The celebration plays first; the "why?" question opens once it has landed.
+    setWon(true);
+    burst(setBigFx, "win", "ALL TESTS PASS!");
+    window.clearTimeout(showTimer.current);
+    showTimer.current = window.setTimeout(() => setShipped(true), slow ? 1500 : 300);
     update((current) => award({
       ...current,
       yardShipped: [...new Set([...current.yardShipped, index])].sort((a, b) => a - b),
@@ -147,9 +164,10 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       return;
     }
     const guess = side && spot.side ? side === spot.side ? `You called train ${String(level.spotlight)} right. ` : `You said train ${String(level.spotlight)} would take the ${side === "true" ? "TRUE" : "ELSE"} track; it took the other one. ` : "";
-    if (bad.length) { setVerdict({ tone: "wrong", text: `${guess}${describe(bad[0])}` }); return; }
+    const failed = () => { burst(setBigFx, "fail", "TEST FAILED"); setShakes((n) => n + 1); };
+    if (bad.length) { setVerdict({ tone: "wrong", text: `${guess}${describe(bad[0])}` }); failed(); return; }
     const still = firstWrong(level, yard);
-    if (still !== null) { setVerdict({ tone: "wrong", text: `${guess}The timetable passed, but train ${String(still)} would still go to the wrong place. Check the edge.` }); return; }
+    if (still !== null) { setVerdict({ tone: "wrong", text: `${guess}The tests passed, but train ${String(still)} would still go to the wrong place. Check the edge.` }); failed(); return; }
     setVerdict({ tone: "done", text: `${guess}Every train reached the right station.` });
     ship(starsFor(runs + 1));
   };
@@ -183,8 +201,11 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
         if (where.stop === "station") setArrived(where.side);
       }
       const want = expected(level, value);
-      rows.push({ value, output, ok: where.stop === "station" && output === want, route: where, want });
+      const ok = where.stop === "station" && output === want;
+      rows.push({ value, output, ok, route: where, want });
       setBoard([...rows]);
+      burst(setFx, ok ? "good" : "bad", ok ? "✓ RIGHT" : "✗ WRONG");
+      if (!ok) setShakes((n) => n + 1);
       await waitStep(signal, 650 * pace);
     }
     finish(rows, mode, side);
@@ -219,15 +240,15 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       : shippedBefore ? "Shipped. Replay any level, or move on to the next one."
         : !ran ? (level.incident ? "Incident report on your desk. Run the yard as it is and watch what happens." : "Somebody built this yard before you. Run it as it is and watch where the trains go.")
           : writing ? (stage === "write" ? written!.next : proof ?? "Your three trains prove the edge. Run them.")
-            : level.tool === "blocks" ? (target === undefined ? "Program complete. Run the timetable." : `Tap the code for line ${target + 1}${level.labels ? `: ${slotNames[target].toLowerCase()}` : ""}.`)
-              : level.tool === "ifs" ? (lines[1] ? "Run the timetable, or pick another test." : "Pick the if line for the switch.")
+            : level.tool === "blocks" ? (target === undefined ? "Program complete. Run the tests." : `Tap the code for line ${target + 1}${level.labels ? `: ${slotNames[target].toLowerCase()}` : ""}.`)
+              : level.tool === "ifs" ? (lines[1] ? "Run the tests, or pick another switch test." : "Pick the if line for the switch.")
                 : `Set the sensor: the operator${level.dialRange ? " and the number" : ""}${level.swap ? ", or swap the stations" : ""}.`;
   const tone = error ? "wrong" : verdict?.tone;
 
   const runLabel = !ran ? (level.incident ? "▶ WATCH THE INCIDENT" : "▶ RUN THE YARD AS IT IS")
-    : writing ? (stage === "write" ? "PICK YOUR TIMETABLE →" : "▶ RUN MY TIMETABLE")
-      : "▶ RUN THE TIMETABLE";
-  const canRun = !busy && !asking && !shipped && (writing ? (stage === "write" ? !!written?.complete : !!written?.complete && !proof) : true);
+    : writing ? (stage === "write" ? "PICK YOUR TESTS →" : "▶ RUN MY TESTS")
+      : "▶ RUN THE TESTS";
+  const canRun = !busy && !asking && !shipped && !won && (writing ? (stage === "write" ? !!written?.complete : !!written?.complete && !proof) : true);
 
   // Line 2 with its test marked true or false once the switch has decided.
   const showLine = (n: number, line: Line): ReactNode => {
@@ -319,7 +340,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
                   {level.swap && <button className="sy-swap" disabled={locked || shipped} onClick={() => setLines(swapStations(lines))}>⇅ SWAP STATIONS</button>}
                 </>
                   : stage === "timetable" ? <div className="sy-picks">
-                    <small><Clock3 size={15} /> Your timetable · three trains that prove the rule</small>
+                    <small><Clock3 size={15} /> Your tests · three trains that prove the rule</small>
                     <div>{picks.map((value, i) => <div key={i} className="sy-number">
                       <button aria-label={`Train ${i + 1} lower`} disabled={busy || value <= level.min} onClick={() => { setPicks(picks.map((v, j) => j === i ? v - 1 : v)); clear(); }}>−</button>
                       <output aria-label={`Train ${i + 1}`}>{value}</output>
@@ -330,25 +351,12 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
       </aside>
 
       <div className="sy-right">
-        <div className="sy-stage">
+        <div className={`sy-stage ${shakes ? `is-shake-${shakes % 2}` : ""}`}>
+          <Fx fx={fx} scope="stage" />
           <TrackDiagram yard={yard} train={train} lever={lever} readout={readout} arrived={arrived} duration={900 * (slow ? 1 : 0.2)} />
           <NumberLine level={level} yard={yard} trains={timetable} current={train?.value ?? null} />
           {/* The caption: what to do now, or what just happened. */}
           <p className={`sy-verdict ${tone ? `is-${tone}` : ""}`} role="status">{caption(hint)}</p>
-          {asking && <div className="sy-overlay sy-predict" role="group" aria-label="Predict the track">
-            <small>BEFORE IT RUNS</small>
-            <p>Train <b>{String(level.spotlight)}</b> is next. Which card will it reach?</p>
-            <div><button className="is-true" onClick={() => predict("true")}>▲ TRUE TRACK</button><button className="is-false" onClick={() => predict("false")}>▼ ELSE TRACK</button></div>
-          </div>}
-          {shipped && <div className="sy-overlay sy-shipped" role="dialog" aria-label="Level shipped">
-            <span className="sy-stamp">SHIPPED</span>
-            <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={28} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
-            <p className="sy-why-q">{level.why.question}</p>
-            <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
-              className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => setWhy(i)}>{level.why.options[i]}</button>)}</div>
-            {why !== null && <p className="sy-why-explain">{why === level.why.answer ? <><b>Right.</b> {level.why.explain} {level.note}</> : <><b>Not that one.</b> Read the trains on the board, then try again.</>}</p>}
-            {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={16} /></button>}
-          </div>}
         </div>
 
         <div className="sy-bottom">
@@ -357,8 +365,8 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
             <WorldArt level={level} value={trainValue} printed={printed} />
           </div>
           <div className="sy-desk">
-            <div className="sy-board" aria-label="Timetable">
-              <small><Clock3 size={15} /> Timetable</small>
+            <div className="sy-board" aria-label="Tests">
+              <small><Clock3 size={15} /> Tests<button className="sy-sound" aria-label={sound ? "Turn sound off" : "Turn sound on"} aria-pressed={sound} onClick={() => { setSoundOn(!sound); setSound(!sound); }}>{sound ? <Volume2 size={14} /> : <VolumeX size={14} />}</button></small>
               <ol>{timetable.map((value, i) => {
                 const done = board[i];
                 return <li key={`${String(value)}-${i}`} className={done ? done.ok ? "is-ok" : "is-wrong" : train && board.length === i && busy ? "is-running" : ""}>
@@ -376,5 +384,25 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
         </div>
       </div>
     </div>
+
+    {/* Questions sit over the whole level, which blurs behind them. */}
+    {(asking || shipped) && <div className="sy-backdrop">
+      {asking && <div className="sy-overlay sy-predict" role="group" aria-label="Predict the track">
+        <small>BEFORE IT RUNS</small>
+        <p>Train <b>{String(level.spotlight)}</b> is next. Which card will it reach?</p>
+        <div><button className="is-true" onClick={() => predict("true")}>▲ TRUE TRACK</button><button className="is-false" onClick={() => predict("false")}>▼ ELSE TRACK</button></div>
+      </div>}
+      {shipped && <div className={`sy-overlay sy-shipped ${whyShakes ? `is-shake-${whyShakes % 2}` : ""}`} role="dialog" aria-label="Level shipped">
+        <Fx fx={whyFx} scope="inline" />
+        <span className="sy-stamp">SHIPPED</span>
+        <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={28} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
+        <p className="sy-why-q">{level.why.question}</p>
+        <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
+          className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => { setWhy(i); if (i === level.why.answer) burst(setWhyFx, "good", ""); else { burst(setWhyFx, "bad", ""); setWhyShakes((n) => n + 1); } }}>{i === why ? i === level.why.answer ? <Check size={16} strokeWidth={3} /> : <X size={16} strokeWidth={3} /> : null}{level.why.options[i]}</button>)}</div>
+        {why !== null && <p className="sy-why-explain">{why === level.why.answer ? <><b>Right.</b> {level.why.explain} {level.note}</> : <><b>Not that one.</b> Read the tests on the board, then try again.</>}</p>}
+        {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={16} /></button>}
+      </div>}
+    </div>}
+    <Fx fx={bigFx} scope="screen" />
   </>;
 }

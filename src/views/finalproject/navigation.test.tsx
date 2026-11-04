@@ -71,7 +71,7 @@ describe("Student Final project navigation", () => {
     const tap = (line: string) => fireEvent.click(container.querySelector<HTMLButtonElement>(`.sy-bank [data-line='${line}']`)!);
     for (const line of ["decl", "if (age <= 12)", 'Console.WriteLine("Child discount");', "else", 'Console.WriteLine("Regular ticket");']) tap(line);
     expect(container.querySelector("[data-slot='0']")?.textContent).toBe("int age = 12;");
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TESTS" }));
     fireEvent.click(within(screen.getByRole("group", { name: "Predict the track" })).getByRole("button", { name: /TRUE TRACK/ }));
     await playOut();
     expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
@@ -98,7 +98,7 @@ describe("Student Final project navigation", () => {
     expect(verdict(container)).toMatch(/Train 29 hit the dead end: nothing printed/);
     fireEvent.click(container.querySelector<HTMLButtonElement>(".sy-bank [data-line='else']")!);
     fireEvent.click(container.querySelector<HTMLButtonElement>(`.sy-bank [data-line='Console.WriteLine("Fan off");']`)!);
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TESTS" }));
     await playOut();
     expect(saved().yardShipped).toContain(2);
   });
@@ -111,12 +111,12 @@ describe("Student Final project navigation", () => {
     fireEvent.click(ops.getByRole("button", { name: "=" }));
     fireEvent.change(screen.getByRole("slider", { name: "Sensor number" }), { target: { value: 42 } });
     // A jammed switch has no track to predict yet.
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TESTS" }));
     expect(screen.queryByRole("group", { name: "Predict the track" })).toBeNull();
     await playOut();
     expect(verdict(container)).toMatch(/jammed: = stores a value/);
     fireEvent.click(ops.getByRole("button", { name: "==" }));
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TESTS" }));
     fireEvent.click(within(screen.getByRole("group", { name: "Predict the track" })).getByRole("button", { name: /ELSE TRACK/ }));
     await playOut();
     expect(verdict(container)).toMatch(/You said train 42 would take the ELSE track/);
@@ -133,13 +133,13 @@ describe("Student Final project navigation", () => {
     await playOut();
     expect(verdict(container)).toMatch(/Incident confirmed\. Train 140 printed “Too short”\. The rule wants “Ride open”/);
     fireEvent.click(within(screen.getByRole("group", { name: "Operator" })).getByRole("button", { name: ">=" }));
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN THE TESTS" }));
     await playOut();
     expect(saved().yardShipped).toContain(7);
     expect(saved().yardStars[7]).toBe(3);
   });
 
-  it("builds the pool's yard from typed code and ships it on a timetable that proves the edge", async () => {
+  it("builds the pool's yard from typed code and ships it on tests that prove the edge", async () => {
     vi.useFakeTimers();
     atLevel(9);
     const { container } = mount();
@@ -147,12 +147,12 @@ describe("Student Final project navigation", () => {
     fireEvent.change(editor, { target: { value: "if (water >= 26)" } });
     expect(verdict(container)).toMatch(/Open the TRUE block/);
     fireEvent.change(editor, { target: { value: 'if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}' } });
-    fireEvent.click(screen.getByRole("button", { name: "PICK YOUR TIMETABLE →" }));
-    expect(verdict(container)).toMatch(/never tries the edge itself: 26/);
-    expect(screen.getByRole("button", { name: "▶ RUN MY TIMETABLE" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "PICK YOUR TESTS →" }));
+    expect(verdict(container)).toMatch(/never try the edge itself: 26/);
+    expect(screen.getByRole("button", { name: "▶ RUN MY TESTS" })).toBeDisabled();
     const step = (train: number, name: "higher" | "lower", times: number) => { for (let i = 0; i < times; i += 1) fireEvent.click(screen.getByRole("button", { name: `Train ${train} ${name}` })); };
     step(1, "higher", 15); step(2, "higher", 6); step(3, "lower", 3);
-    fireEvent.click(screen.getByRole("button", { name: "▶ RUN MY TIMETABLE" }));
+    fireEvent.click(screen.getByRole("button", { name: "▶ RUN MY TESTS" }));
     await playOut();
     expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
     expect(saved().yardShipped).toContain(9);

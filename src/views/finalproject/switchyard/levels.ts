@@ -151,7 +151,7 @@ export const levels: YardLevel[] = [
     tool: "dial", preset: five("daysLate > 1", "Thank you!", "Pay a fine"), given: [0, 3], runFirst: true, swap: true,
     ops: [">", ">=", "==", "!="], dialRange: [0, 30],
     timetable: [5, 1, 0], spotlight: 1,
-    why: { question: "Why didn't fixing the signs fix everything?", options: ["There were two bugs: the signs and the edge.", "The timetable was wrong.", "Signs can't be swapped in C#."], answer: 0, explain: "One fix can uncover the next bug. That is why every test runs again after a change." },
+    why: { question: "Why didn't fixing the signs fix everything?", options: ["There were two bugs: the signs and the edge.", "The tests were wrong.", "Signs can't be swapped in C#."], answer: 0, explain: "One fix can uncover the next bug. That is why every test runs again after a change." },
     note: "A bug can hide in the action, not only in the test. Rerun every train after each fix.",
   },
   {

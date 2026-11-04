@@ -66,15 +66,15 @@ try{
   // The yard through the real C# engine: level 1 from code blocks, then the pool written from scratch.
   await seed({...core,activity:'yard'});
   for(const line of ['decl','if (age <= 12)','Console.WriteLine("Child discount");','else','Console.WriteLine("Regular ticket");'])await evaluate(`document.querySelector(${JSON.stringify(`.sy-bank [data-line='${line}']`)}).click()`);
-  await click('▶ RUN THE TIMETABLE');await wait('!!document.querySelector(".sy-predict")');await evaluate('document.querySelector(".sy-predict .is-true").click()');
+  await click('▶ RUN THE TESTS');await wait('!!document.querySelector(".sy-predict")');await evaluate('document.querySelector(".sy-predict .is-true").click()');
   await wait('!!document.querySelector(".sy-shipped")',40000);assert.equal(await evaluate('document.querySelectorAll(".sy-board li.is-ok").length'),3);
   await seed({...core,activity:'yard',yardLevel:9,yardShipped:[0,1,2,3,4,5,6,7,8],yardStars:[3,3,3,3,3,3,3,3,3,0]});
   await evaluate(`(()=>{const t=document.querySelector('.sy-write textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(t,${JSON.stringify('if (water >= 26)\n{\n    Console.WriteLine("Pool open");\n}\nelse\n{\n    Console.WriteLine("Too cold");\n}')});t.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await click('PICK YOUR TIMETABLE →');
+  await click('PICK YOUR TESTS →');
   for(const [train,way,times] of [[1,'higher',15],[2,'higher',6],[3,'lower',3]])for(let n=0;n<times;n++)await pressLabel(`Train ${train} ${way}`);
-  await click('▶ RUN MY TIMETABLE');await wait('!!document.querySelector(".sy-shipped")',40000);
+  await click('▶ RUN MY TESTS');await wait('!!document.querySelector(".sy-shipped")',40000);
   assert.equal((await saved()).yardShipped.length,10);
-  console.log('PASS Switchyard level 1 from blocks and level 10 typed with its own timetable, through the real C# engine');
+  console.log('PASS Switchyard level 1 from blocks and level 10 typed with its own tests, through the real C# engine');
   }
   }
   if(!process.env.SHARPIE_QA_LAYOUT_ONLY&&!process.env.SHARPIE_QA_HUB_ONLY&&!process.env.SHARPIE_QA_YARD_ONLY){

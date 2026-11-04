@@ -135,6 +135,9 @@ export function TrackDiagram({ yard, train, lever, readout, arrived, duration }:
   const ifState = gapAtSwitch ? "missing" : brokenTrue ? "broken" : "ok";
   const elseState = gapAtSwitch ? "missing" : brokenFalse ? "broken" : deadEnd ? "dead" : "ok";
   const box = result ? result : jammed ? "JAMMED" : readout[1] ?? readout[0] ?? yard.condition ?? "no if yet";
+  // The box grows with its text so a long test never spills over the edge.
+  const boxSize = box.length > 20 ? 15 : 19;
+  const boxW = Math.max(150, Math.round(box.length * boxSize * .62 + 34));
   const lead = sampleBranch(lever === "false" ? ELSE_IN : IF_IN, .16);
   return <svg className="sy-track" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Track switch. Test: ${yard.condition ?? "not built"}.`}>
     {/* Main line, then the two branches. */}
@@ -151,9 +154,9 @@ export function TrackDiagram({ yard, train, lever, readout, arrived, duration }:
     {/* The condition box on its post. */}
     <g className={`sy-test ${result ? `is-${result}` : jammed ? "is-jam" : readout[1] ? "is-reading" : ""} ${yard.condition ? "" : "is-missing"}`} transform="translate(260 120)">
       <line x1={0} y1={0} x2={0} y2={Y - 120 - 9} className="sy-test-post" />
-      <rect className="sy-test-shadow" x={-90 + 5} y={-46 + 5} width={180} height={46} rx={10} />
-      <rect className="sy-test-box" x={-90} y={-46} width={180} height={46} rx={10} />
-      <text className="sy-test-text" y={-16} textAnchor="middle" style={{ fontSize: box.length > 18 ? 14 : 19 }}>{box}</text>
+      <rect className="sy-test-shadow" x={-boxW / 2 + 5} y={-46 + 5} width={boxW} height={46} rx={10} />
+      <rect className="sy-test-box" x={-boxW / 2} y={-46} width={boxW} height={46} rx={10} />
+      <text className="sy-test-text" y={-16} textAnchor="middle" style={{ fontSize: boxSize }}>{box}</text>
     </g>
     <Card side="true" message={yard.yes} state={ifState} lit={arrived === "true"} />
     <Card side="false" message={yard.no} state={elseState} lit={arrived === "false"} />

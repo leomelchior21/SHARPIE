@@ -147,14 +147,14 @@ export function readWritten(code: string): Written {
   if (!take(/^\s*\}/)) return { ...result, next: no ? "Close the ELSE block with }" : "Inside the else block, print a message." };
   if (rest.trim()) return { ...result, next: "Nothing goes after the else block." };
   if (result.yes === null || result.no === null) return { ...result, next: "Both blocks need a Console.WriteLine." };
-  return { ...result, complete: true, next: "The yard is built. Pick your timetable." };
+  return { ...result, complete: true, next: "The yard is built. Pick your tests." };
 }
 
 export const writtenCode = (variable: string, value: Input, code: string) => `${declaration(variable, value)}\n\n${code.trim()}`;
 
-/** A timetable proves a rule when it tries just below, exactly at and just above the edge. */
+/** A set of tests proves a rule when it tries just below, exactly at and just above the edge. */
 export function provesEdge(edge: number, picks: number[]): string | null {
-  if (!picks.includes(edge)) return `Your timetable never tries the edge itself: ${edge}.`;
+  if (!picks.includes(edge)) return `Your tests never try the edge itself: ${edge}.`;
   if (!picks.includes(edge - 1)) return `Try the train just below the edge: ${edge - 1}.`;
   if (!picks.includes(edge + 1)) return `Try the train just above the edge: ${edge + 1}.`;
   return null;
