@@ -465,3 +465,46 @@
 .fp-shell .sy button.sy-reset:disabled { opacity: .35; }
 .fp-shell .sy button.sy-reset.is-sure { color: #fff; background: var(--else); animation: fx-pop .3s ease-out; }
 .fp-shell .sy button.sy-reset:not(:disabled):hover svg { transform: rotate(-90deg); transition: transform .25s; }
+
+/* Dark code surfaces, like the other modules' editor: the program, the code blocks, the dial readout,
+   the tour's program and the quiz window use the shared bright palette on near-black. */
+.sy-editor, .sy-bank, .sy-dial small code, .sy-tour-code ol, .fp-yard-theme .lab-quiz-code {
+  --kw: #ff5fd2; --type: #e5b567; --num: #e5b567; --var: #e87d7d; --str: #b4d273; --cmd: #62e6ff; --comment: #7a8499;
+  --code-bg: #0b1124; --code-ink: #dbe6ff; --code-dim: #6b7aa0; --code-line: #2c3a60;
+}
+.fp-shell .sy .sy-editor { background: var(--code-bg); }
+.sy-editor .sy-ln { color: #4a5878; }
+.sy-editor .sy-code-text { color: var(--code-ink); }
+.sy-editor .sy-code-text.is-empty { color: var(--code-dim); }
+.sy-editor .sy-code-text.is-brace { color: #8a97b8; }
+.sy-editor .sy-row.is-now { border-color: var(--yellow); background: rgba(255, 210, 63, .14); }
+.sy-editor .sy-block.is-true { border-color: var(--if); background: rgba(34, 176, 125, .2); }
+.sy-editor .sy-block.is-false { border-color: var(--else); background: rgba(255, 122, 69, .2); }
+.sy-editor .sy-skipped { border-color: #5b6890; color: #8a97b8; background: var(--code-bg); }
+.fp-shell .sy .sy-editor .sy-cond-badge { border-color: var(--code-ink); }
+.fp-shell .sy .sy-editor button.sy-slot { border-color: var(--code-line); color: var(--code-ink); }
+.fp-shell .sy .sy-editor button.sy-slot.is-filled { border-color: #34446e; background: #131c38; }
+.fp-shell .sy .sy-editor button.sy-slot:hover:not(:disabled) { border-color: #5b6890; background: #16213f; }
+.fp-shell .sy .sy-editor button.sy-slot > span, .sy-editor .sy-slot-x { color: var(--code-dim); }
+.fp-shell .sy .sy-editor button.sy-slot.is-target { border-color: var(--yellow); background: rgba(255, 210, 63, .14); }
+.sy-editor .sy-write textarea { border-color: var(--code-line); color: var(--code-ink); background: #070c1c; caret-color: var(--yellow); }
+.sy-editor .sy-write textarea::placeholder { color: #55648a; }
+.sy-editor .sy-write textarea:focus { border-color: var(--yellow); background: #070c1c; }
+/* Code blocks: dark snippets with the same hard shadow as every button. */
+.fp-shell .sy .sy-bank button { border-color: var(--ink); color: var(--code-ink); background: var(--code-bg); }
+.fp-shell .sy .sy-bank button:hover:not(:disabled) { border-color: var(--ink); background: #18223f; }
+.fp-shell .sy .sy-bank button[aria-pressed=true] { border-color: var(--yellow); background: #1d2340; box-shadow: 3px 3px 0 var(--ink), 0 0 0 3px var(--yellow); }
+/* Used or waiting blocks stay dark: dimmed in place instead of fading into the cream card. */
+.fp-shell .sy .sy-bank button:disabled { opacity: 1; filter: saturate(.35) brightness(.7); box-shadow: none; }
+.fp-shell .sy .sy-bank button.is-used { opacity: 1; border-style: dashed; filter: grayscale(1) brightness(.5); }
+.fp-shell .sy-dial small code { border-color: var(--ink); color: var(--code-ink); background: var(--code-bg); }
+/* The tour's program. */
+.sy-tour .sy-tour-code ol { color: var(--code-ink); background: var(--code-bg); }
+.sy-tour .sy-tour-code .sy-ln { color: #4a5878; }
+.sy-tour .sy-tour-code li.is-now { background: rgba(255, 210, 63, .16); }
+.sy-tour .sy-tour-code li.is-run { background: rgba(34, 176, 125, .2); }
+/* The quiz window: cream title bar, dark code. */
+.fp-shell.fp-yard-theme .lab-quiz-code .lab-code { color: var(--code-ink); background: var(--code-bg); }
+.fp-yard-theme .lab-quiz-code .lab-line-number { color: #4a5878; }
+.fp-yard-theme .lab-quiz-code .lab-line.is-run { background: rgba(34, 176, 125, .2); }
+.fp-shell.fp-yard-theme .lab-quiz-code .lab-code .syn-variable { color: var(--var); }
