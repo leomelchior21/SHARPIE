@@ -1,6 +1,7 @@
 import { questions } from "./content";
 import { adoptLegacyBackroom } from "./backroomStore";
 import { levelCount, levels } from "./switchyard/levels";
+const allLevels = levels.length;
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 // lab is the Switchyard hub; yard is the Switchyard game inside it.
 export const activities = ["overview","matrix","transition","lab","yard","quiz-intro","quiz","shadow","report"] as const;
@@ -13,10 +14,12 @@ export type Progress = {
   quizIndex: number; answers: Record<string,number>; attempts: Record<string,number>; mastered: string[];
   // The Switchyard: the level open now, levels shipped, best stars per level and each level's program.
   yardLevel: number; yardShipped: number[]; yardStars: number[]; yardDrafts: Record<string,string[]>;
+  // The animated how-to-play tour has been watched (or skipped) once.
+  yardIntro: boolean;
   missionIndex: number; observed: number[]; repaired: number[]; patches: Record<string,string[]>;
   reflection: string; completedAt: string; awards: Record<string,number>;
 };
-export const freshProgress = (): Progress => ({version:1,activity:"overview",transition:false,legacyXp:0,quizIndex:0,answers:{},attempts:{},mastered:[],yardLevel:0,yardShipped:[],yardStars:Array(levelCount).fill(0),yardDrafts:{},missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
+export const freshProgress = (): Progress => ({version:1,activity:"overview",transition:false,legacyXp:0,quizIndex:0,answers:{},attempts:{},mastered:[],yardLevel:0,yardShipped:[],yardStars:Array(allLevels).fill(0),yardDrafts:{},yardIntro:false,missionIndex:0,observed:[],repaired:[],patches:{},reflection:"",completedAt:"",awards:{}});
 export const storageKey = (student: string) => `sharpie:final-project:v1:${encodeURIComponent(student.trim().toLowerCase())}`;
 const count = (v: unknown,max: number, fallback=0) => typeof v === "number" && Number.isFinite(v) ? Math.max(0,Math.min(max,Math.floor(v))) : fallback;
 const indices = (v:unknown,max:number):number[] => Array.isArray(v) ? [...new Set(v.filter((x):x is number=>Number.isInteger(x)&&x>=0&&x<max))] : [];
@@ -34,8 +37,9 @@ export function sanitizeProgress(raw: unknown): Progress {
   p.legacyXp=count(s.legacyXp,60,indices(s.warmup,6).length*10);
   p.quizIndex=count(s.quizIndex,20); p.missionIndex=count(s.missionIndex,3);
   p.observed=indices(s.observed,4); p.repaired=indices(s.repaired,4);
-  p.yardShipped=indices(s.yardShipped,levelCount).sort((a,b)=>a-b);
-  p.yardLevel=count(s.yardLevel,levelCount-1);
+  p.yardShipped=indices(s.yardShipped,allLevels).sort((a,b)=>a-b);
+  p.yardLevel=count(s.yardLevel,allLevels-1);
+  p.yardIntro=s.yardIntro===true;
   p.yardStars=p.yardStars.map((_,i)=>p.yardShipped.includes(i)?Math.max(1,count(s.yardStars?.[i],3)):0);
   for (const level of levels) {
     const draft=s.yardDrafts?.[level.id];
@@ -77,12 +81,17 @@ export const syncSummary = (p:Progress): FinalProjectSyncState => ({
   quizAnswered:questions.filter(q=>p.answers[q.id]!==undefined).length,
   quizRight:questions.filter(q=>p.answers[q.id]===q.answer).length,
   quizMissed:questions.flatMap((q,i)=>p.answers[q.id]!==undefined&&p.answers[q.id]!==q.answer?[i+1]:[]),
-  levels:p.yardShipped.map(i=>i+1), stars:p.yardStars.reduce((a,b)=>a+b,0),
+  // The main line counts for the grade; the Mystery line is reported on its own.
+  levels:p.yardShipped.filter(i=>i<levelCount).map(i=>i+1), stars:p.yardStars.slice(0,levelCount).reduce((a,b)=>a+b,0),
+  mystery:p.yardShipped.filter(i=>i>=levelCount).length,
   policies:p.repaired.length, reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
 });
 /** Every quiz question answered, right or wrong: the Switchyard game opens. */
 export const quizDone = (p:Progress) => questions.every(q=>p.answers[q.id]!==undefined);
-export const stageTwoDone = (p:Progress) => quizDone(p) && p.yardShipped.length===levelCount;
+export const mainShipped = (p:Progress) => p.yardShipped.filter(i=>i<levelCount).length;
+/** All three Mystery levels shipped: the Super Maker Master title. */
+export const superMaker = (p:Progress) => p.yardShipped.filter(i=>i>=levelCount).length===allLevels-levelCount;
+export const stageTwoDone = (p:Progress) => quizDone(p) && mainShipped(p)===levelCount;
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
 // allOpen: the teacher, or the teacher preview.
 export function canOpen(activity:Activity,p:Progress,allOpen:boolean) {

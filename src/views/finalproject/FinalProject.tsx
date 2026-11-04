@@ -77,9 +77,9 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {activity==="matrix"&&<MatrixRun progress={{...activeBackroom,isTeacher:isTeacher||preview}} onProgress={saveBackroom} preview={preview} onBack={()=>go("overview")}/>}
     {activity==="transition"&&<Transition update={update} completed={active.transition} canContinue={one} onNext={()=>go("lab")} onRun={()=>go("matrix")}/>}
     {activity==="lab"&&<SwitchyardHome progress={active} allOpen={allOpen} onQuiz={()=>go("quiz-intro")} onYard={()=>go("yard")}/>}
-    {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")}/>}
+    {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")} onPick={allOpen?index=>update(p=>({...p,quizIndex:index,activity:"quiz"})):undefined}/>}
     {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} headerSlot={headerSlot} onHub={()=>go("lab")}/>}
-    {activity==="quiz"&&<Quiz progress={active} update={update} onYard={()=>go("yard")}/>}
+    {activity==="quiz"&&<Quiz progress={active} update={update} allOpen={allOpen} onYard={()=>go("yard")}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}
     </div></section>;

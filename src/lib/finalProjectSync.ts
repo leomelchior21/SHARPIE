@@ -13,6 +13,8 @@ export type FinalProjectSyncState = {
   /** Switchyard levels shipped, numbered from 1, and the stars earned on them. */
   levels: number[];
   stars: number;
+  /** Mystery line levels shipped after level 10 (0 to 3); all three is Super Maker Master. */
+  mystery: number;
   policies: number;
   reportDone: boolean;
   reflection: string;
@@ -23,6 +25,7 @@ export const FINAL_QUESTIONS = 20;
 export const FINAL_LEVELS = 10;
 export const FINAL_STARS = FINAL_LEVELS * 3;
 export const FINAL_POLICIES = 4;
+export const FINAL_MYSTERY = 3;
 
 function count(value: unknown, max: number): number {
   const numeric = Number(value);
@@ -43,6 +46,7 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
     quizMissed: numbers(raw.quizMissed, FINAL_QUESTIONS),
     levels: numbers(raw.levels, FINAL_LEVELS),
     stars: count(raw.stars, FINAL_STARS),
+    mystery: count(raw.mystery, FINAL_MYSTERY),
     policies: count(raw.policies, FINAL_POLICIES),
     reportDone: raw.reportDone === true,
     reflection: typeof raw.reflection === "string" ? raw.reflection.slice(0, 600) : "",

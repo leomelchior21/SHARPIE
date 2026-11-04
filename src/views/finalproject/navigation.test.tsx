@@ -21,7 +21,7 @@ const mount = () => render(<FinalProject name="Ada" studentKey={student} isTeach
 const back = () => fireEvent.click(screen.getByRole("button", { name: "BACK" }));
 const saved = () => JSON.parse(localStorage.getItem(storageKey(student))!) as Progress;
 const licensed = Object.fromEntries(questions.map((q) => [q.id, q.answer]));
-const atLevel = (yardLevel: number, extra: Partial<Progress> = {}) => saveProgress(student, { ...freshProgress(), activity: "yard", answers: licensed, quizIndex: 20, yardLevel, yardShipped: Array.from({ length: yardLevel }, (_, i) => i), yardStars: Array.from({ length: 10 }, (_, i) => i < yardLevel ? 1 : 0), ...extra });
+const atLevel = (yardLevel: number, extra: Partial<Progress> = {}) => saveProgress(student, { ...freshProgress(), activity: "yard", answers: licensed, quizIndex: 20, yardLevel, yardShipped: Array.from({ length: yardLevel }, (_, i) => i), yardStars: Array.from({ length: 13 }, (_, i) => i < yardLevel ? 1 : 0), yardIntro: true, ...extra });
 const playOut = () => act(async () => { await vi.advanceTimersByTimeAsync(60000); });
 const verdict = (container: HTMLElement) => container.querySelector(".sy-verdict")?.textContent ?? "";
 
@@ -76,7 +76,7 @@ describe("Student Final project navigation", () => {
     await playOut();
     expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
     expect(verdict(container)).toMatch(/You called train 12 right/);
-    expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
     const dialog = screen.getByRole("dialog", { name: "Level shipped" });
     // The right answer is not parked in the first spot.
     expect(within(dialog).getAllByRole("button").map((b) => b.textContent)[1]).toMatch(/includes 12/);
@@ -199,6 +199,54 @@ describe("Student Final project navigation", () => {
     mount(); fireEvent.click(screen.getByRole("button", { name: /OPEN THE SWITCHYARD/ }));
     expect(screen.getByRole("navigation", { name: "Switchyard levels" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "First Switch" })).toBeInTheDocument();
+  });
+
+  it("plays the how-to-play tour the first time the game opens, and brings it back on request", () => {
+    atLevel(0, { yardIntro: false });
+    mount();
+    expect(screen.getByRole("dialog", { name: "How the Switchyard works" })).toBeInTheDocument();
+    for (let n = 0; n < 5; n += 1) fireEvent.click(screen.getByRole("button", { name: /^NEXT/ }));
+    expect(screen.getByText("Ten levels, one line")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /START LEVEL 1/ }));
+    expect(screen.queryByRole("dialog", { name: "How the Switchyard works" })).toBeNull();
+    expect(saved().yardIntro).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /HOW TO PLAY/ }));
+    fireEvent.click(screen.getByRole("button", { name: /SKIP/ }));
+    expect(screen.queryByRole("dialog", { name: "How the Switchyard works" })).toBeNull();
+  });
+
+  it("keeps the Mystery line sealed until level 10 ships, then reveals it", async () => {
+    atLevel(9);
+    mount();
+    expect(screen.getByRole("button", { name: "Mystery 1: locked" })).toBeDisabled();
+    cleanup();
+    vi.useFakeTimers();
+    atLevel(9, { yardShipped: Array.from({ length: 10 }, (_, i) => i) });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /THE MYSTERY LINE/ }));
+    expect(screen.getByRole("dialog", { name: "Mystery line unlocked" })).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    fireEvent.click(screen.getByRole("button", { name: /ENTER THE MYSTERY LINE/ }));
+    expect(screen.getByRole("heading", { name: "The Night Log" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Clue log")).toHaveTextContent("17");
+    expect(screen.getByRole("button", { name: "Mystery 2: locked" })).toBeDisabled();
+    expect(saved().yardLevel).toBe(10);
+  });
+
+  it("gives the teacher every quiz question, the answer on demand and free steps", () => {
+    saveProgress(student, { ...freshProgress(), activity: "quiz-intro" });
+    render(<FinalProject name="Teacher" studentKey={student} isTeacher onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open question 7" }));
+    expect(screen.getByText(/QUESTION 7 \/ 20/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /SHOW ANSWER/ }));
+    expect(screen.getByText(/The answer is/)).toBeInTheDocument();
+    expect(saved().answers).toEqual({});
+    fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    expect(screen.getByText(/QUESTION 8 \/ 20/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open question 20" }));
+    expect(screen.getByText(/QUESTION 20 \/ 20/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "All results" }));
+    expect(screen.getAllByRole("button", { name: /^Question \d+/ })).toHaveLength(20);
   });
 
   it("resumes the quiz from its introduction without losing saved answers", () => {

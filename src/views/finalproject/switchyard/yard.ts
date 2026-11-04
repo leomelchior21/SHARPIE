@@ -123,9 +123,9 @@ const tidy = (condition: string) => {
   return match ? `${match[1]} ${match[2]} ${match[3]}` : condition.trim();
 };
 
-export function readWritten(code: string): Written {
+export function readWritten(code: string, variable = "water"): Written {
   const source = code.replace(/\/\/.*$/gm, "");
-  const result: Written = { bay: true, condition: null, yes: null, hasElse: false, no: null, fault: null, complete: false, next: "Start with the switch: if (water >= …)" };
+  const result: Written = { bay: true, condition: null, yes: null, hasElse: false, no: null, fault: null, complete: false, next: `Start with the switch: if (${variable} … )` };
   let rest = source;
   const take = (pattern: RegExp) => {
     const match = pattern.exec(rest);

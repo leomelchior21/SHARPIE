@@ -61,8 +61,9 @@
 .lab-window-bar i:nth-child(3) { background: #58f0b5; }
 .lab-window-bar span { margin-left: 8px; color: #c6d4ea; font: 12px var(--mono); }
 .fp-shell .lab-window-bar em { margin-left: auto; padding: 3px 10px; border: 1px solid #355275; border-radius: 999px; color: #93b9f0; font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.lab-quiz-code { max-height: 100%; }
-.lab-quiz-code .lab-code { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: clamp(150px, 34vh, 380px); padding: 14px 12px; font-size: clamp(15px, 2.7vh, 26px); }
+/* The window keeps its height; the code inside fits it (useFitCode) and never centres itself out of view. */
+.lab-quiz-code { min-height: clamp(150px, 34vh, 380px); max-height: 100%; }
+.lab-quiz-code .lab-code { position: relative; display: flex; flex-direction: column; justify-content: safe center; min-height: 0; padding: 14px 12px; overflow: auto; font-size: clamp(14px, min(2.7vh, 2.4vw), 26px); }
 /* A scan line sweeps the code once as each question opens. */
 .lab-quiz-code .lab-code::after { position: absolute; right: 0; left: 0; height: 30%; content: ""; background: linear-gradient(transparent, rgba(154,121,255,.16), transparent); pointer-events: none; animation: lab-scan .9s ease-in-out both; }
 .lab-eval { display: flex; flex: none; align-items: center; gap: 10px; margin: 4px 12px 12px; padding: 8px 12px; border-radius: 10px; animation: lab-rise .3s ease-out; }
@@ -154,9 +155,12 @@
 @keyframes lab-burst { from { opacity: 1; transform: rotate(calc(var(--n) * 36deg)) translateY(0); } to { opacity: 0; transform: rotate(calc(var(--n) * 36deg)) translateY(-110px) rotate(200deg); } }
 @keyframes lab-trophy { from { transform: translateY(0) rotate(-6deg); } to { transform: translateY(-6px) rotate(6deg); } }
 
-/* Tablets in portrait. */
+/* Tablets in portrait: the code on top takes the room the answers leave. */
+@media (max-width: 1000px) and (min-width: 701px) and (orientation: portrait) {
+  .lab-quiz-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, max-content) auto; align-content: center; height: 100%; }
+  .lab-quiz-code .lab-code { font-size: clamp(14px, 3.1vw, 26px); }
+}
 @media (max-width: 1000px) and (min-width: 701px) {
-  .lab-quiz-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, .8fr) minmax(0, 1fr); }
   .lab-rounds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-review-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
@@ -166,10 +170,32 @@
   .fp-activity-quiz .fp-content, .fp-activity-quiz-intro .fp-content { overflow: auto; }
   .lab-quiz-intro, .lab-quiz, .lab-review, .lab-checkpoint { height: auto; }
   .lab-quiz-grid { grid-template-columns: minmax(0, 1fr); }
+  .lab-quiz-code { min-height: 0; }
+  .lab-quiz-code .lab-code { font-size: clamp(12px, 3.6vw, 18px); }
   .lab-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-quiz-head, .lab-review-head { flex-wrap: wrap; }
   .lab-answers, .lab-rounds { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Teacher strip: every question one tap away, and SHOW ANSWER. */
+.lab-teacher { display: flex; align-items: center; gap: 6px; width: min(1240px, 100%); margin: 0 auto; padding: 6px 10px; border: 2px dashed var(--ink, #93b9f0); border-radius: 12px; background: var(--yellow-soft, rgba(147,185,240,.08)); }
+.fp-shell .lab-teacher small { flex: none; color: var(--ink, #c6d4ea); font: 800 11px var(--sans, inherit); letter-spacing: .1em; }
+.lab-teacher ol { display: flex; flex: 1; gap: 4px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.lab-teacher li { flex: 1; min-width: 0; }
+.fp-shell .lab-teacher button { display: grid; place-items: center; width: 100%; min-width: 22px; min-height: 30px; padding: 0 3px; border: 2px solid var(--ink, #355275); border-radius: 8px; color: var(--ink, #fff); background: var(--paper, #0b1b33); box-shadow: 2px 2px 0 var(--ink, transparent); font: 700 12px var(--mono); cursor: pointer; }
+.fp-shell .lab-teacher > button { flex: none; width: 34px; }
+.fp-shell .lab-teacher button.is-right { background: var(--if-soft, rgba(88,240,181,.2)); }
+.fp-shell .lab-teacher button.is-wrong { background: var(--else-soft, rgba(255,107,129,.2)); }
+.fp-shell .lab-teacher button[aria-current=step], .fp-shell .lab-teacher button[aria-pressed=true] { background: var(--yellow, #c7b7ff); transform: translateY(-2px); }
+.fp-shell .lab-teacher button:disabled { opacity: .4; box-shadow: none; }
+.lab-teacher.is-intro { flex-direction: column; width: min(880px, 100%); padding: 10px 12px; }
+.lab-teacher.is-intro ol { flex-wrap: wrap; justify-content: center; width: 100%; }
+.lab-teacher.is-intro li { flex: 0 0 38px; }
+.lab-checkpoint:has(> .lab-teacher) { position: relative; padding-top: 48px; }
+.lab-checkpoint > .lab-teacher { position: absolute; top: 0; right: 0; left: 0; }
+.lab-quiz:has(> .lab-teacher), .lab-review:has(> .lab-teacher) { grid-template-rows: auto auto minmax(0, 1fr); }
+.fp-shell .lab-reveal { display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 6px 12px; border: 2px solid var(--ink, #93b9f0); border-radius: 10px; color: var(--ink, #fff); background: var(--paper, transparent); box-shadow: 2px 2px 0 var(--ink, transparent); font: 800 12px var(--sans, inherit); letter-spacing: .06em; cursor: pointer; }
+@media (max-width: 700px) { .lab-teacher ol { flex-wrap: wrap; } .lab-teacher li { flex: 0 0 30px; } }
 
 /* Stage 1 card: a real frame from the 3D game behind the copy. */
 .memory-experience-card.memory-card-purple.fp-stage--backrooms {

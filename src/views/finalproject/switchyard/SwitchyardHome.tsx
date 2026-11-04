@@ -1,10 +1,11 @@
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Lock, Sparkles } from "lucide-react";
 import { questions } from "../content";
-import { quizDone, type Progress } from "../progress";
-import { levelCount } from "./levels";
+import { mainShipped, quizDone, superMaker, type Progress } from "../progress";
+import { levelCount, mysteryCount } from "./levels";
 import { buildYard } from "./yard";
 import { TrackDiagram } from "./TrackDiagram";
 import "./switchyard.css";
+import "./tour.css";
 
 // The card art is the switch itself, built and waiting for its first train.
 const finishedYard = buildYard(["decl", "if (grade >= 7)", 'Console.WriteLine("Approved");', "else", 'Console.WriteLine("Try again");']);
@@ -15,8 +16,11 @@ export function SwitchyardHome({ progress: p, allOpen, onQuiz, onYard }: { progr
   const right = questions.filter((q) => p.answers[q.id] === q.answer).length;
   const licensed = quizDone(p);
   const open = licensed || allOpen;
-  const shipped = p.yardShipped.length;
-  const stars = p.yardStars.reduce((a, b) => a + b, 0);
+  const shipped = mainShipped(p);
+  const stars = p.yardStars.slice(0, levelCount).reduce((a, b) => a + b, 0);
+  // After level 10 the Mystery line is open; all three solved crowns the Super Maker Master.
+  const solved = p.yardShipped.filter((i) => i >= levelCount).length;
+  const master = superMaker(p);
   return <section className="sy-hub">
     <header>
       <div className="sy-mission-top"><span className="sy-cs">C#</span><small>true, false &amp; if / else</small></div>
@@ -38,11 +42,12 @@ export function SwitchyardHome({ progress: p, allOpen, onQuiz, onYard }: { progr
       </button>
       <button className={`sy-card sy-card--yard ${open ? (licensed || allOpen) && !shipped ? "is-next" : "" : "is-locked"} ${shipped === levelCount ? "is-done" : ""}`} disabled={!open} onClick={onYard} aria-label="The Switchyard">
         <span className="sy-card-n">02</span>
+        {shipped === levelCount && <span className={`sy-card-mystery ${master ? "is-master" : ""}`}><Sparkles size={13} /> {master ? "SUPER MAKER MASTER" : `MYSTERY LINE · ${solved} / ${mysteryCount}`}</span>}
         <span className="sy-card-art" aria-hidden="true"><TrackDiagram yard={finishedYard} train={null} lever={null} readout={[]} arrived={null} duration={0} /></span>
         <strong>The Switchyard</strong>
         <em>Lay track, set sensors, fix incidents, write it yourself.</em>
         <span className="sy-card-bar"><i style={{ width: `${Math.round(shipped / levelCount * 100)}%` }} /></span>
-        <span className="sy-card-foot">{open ? <>{shipped} / {levelCount} levels · {stars}★{shipped < levelCount && <span className="sy-card-go">{shipped ? "RESUME" : "START"} <ArrowRight size={14} /></span>}</> : <><Lock size={14} /> FINISH THE QUIZ TO OPEN</>}</span>
+        <span className="sy-card-foot">{open ? <>{shipped} / {levelCount} levels · {stars}★{shipped < levelCount ? <span className="sy-card-go">{shipped ? "RESUME" : "START"} <ArrowRight size={14} /></span> : !master && <span className="sy-card-go">SOLVE THE MYSTERY <ArrowRight size={14} /></span>}</> : <><Lock size={14} /> FINISH THE QUIZ TO OPEN</>}</span>
       </button>
     </div>
   </section>;

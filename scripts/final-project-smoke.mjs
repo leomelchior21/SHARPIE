@@ -20,7 +20,7 @@ const wait=async(expression,timeout=10000)=>{const start=Date.now();while(Date.n
 const click=async text=>{await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)});if(!b)throw new Error('Button missing: '+${JSON.stringify(text)});if(b.disabled)throw new Error('Button disabled: '+${JSON.stringify(text)});b.click();})()`);await delay(120);};
 const seed=async patch=>{await evaluate(`localStorage.setItem(finalQA.storageKey('final-qa'),JSON.stringify({...finalQA.freshProgress(),...${JSON.stringify(patch)}})); window.__qaReloading=true`);await send('Page.navigate',{url:fixture});await wait('!window.__qaReloading && !!document.querySelector(".fp-header") && !!window.finalQA');await delay(150);};
 // Every quiz question answered: the Switchyard game is open.
-const core={transition:true,quizIndex:20,answers:Object.fromEntries([1,0,2,3,1,2,1,0,2,1,2,1,2,0,3,1,2,0,3,0].map((answer,i)=>[`q${i+1}`,answer]))};
+const core={transition:true,yardIntro:true,quizIndex:20,answers:Object.fromEntries([1,0,2,3,1,2,1,0,2,1,2,1,2,0,3,1,2,0,3,0].map((answer,i)=>[`q${i+1}`,answer]))};
 const range=async(label,value)=>{await evaluate(`(()=>{const input=document.querySelector('input[aria-label="${label}"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));})()`);await delay(80);};
 const saved=()=>evaluate(`JSON.parse(localStorage.getItem(finalQA.storageKey('final-qa')))`);
 const energyTo=async target=>{

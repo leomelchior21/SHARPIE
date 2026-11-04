@@ -3,12 +3,12 @@ import { missions, questions } from "./content";
 import { compare, conditionResult } from "./logic";
 import { substitute, traceProgram } from "./labStories";
 import { parseFinalProjectSync } from "../../lib/finalProjectSync";
-import { award, canOpen, freshProgress, loadProgress, quizDone, sanitizeProgress, saveProgress, stageTwoDone, storageKey, syncSummary, xp } from "./progress";
-import { levels } from "./switchyard/levels";
+import { award, canOpen, freshProgress, loadProgress, quizDone, sanitizeProgress, saveProgress, stageTwoDone, storageKey, superMaker, syncSummary, xp } from "./progress";
+import { levelCount, levels, mysteryCount } from "./switchyard/levels";
 const allAnswered=Object.fromEntries(questions.map(q=>[q.id,q.answer]));
 describe("Final project curriculum and behavioral validation",()=>{
   it("contains exactly the requested activities and answer key",()=>{
-    expect(levels).toHaveLength(10);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
+    expect(levels).toHaveLength(13);expect(levelCount).toBe(10);expect(mysteryCount).toBe(3);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
     expect(questions.map(q=>q.answer)).toEqual([1,0,2,3,1,2,1,0,2,1,2,1,2,0,3,1,2,0,3,0]);
     expect(questions.every(q=>q.options.length===4)).toBe(true);
   });
@@ -57,7 +57,7 @@ describe("Final project profile persistence and milestones",()=>{
     localStorage.removeItem(storageKey("ana"));
   });
   it("recovers malformed fields and reports inaccessible or corrupt storage",()=>{
-    expect(sanitizeProgress({version:1,activity:"other",yardShipped:[0,0,-1,11],yardStars:[9,"x"],yardLevel:40,answers:{q1:8},yardDrafts:{cinema:["too","short"]}})).toMatchObject({activity:"overview",yardShipped:[0],yardStars:[3,0,0,0,0,0,0,0,0,0],yardLevel:9,answers:{},yardDrafts:{}});
+    expect(sanitizeProgress({version:1,activity:"other",yardShipped:[0,0,-1,13],yardStars:[9,"x"],yardLevel:40,answers:{q1:8},yardDrafts:{cinema:["too","short"]}})).toMatchObject({activity:"overview",yardShipped:[0],yardStars:[3,0,0,0,0,0,0,0,0,0,0,0,0],yardLevel:12,answers:{},yardDrafts:{}});
     localStorage.setItem(storageKey("broken"),"{");expect(loadProgress("broken").warning).not.toBe("");expect(localStorage.getItem(storageKey("broken"))).toBe("{");localStorage.removeItem(storageKey("broken"));
   });
   it("summarizes progress for the teacher dashboard and survives the round trip",()=>{
@@ -65,6 +65,10 @@ describe("Final project profile persistence and milestones",()=>{
     const summary=syncSummary(p);
     expect(summary).toMatchObject({levels:[1,3],stars:5,quizAnswered:2,quizRight:1,quizMissed:[2],policies:1,reportDone:false,reflection:"Rules need review.",xp:xp(p)});
     expect(parseFinalProjectSync(JSON.parse(JSON.stringify(summary)))).toEqual(summary);
+    // The Mystery line is reported apart from the ten graded levels.
+    const master=sanitizeProgress({...freshProgress(),yardShipped:levels.map((_,i)=>i),yardStars:levels.map(()=>3)});
+    expect(syncSummary(master)).toMatchObject({levels:[1,2,3,4,5,6,7,8,9,10],stars:30,mystery:3});
+    expect(superMaker(master)).toBe(true);expect(superMaker({...master,yardShipped:master.yardShipped.slice(0,12)})).toBe(false);
     expect(parseFinalProjectSync({levels:[99,-1,"x"],quizRight:500,stars:90})).toMatchObject({levels:[10],quizRight:20,stars:30});
     // Older summaries from the IF / ELSE Lab do not count as Switchyard levels.
     expect(parseFinalProjectSync({built:[1,2,3],flows:3})).toMatchObject({levels:[],stars:0});

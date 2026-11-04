@@ -15,7 +15,8 @@ export interface Why { question: string; options: string[]; answer: number; expl
 
 export interface YardLevel {
   id: string;
-  stage: 0 | 1 | 2 | 3;
+  /** 4 is the Mystery line: three secret levels that open after level 10. */
+  stage: 0 | 1 | 2 | 3 | 4;
   title: string;
   place: string;
   /** The yard boss's radio message: the rule in plain words. */
@@ -44,6 +45,8 @@ export interface YardLevel {
   runFirst?: boolean;
   /** What went wrong, told as an incident report. */
   incident?: string;
+  /** Mystery levels hide the rule: only a log of trains already seen and where they went. */
+  clues?: [Input, string][];
   /** Three trains per level: just below, at and just above the edge. */
   timetable: Input[];
   /** The train the student predicts before the first run. */
@@ -57,6 +60,7 @@ export const stages = [
   { name: "SET THE SENSOR", short: "B" },
   { name: "INCIDENTS", short: "C" },
   { name: "HEAD CONTROLLER", short: "D" },
+  { name: "MYSTERY LINE", short: "?" },
 ];
 
 const five = (condition: string, yes: string, no: string): Line[] => ["decl", ifLine(condition), printLine(yes), "else", printLine(no)];
@@ -163,6 +167,42 @@ export const levels: YardLevel[] = [
     why: { question: "Which three trains prove a rule with >= 26?", options: ["25, 26 and 27: below, at and above the edge.", "0, 20 and 40: spread out.", "26, 26 and 26: the edge three times."], answer: 0, explain: "The edge decides everything. Test just below it, exactly on it and just above it." },
     note: "You wrote a real C# decision from nothing, and chose the tests that prove it.",
   },
+  // The Mystery line: no rule in the dispatch, only clues. Read the log, find the edge, prove it.
+  {
+    id: "observatory", stage: 4, title: "The Night Log", place: "Midnight observatory",
+    dispatch: "No rule tonight, only the night log. Read where each train went, then set the sensor so the yard does the same.",
+    clues: [[25, "Telescope on"], [17, "Dome closed"], [18, "Telescope on"], [3, "Dome closed"]],
+    variable: "visibility", min: 0, max: 40, condition: "visibility >= 18", yes: "Telescope on", no: "Dome closed",
+    tool: "dial", preset: five("visibility > 30", "Telescope on", "Dome closed"), given: [0, 2, 3, 4],
+    ops: [">", "<", ">=", "<=", "==", "!="], dialRange: [0, 40],
+    timetable: [17, 18, 19], spotlight: 18,
+    why: { question: "Which two clues told you the edge was exactly 18?", options: ["17 went to Dome closed and 18 went to Telescope on.", "25 and 3: the biggest and the smallest.", "Only 18: one clue is enough."], answer: 0, explain: "The edge sits between the last value that goes one way and the first that goes the other: 17 and 18." },
+    note: "Detectives find the edge from evidence. Two neighbours on opposite tracks pin it down.",
+  },
+  {
+    id: "funhouse", stage: 4, title: "Room 13", place: "Haunted funhouse",
+    dispatch: "The ghost won't say the rule. The log shows one room is different from all the others. Pick the test, then make sure each message is on the right track.",
+    clues: [[12, "Boo!"], [13, "Safe passage"], [14, "Boo!"], [0, "Boo!"]],
+    variable: "room", min: 0, max: 30, condition: "room == 13", yes: "Safe passage", no: "Boo!",
+    tool: "ifs", preset: ["decl", "", printLine("Boo!"), "else", printLine("Safe passage")], given: [0, 3], swap: true,
+    bank: [ifLine("room >= 13"), ifLine("room == 13"), ifLine("room != 13"), ifLine("room = 13")],
+    timetable: [12, 13, 14], spotlight: 13,
+    why: { question: "Why do room == 13 and room != 13 both solve it?", options: ["Flip the test and swap the messages: same decision.", "C# treats == and != the same.", "Room 13 is always true."], answer: 0, explain: "!= is the exact opposite of ==. Flip the test, swap the stations, and every train still lands in the same place." },
+    note: "One exact value against all the rest: == or != finds it. Both work if the stations match.",
+  },
+  {
+    id: "workshop", stage: 4, title: "Master Key", place: "Maker's workshop",
+    dispatch: "The final lock. No code, no rule: only the log. Write the whole if / else yourself, then pick three tests that prove it.",
+    clues: [[0, "Keep charging"], [49, "Keep charging"], [50, "Master unlocked"], [80, "Master unlocked"]],
+    variable: "power", min: 0, max: 100, condition: "power >= 50", yes: "Master unlocked", no: "Keep charging",
+    tool: "write", preset: [], given: [0],
+    timetable: [49, 50, 51], spotlight: 50,
+    why: { question: "What turns a guess into proof?", options: ["Tests just below, on and just above the edge: 49, 50, 51.", "Testing 0 and 100 only.", "Running the same train three times."], answer: 0, explain: "The clues suggest the edge; your tests prove it. Below, at and above leaves the bug nowhere to hide." },
+    note: "You read evidence, wrote a real C# decision and proved it. That is what a maker does.",
+  },
 ];
 
-export const levelCount = levels.length;
+/** The ten levels of the main line; the Mystery line comes after them. */
+export const levelCount = levels.filter((level) => level.stage < 4).length;
+export const mysteryCount = levels.length - levelCount;
+export const isMystery = (index: number) => index >= levelCount;

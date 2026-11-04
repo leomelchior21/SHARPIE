@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Blocks, Check, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowRight, Blocks, Check, CircleHelp, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
 import type { Input } from "../content";
 import { award, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
-import { levels, stages, type Line, type YardLevel } from "./levels";
+import { isMystery, levelCount, levels, mysteryCount, stages, type Line, type YardLevel } from "./levels";
 import { buildYard, dialLine, expected, firstWrong, provesEdge, readDial, readWritten, route, starsFor, swapStations, writtenCode, yardCode, type Route, type Yard } from "./yard";
 import { runYard, warmYard } from "./runYard";
 import { TrackDiagram, type TrainState } from "./TrackDiagram";
 import { WorldArt } from "./WorldArt";
 import { Fx, playFx, setSoundOn, soundOn, type FxKind, type FxState } from "./Fx";
+import { Cs } from "./Cs";
+import { SwitchyardIntro } from "./Intro";
+import { MasterCrown, MysteryReveal } from "./Mystery";
 import "./switchyard.css";
+import "./tour.css";
 
 const slotNames = ["Create the variable", "Test a condition", "TRUE action", "ELSE path", "ELSE action"];
 type Side = "true" | "false";
@@ -29,41 +33,59 @@ const whyOrder = (index: number, count: number, answer: number) => {
 };
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-// C# coloured like the explainer video: keywords purple, types blue, numbers and bools teal, strings gold.
-const tokens = /("(?:[^"\\]|\\.)*"|\b(?:if|else)\b|\b(?:int|double|bool)\b|\b(?:true|false)\b|\b\d+(?:\.\d+)?\b|Console\.WriteLine)/;
-function Cs({ code }: { code: string }) {
-  return <>{code.split(tokens).filter(Boolean).map((part, i) => {
-    const kind = part.startsWith('"') ? "str" : /^(if|else)$/.test(part) ? "kw" : /^(int|double|bool)$/.test(part) ? "type" : /^(true|false|\d+(\.\d+)?)$/.test(part) ? "num" : part === "Console.WriteLine" ? "fn" : "";
-    return <span key={i} className={kind ? `cs-${kind}` : undefined}>{part}</span>;
-  })}</>;
-}
-
 // allOpen: the teacher, or the teacher preview, has every level open.
 export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1);
 
 /** headerSlot: a spot in the Final Project header where the level line goes, so the game keeps the whole screen. */
 export function Switchyard({ progress: p, update, allOpen, onHub, headerSlot = null }: { progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot?: HTMLElement | null }) {
   useEffect(() => { warmYard(); }, []);
-  return <section className="sy">
-    <Level key={p.yardLevel} index={p.yardLevel} progress={p} update={update} allOpen={allOpen} onHub={onHub} headerSlot={headerSlot} />
+  // Each level opens when the one before it ships; a save pointing past that lands on the last open level.
+  const index = levelOpen(p, p.yardLevel, allOpen) ? p.yardLevel : levels.reduce((best, _, i) => levelOpen(p, i, allOpen) ? i : best, 0);
+  // The animated tour plays the first time the game opens; HOW TO PLAY brings it back.
+  const [touring, setTouring] = useState(!p.yardIntro);
+  const done = () => { setTouring(false); if (!p.yardIntro) update((current) => ({ ...current, yardIntro: true })); };
+  // Shipping level 10 opens the Mystery line with a reveal; shipping its last level crowns the Super Maker Master.
+  const [reveal, setReveal] = useState(false);
+  const [crown, setCrown] = useState(false);
+  const before = useRef(index);
+  useEffect(() => { if (before.current === levelCount - 1 && index === levelCount) setReveal(true); before.current = index; }, [index]);
+  return <section className={`sy ${isMystery(index) ? "is-mystery" : ""}`}>
+    <Level key={index} index={index} progress={p} update={update} allOpen={allOpen} onHub={onHub} headerSlot={headerSlot} onHelp={() => setTouring(true)} onMaster={() => setCrown(true)} />
+    {touring && <SwitchyardIntro onDone={done} />}
+    {reveal && !touring && <MysteryReveal onDone={() => setReveal(false)} />}
+    {crown && <MasterCrown stars={p.yardStars.slice(levelCount).reduce((a, b) => a + b, 0)} onDone={() => { setCrown(false); onHub(); }} />}
   </section>;
 }
 
 // The levels as stops on one route line: finished stops in green, the current one in yellow.
 function Rail({ progress: p, index, allOpen, update }: { progress: Progress; index: number; allOpen: boolean; update: Update }) {
   const stage = stages[levels[index].stage];
-  return <nav className="sy-route" aria-label="Switchyard levels">
-    <div className="sy-route-head"><b>Level {index + 1} <span>/ {levels.length}</span></b><small>{stage.short} · {stage.name}</small></div>
+  const mystery = isMystery(index);
+  return <nav className={`sy-route ${mystery ? "is-mystery" : ""}`} aria-label="Switchyard levels">
+    <div className="sy-route-head">{mystery ? <b>Mystery {index - levelCount + 1} <span>/ {mysteryCount}</span></b> : <b>Level {index + 1} <span>/ {levelCount}</span></b>}<small>{stage.short} · {stage.name}</small></div>
     <ol>{levels.map((level, i) => {
       const open = levelOpen(p, i, allOpen);
       const stars = p.yardStars[i] ?? 0;
-      return <li key={level.id} className={`${i > 0 && levels[i - 1].stage !== level.stage ? "is-new-stage" : ""} ${i > 0 && p.yardShipped.includes(i - 1) ? "is-linked" : ""} ${p.yardShipped.includes(i) ? "is-done" : ""} ${i === index ? "is-now" : ""}`}>
-        <button aria-label={`Level ${i + 1}: ${level.title}`} title={`${i + 1} · ${level.title}`} aria-current={i === index ? "step" : undefined} disabled={!open}
-          onClick={() => update((current) => ({ ...current, yardLevel: i }))}>{open ? i + 1 : <Lock size={10} />}</button>
+      // Mystery stops stay question marks until level 10 ships.
+      const secret = isMystery(i);
+      const name = secret ? `Mystery ${i - levelCount + 1}` : `Level ${i + 1}`;
+      return <li key={level.id} className={`${i > 0 && levels[i - 1].stage !== level.stage ? "is-new-stage" : ""} ${secret ? "is-mystery" : ""} ${i > 0 && p.yardShipped.includes(i - 1) ? "is-linked" : ""} ${p.yardShipped.includes(i) ? "is-done" : ""} ${i === index ? "is-now" : ""}`}>
+        <button aria-label={secret && !open ? `${name}: locked` : `${name}: ${level.title}`} title={open ? `${name} · ${level.title}` : secret ? "Ship level 10 to open the Mystery line" : name} aria-current={i === index ? "step" : undefined} disabled={!open}
+          onClick={() => update((current) => ({ ...current, yardLevel: i }))}>{secret ? "?" : open ? i + 1 : <Lock size={10} />}</button>
         <i aria-hidden="true">{[0, 1, 2].map((n) => <em key={n} className={n < stars ? "is-on" : ""} />)}</i>
       </li>;
     })}</ol>
   </nav>;
+}
+
+// Mystery levels: the client's picture is the log itself, and every finished train writes one more line.
+function ClueLog({ level, value, printed }: { level: YardLevel; value: Input; printed: string | null }) {
+  return <div className="sy-clues" aria-label="Clue log">
+    <small>CLUE LOG · the rule is hidden</small>
+    <ol>{level.clues!.map(([seen, said], i) => <li key={i} style={{ "--i": i } as CSSProperties}><b>{String(seen)}</b><span>→</span><em>“{said}”</em></li>)}
+      {printed !== null && <li key={`now-${String(value)}-${printed}`} className="is-yours"><b>{String(value)}</b><span>→</span><em>“{printed || "nothing"}”</em><i>YOUR YARD</i></li>}
+    </ol>
+  </div>;
 }
 
 function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: Yard; trains: Input[]; current: Input | null }) {
@@ -85,14 +107,14 @@ function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: 
   </div>;
 }
 
-function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot: HTMLElement | null }) {
+function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp, onMaster }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot: HTMLElement | null; onHelp: () => void; onMaster: () => void }) {
   const level = levels[index];
   const writing = level.tool === "write";
   const shippedBefore = p.yardShipped.includes(index);
   const draft = p.yardDrafts[level.id];
   const lines = writing ? [] : level.preset.map((line, slot) => level.given.includes(slot) ? line : draft?.[slot] ?? line);
   const code = writing ? draft?.[0] ?? "" : "";
-  const written = writing ? readWritten(code) : null;
+  const written = writing ? readWritten(code, level.variable) : null;
   const yard: Yard = written ?? buildYard(lines);
 
   const [ran, setRan] = useState(shippedBefore || !level.runFirst);
@@ -130,6 +152,9 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
   const editable = [0, 1, 2, 3, 4].filter((slot) => !level.given.includes(slot));
   const locked = busy || !ran;
   const last = index === levels.length - 1;
+  const mystery = isMystery(index);
+  // Level 10 leads into the Mystery line; the last mystery level ends in the crown.
+  const nextLabel = last ? "CLAIM YOUR TITLE ★" : index === levelCount - 1 ? "★ THE MYSTERY LINE" : "NEXT LEVEL";
   const edge = edgeOf(level.condition);
   const proof = writing ? provesEdge(edge, picks) : null;
   const spot = route(yard, level.variable, level.spotlight);
@@ -292,7 +317,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
   const outputSide = lastRow?.route.side ?? null;
   const caption = (text: string) => text.split(/(\btrue\b|\bfalse\b|\bTRUE\b|\bFALSE\b)/).map((part, i) => /^(true|TRUE)$/.test(part) ? <b key={i} className="is-true">{part}</b> : /^(false|FALSE)$/.test(part) ? <b key={i} className="is-false">{part}</b> : part);
 
-  const next = () => last ? onHub() : update((current) => ({ ...current, yardLevel: index + 1 }));
+  const next = () => last ? onMaster() : update((current) => ({ ...current, yardLevel: index + 1 }));
 
   return <>
     {headerSlot ? createPortal(<Rail progress={p} index={index} allOpen={allOpen} update={update} />, headerSlot) : <header className="sy-top"><Rail progress={p} index={index} allOpen={allOpen} update={update} /></header>}
@@ -300,7 +325,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
     <div className="sy-main">
       <aside className="sy-left">
         <div className="sy-mission">
-          <div className="sy-mission-top"><span className="sy-cs">C#</span><small>Level {index + 1} · {level.place}</small></div>
+          <div className="sy-mission-top"><span className="sy-cs">{mystery ? "?" : "C#"}</span><small>{mystery ? `Mystery ${index - levelCount + 1}` : `Level ${index + 1}`} · {level.place}</small><button className="sy-help" onClick={onHelp}><CircleHelp size={14} /> HOW TO PLAY</button></div>
           <h1 className="sy-label">{level.title}</h1>
           <p>{level.dispatch}</p>
           {level.incident && <p className="sy-incident"><b>INCIDENT</b> {level.incident}</p>}
@@ -362,7 +387,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
         <div className="sy-bottom">
           <div className={`sy-world ${lastRow && printed !== null ? lastRow.ok ? "is-ok" : "is-wrong" : ""}`}>
             <div className="sy-world-head"><small>{level.place}</small>{lastRow && printed !== null && <em>{lastRow.ok ? <><Check size={13} strokeWidth={3} /> matches the rule</> : <><X size={13} strokeWidth={3} /> the rule wants “{lastRow.want}”</>}</em>}</div>
-            <WorldArt level={level} value={trainValue} printed={printed} />
+            {level.clues ? <ClueLog level={level} value={trainValue} printed={printed} /> : <WorldArt level={level} value={trainValue} printed={printed} />}
           </div>
           <div className="sy-desk">
             <div className="sy-board" aria-label="Tests">
@@ -378,7 +403,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
             </div>
             {shippedBefore && !shipped ? <div className="sy-replay">
               <button className="sy-go" disabled={!canRun} onClick={start}>{runLabel}</button>
-              <button className="sy-small" onClick={next}>{last ? "SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={14} /></button>
+              <button className="sy-small" onClick={last ? onHub : next}>{last ? "SWITCHYARD" : nextLabel} <ArrowRight size={14} /></button>
             </div> : <button className={`sy-go ${canRun && !board.length ? "is-cue" : ""}`} disabled={!canRun} onClick={start}>{busy ? "RUNNING…" : runLabel}</button>}
           </div>
         </div>
@@ -400,7 +425,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot }: { ind
         <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
           className={why === i ? i === level.why.answer ? "is-right" : "is-wrong" : ""} onClick={() => { setWhy(i); if (i === level.why.answer) burst(setWhyFx, "good", ""); else { burst(setWhyFx, "bad", ""); setWhyShakes((n) => n + 1); } }}>{i === why ? i === level.why.answer ? <Check size={16} strokeWidth={3} /> : <X size={16} strokeWidth={3} /> : null}{level.why.options[i]}</button>)}</div>
         {why !== null && <p className="sy-why-explain">{why === level.why.answer ? <><b>Right.</b> {level.why.explain} {level.note}</> : <><b>Not that one.</b> Read the tests on the board, then try again.</>}</p>}
-        {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{last ? "BACK TO THE SWITCHYARD" : "NEXT LEVEL"} <ArrowRight size={16} /></button>}
+        {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{nextLabel} <ArrowRight size={16} /></button>}
       </div>}
     </div>}
     <Fx fx={bigFx} scope="screen" />
