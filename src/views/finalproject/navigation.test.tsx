@@ -201,6 +201,23 @@ describe("Student Final project navigation", () => {
     expect(screen.getByRole("heading", { name: "First Switch" })).toBeInTheDocument();
   });
 
+  it("resets the code from the editor after a second tap, and points at the run button on run-first levels", () => {
+    atLevel(0);
+    const { container } = mount();
+    expect(screen.getByRole("button", { name: "Reset the code" })).toBeDisabled();
+    fireEvent.click(container.querySelector(".sy-bank [data-line='decl']")!);
+    expect(saved().yardDrafts.cinema[0]).toBe("decl");
+    fireEvent.click(screen.getByRole("button", { name: "Reset the code" }));
+    expect(saved().yardDrafts.cinema[0]).toBe("decl");
+    fireEvent.click(screen.getByRole("button", { name: "Tap again to reset the code" }));
+    expect(saved().yardDrafts.cinema).toEqual(["", "", "", "", ""]);
+    cleanup();
+    atLevel(2);
+    const fan = mount();
+    expect(fan.container.querySelector(".sy-must .sy-go.is-must")?.textContent).toContain("RUN THE YARD AS IT IS");
+    expect(screen.getByText(/First press the glowing/)).toBeInTheDocument();
+  });
+
   it("plays the how-to-play tour the first time the game opens, and brings it back on request", () => {
     atLevel(0, { yardIntro: false });
     mount();

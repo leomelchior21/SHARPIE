@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Blocks, Check, CircleHelp, Clock3, Gauge, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowRight, Blocks, Check, CircleHelp, Clock3, Gauge, Hand, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
 import type { Input } from "../content";
 import { award, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
@@ -132,6 +132,9 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const [selected, setSelected] = useState<number | null>(null);
   const [stage, setStage] = useState<"write" | "timetable">("write");
   const [picks, setPicks] = useState<number[]>([10, 20, 30]);
+  // Reset asks twice: the first tap arms it for a few seconds, the second puts the level back as it started.
+  const [sure, setSure] = useState(false);
+  useEffect(() => { if (!sure) return; const timer = window.setTimeout(() => setSure(false), 3000); return () => window.clearTimeout(timer); }, [sure]);
   const trip = useRef(0);
   // Feedback: a stamp per train on the stage, a big one over the screen at the end of a run, and one for the "why?" answer.
   const [fx, setFx] = useState<FxState | null>(null);
@@ -151,6 +154,8 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const timetable = writing ? picks : level.timetable;
   const editable = [0, 1, 2, 3, 4].filter((slot) => !level.given.includes(slot));
   const locked = busy || !ran;
+  // Nothing to reset while the program is still the one the level started with.
+  const pristine = writing ? !code && stage === "write" : lines.every((line, slot) => line === level.preset[slot]);
   const last = index === levels.length - 1;
   const mystery = isMystery(index);
   // Level 10 leads into the Mystery line; the last mystery level ends in the crown.
@@ -332,6 +337,10 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
         </div>
 
         <div className="sy-editor">
+          <button className={`sy-reset ${sure ? "is-sure" : ""}`} aria-label={sure ? "Tap again to reset the code" : "Reset the code"} disabled={locked || shipped || pristine}
+            onClick={() => { if (!sure) { setSure(true); return; } setSure(false); setSelected(null); if (writing) { save([""]); setStage("write"); setPicks([10, 20, 30]); } else setLines([...level.preset]); }}>
+            <RotateCcw size={13} strokeWidth={2.5} /> {sure ? "TAP AGAIN" : "RESET"}
+          </button>
           {writing ? <div className="sy-write">
             <div className="sy-row"><span className="sy-ln">1</span><code className="sy-code-text" data-slot={0}><Cs code={show("decl")} /></code></div>
             <textarea aria-label="Your if / else" spellCheck={false} autoCapitalize="off" autoCorrect="off" value={code} disabled={busy}
@@ -342,12 +351,11 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
         <p className={`sy-output ${outputSide ? `is-${outputSide}` : ""}`} aria-live="polite"><span>Output</span><b>{lastRow ? lastRow.output || "(nothing)" : ""}</b><i aria-hidden="true" /></p>
 
         <div className="sy-tools">
-          {!ran ? <p className="sy-locked"><Lock size={15} /> {level.incident ? "LOCKED UNTIL YOU WATCH THE INCIDENT" : "LOCKED UNTIL THE YARD HAS RUN ONCE"}</p>
+          {!ran ? <p className="sy-locked is-must"><Lock size={15} /> <span>{level.incident ? "LOCKED UNTIL YOU WATCH THE INCIDENT" : "LOCKED UNTIL THE YARD HAS RUN ONCE"}<small>First press the glowing <b>{runLabel}</b> button.</small></span><ArrowRight className="sy-locked-arrow" size={20} strokeWidth={3} /></p>
             : level.tool === "blocks" ? <>
               <small><Blocks size={15} /> Code blocks · {target === undefined ? "tap a line to send it back" : `for line ${target + 1}`}</small>
               <div className="sy-bank">{bank.map((line) => <button key={line} data-line={line} className={used.has(line) ? "is-used" : ""} disabled={locked || shipped || used.has(line) || target === undefined}
                 onClick={() => { setLines(lines.map((item, m) => m === target ? line : item)); setSelected(null); }}><code><Cs code={show(line)} /></code></button>)}</div>
-              <button className="sy-small" disabled={locked || shipped} onClick={() => { setLines([...level.preset]); setSelected(null); }}><RotateCcw size={14} /> Reset</button>
             </>
               : level.tool === "dial" ? <div className="sy-dial">
                 <small><Gauge size={15} /> Sensor dial · <code><Cs code={`${level.variable} ${dial.op} ${dial.n}`} /></code></small>
@@ -404,6 +412,10 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
             {shippedBefore && !shipped ? <div className="sy-replay">
               <button className="sy-go" disabled={!canRun} onClick={start}>{runLabel}</button>
               <button className="sy-small" onClick={last ? onHub : next}>{last ? "SWITCHYARD" : nextLabel} <ArrowRight size={14} /></button>
+            </div> : !ran && canRun ? <div className="sy-must">
+              {/* Levels that run first: the one button that works right now is impossible to miss. */}
+              <span className="sy-tap" aria-hidden="true"><Hand size={16} strokeWidth={2.5} /> START HERE</span>
+              <button className="sy-go is-must" onClick={start}>{runLabel}</button>
             </div> : <button className={`sy-go ${canRun && !board.length ? "is-cue" : ""}`} disabled={!canRun} onClick={start}>{busy ? "RUNNING…" : runLabel}</button>}
           </div>
         </div>

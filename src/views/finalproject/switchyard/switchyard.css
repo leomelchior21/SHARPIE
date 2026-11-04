@@ -436,3 +436,31 @@
 @keyframes fx-shake-b { 10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(5px); } 30%, 50%, 70% { transform: translateX(-9px); } 40%, 60% { transform: translateX(9px); } }
 @keyframes fx-pop { 40% { transform: scale(1.05); } }
 @media (prefers-reduced-motion: reduce) { .sy-fx i, .sy-fx-flash { display: none; } .sy-stage[class*="is-shake"], .sy-overlay[class*="is-shake"] { animation: none; } }
+
+/* Levels that must run once first: a callout, rings and a shine point at the only button that works. */
+.sy-must { position: relative; display: grid; }
+.fp-shell .sy button.sy-go.is-must { position: relative; overflow: hidden; z-index: 1; min-height: 58px; animation: sy-must 1.3s ease-in-out infinite; }
+.fp-shell .sy button.sy-go.is-must::after { position: absolute; inset: 0; content: ""; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .75) 50%, transparent 65%) -150% 0 / 60% 100% no-repeat; pointer-events: none; animation: sy-shine 2.2s ease-in-out infinite; }
+.sy-tap { position: absolute; z-index: 2; top: -16px; right: 14px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: 2.5px solid var(--ink); border-radius: 999px; color: #fff; background: var(--else); box-shadow: 3px 3px 0 var(--ink); font: 900 12px var(--sans); letter-spacing: .08em; pointer-events: none; animation: sy-tap-bob .9s ease-in-out infinite; }
+.sy-tap::after { position: absolute; bottom: -9px; right: 22px; width: 12px; height: 12px; border-right: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); content: ""; background: var(--else); transform: rotate(45deg); }
+.fp-shell .sy .sy-locked.is-must { padding: 8px 10px; border: 2px dashed #c2410c; border-radius: 10px; background: #fff3ec; }
+.fp-shell .sy .sy-locked.is-must small { display: block; margin-top: 2px; color: var(--ink); font: 600 12.5px/1.35 var(--sans); letter-spacing: 0; }
+.sy-locked.is-must small b { padding: 0 5px; border: 1.5px solid var(--ink); border-radius: 5px; background: var(--yellow); font-weight: 800; white-space: nowrap; }
+.sy-locked-arrow { flex: none; margin-left: auto; color: var(--else); animation: sy-point 1s ease-in-out infinite; }
+@keyframes sy-must { 0%, 100% { box-shadow: 5px 5px 0 var(--ink), 0 0 0 0 rgba(255, 122, 69, .7); transform: scale(1); } 50% { box-shadow: 5px 5px 0 var(--ink), 0 0 0 12px rgba(255, 122, 69, 0); transform: scale(1.03); } }
+@keyframes sy-shine { 0%, 40% { background-position: -150% 0; } 100% { background-position: 250% 0; } }
+@keyframes sy-tap-bob { 50% { transform: translateY(-6px); } }
+@keyframes sy-point { 50% { transform: translateX(6px); } }
+/* Portrait scrolls, so the button rides along at the bottom of the screen until the first run. */
+@media (orientation: portrait) and (max-width: 980px) {
+  .sy-locked-arrow { transform: rotate(90deg); animation: none; }
+  .sy-must { position: fixed; z-index: 20; right: 16px; bottom: 16px; left: 16px; }
+  .sy:has(.sy-must) .sy-main { padding-bottom: 90px; }
+}
+
+/* Reset sits on the code editor's top edge on every level, clear of the program lines. */
+.sy-editor { position: relative; }
+.fp-shell .sy button.sy-reset { position: absolute; z-index: 2; top: -13px; right: 14px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-width: 2px; border-radius: 8px; box-shadow: 2px 2px 0 var(--ink); font: 800 11px var(--sans); letter-spacing: .06em; }
+.fp-shell .sy button.sy-reset:disabled { opacity: .35; }
+.fp-shell .sy button.sy-reset.is-sure { color: #fff; background: var(--else); animation: fx-pop .3s ease-out; }
+.fp-shell .sy button.sy-reset:not(:disabled):hover svg { transform: rotate(-90deg); transition: transform .25s; }
