@@ -4,7 +4,8 @@
 .fp-shell.fp-yard-theme {
   --ink: #1d1d1f; --paper: #fffdf6; --cream: #f4efe3; --dot: #d8cfbd; --muted: #6b665c; --faint: #9a9384;
   --yellow: #ffd23f; --yellow-soft: #fff1b8; --if: #22b07d; --if-soft: #c4ecd8; --else: #ff7a45; --else-soft: #ffd2bd;
-  --kw: #7c3aed; --type: #2f5bd3; --num: #0f8b8d; --str: #9a6a00;
+  /* Code colours follow the other modules (gold types and numbers, red variables, green strings, cyan commands, magenta if / else), deepened to read on cream. */
+  --kw: #c81e9c; --type: #a36700; --num: #a36700; --var: #c43c3c; --str: #4d7d0c; --cmd: #0784a0; --comment: #7a8499;
   --sans: "Space Grotesk", Inter, system-ui, sans-serif;
   color: var(--ink);
   background: radial-gradient(circle, var(--dot) 1px, transparent 1.3px) 0 0 / 22px 22px, var(--cream);
@@ -25,7 +26,7 @@
 .fp-shell .sy button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 .fp-shell .sy button[aria-pressed=true] { border-color: var(--ink); color: var(--ink); background: var(--yellow); }
 .fp-shell .sy button:disabled { opacity: .45; box-shadow: none; }
-.cs-kw { color: var(--kw); font-weight: 700; } .cs-type { color: var(--type); font-weight: 600; } .cs-num { color: var(--num); font-weight: 600; } .cs-str { color: var(--str); } .cs-fn { color: var(--ink); }
+.cs-kw { color: var(--kw); font-weight: 800; } .cs-type { color: var(--type); font-weight: 600; } .cs-num { color: var(--num); font-weight: 600; } .cs-var { color: var(--var); } .cs-str { color: var(--str); } .cs-fn { color: var(--cmd); font-weight: 700; }
 .sy-cs { display: inline-grid; place-items: center; padding: 2px 8px; border-radius: 7px; color: var(--yellow); background: var(--ink); font: 800 13px var(--mono); }
 .sy-mission-top { display: flex; align-items: center; gap: 10px; }
 .fp-shell .sy-label { display: inline-block; justify-self: start; margin: 0; padding: 4px 14px 5px; border: 2.5px solid var(--ink); border-radius: 10px; color: var(--ink); background: var(--yellow); box-shadow: 4px 4px 0 var(--ink); font: 800 clamp(20px, 3vh, 26px)/1.1 var(--mono); letter-spacing: -.01em; transform: rotate(-1.5deg); }
@@ -85,7 +86,7 @@
 .sy-skipped { position: absolute; right: 8px; bottom: -9px; padding: 0 6px; border: 1.5px dashed var(--muted); border-radius: 5px; color: var(--muted); background: var(--paper); font: 700 10px var(--mono); font-style: normal; letter-spacing: .08em; }
 .sy-cond { padding: 1px 4px; border-radius: 6px; color: #fff; }
 .sy-cond.is-true { background: var(--if); } .sy-cond.is-false { background: var(--else); }
-.sy-cond .cs-num, .sy-cond .cs-kw, .sy-cond .cs-type { color: #fff; }
+.sy-cond .cs-num, .sy-cond .cs-kw, .sy-cond .cs-type, .sy-cond .cs-var { color: #fff; }
 .fp-shell .sy .sy-cond-badge { margin-left: 8px; padding: 0 7px; border: 2px solid var(--ink); border-radius: 6px; color: #fff; font: 700 12px var(--mono); }
 .sy-cond-badge.is-true { background: var(--if); } .sy-cond-badge.is-false { background: var(--else); }
 .fp-shell .sy button.sy-slot { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; min-height: 1.85em; padding: 1px 8px; border: 2px dashed #b9b09d; border-radius: 8px; background: transparent; box-shadow: none; font: inherit; text-align: left; }
@@ -163,7 +164,7 @@
 .sy-card-node.is-dead .sy-card-head, .sy-card-node.is-missing .sy-card-head, .sy-card-node.is-broken .sy-card-head { fill: #b9b09d; }
 .sy-card-node.is-dead .sy-card-box, .sy-card-node.is-missing .sy-card-box, .sy-card-node.is-broken .sy-card-box { stroke-dasharray: 7 5; }
 .sy-card-node.is-dead .sy-card-text, .sy-card-node.is-missing .sy-card-text, .sy-card-node.is-broken .sy-card-text { fill: var(--muted); font-style: italic; }
-.sy-train-body { fill: var(--type); stroke: var(--ink); stroke-width: 2.5; }
+.sy-train-body { fill: #2f5bd3; stroke: var(--ink); stroke-width: 2.5; }
 .sy-train-window { fill: #dcefff; stroke: var(--ink); stroke-width: 2; }
 .sy-train-nose { fill: var(--yellow); stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; }
 .sy-train-wheel { fill: var(--ink); }
@@ -308,8 +309,8 @@
 .fp-yard-theme .lab-line-number { color: var(--faint); }
 .fp-yard-theme .lab-line.is-run { border-left-color: var(--if); background: var(--if-soft); }
 .fp-yard-theme .lab-line.is-skip { opacity: .35; }
-.fp-shell.fp-yard-theme .lab-code .syn-type { color: var(--type); } .fp-shell.fp-yard-theme .lab-code .syn-string { color: var(--str); } .fp-shell.fp-yard-theme .lab-code .syn-number { color: var(--num); } .fp-shell.fp-yard-theme .lab-code .syn-variable { color: var(--ink); }
-.fp-shell.fp-yard-theme .lab-code .syn-method { color: var(--ink) !important; }
+.fp-shell.fp-yard-theme .lab-code .syn-type { color: var(--type); } .fp-shell.fp-yard-theme .lab-code .syn-string { color: var(--str); } .fp-shell.fp-yard-theme .lab-code .syn-number { color: var(--num); } .fp-shell.fp-yard-theme .lab-code .syn-variable { color: var(--var); } .fp-shell.fp-yard-theme .lab-code .syn-keyword { color: var(--kw); } .fp-shell.fp-yard-theme .lab-code .syn-comment { color: var(--comment); }
+.fp-shell.fp-yard-theme .lab-code .syn-method { color: var(--cmd) !important; font-weight: 700; }
 .fp-yard-theme .lab-eval { border: 2px solid var(--ink) !important; color: #fff !important; }
 .fp-yard-theme .lab-eval.is-true { background: var(--if); } .fp-yard-theme .lab-eval.is-false { background: var(--else); }
 .fp-shell.fp-yard-theme .lab-eval code { color: #fff; }

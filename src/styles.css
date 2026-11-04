@@ -20,6 +20,7 @@
   --code-number: #e5b567;
   --code-command: #62e6ff;
   --code-comment: #7a8499;
+  --code-keyword: #ff5fd2;
   --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 
@@ -3403,6 +3404,7 @@ button.module-card { cursor: pointer; }
 .console-method { color: var(--code-command) !important; font-weight: 600; }
 .syn-number { color: var(--code-number); }
 .syn-variable { color: var(--code-variable); }
+.syn-keyword { color: var(--code-keyword); font-weight: 700; }
 .code-preview { margin: clamp(25px, 6vh, 62px) 22px 0 61px; padding: 17px; border: 1px solid rgba(100, 143, 243, 0.2); border-radius: 8px; background: rgba(11, 21, 50, 0.62); }
 .code-preview > span { display: block; margin-bottom: 9px; color: #5f7198; font: 0.45rem var(--mono); letter-spacing: 0.12em; }
 .code-preview code { color: #dce8ff; font: 0.71rem/1.8 var(--mono); }

@@ -14,6 +14,7 @@ export const csharpPalette = {
   number: "#e5b567",
   command: "#62e6ff",
   comment: "#7a8499",
+  keyword: "#ff5fd2",
 } as const;
 
 export const csharpEditorBasicSetup: BasicSetupOptions = {
@@ -44,7 +45,8 @@ export const csharpEditorBasicSetup: BasicSetupOptions = {
 };
 
 const csharpHighlightStyle = HighlightStyle.define([
-  { tag: [tags.keyword, tags.typeName, tags.definitionKeyword], color: csharpPalette.type },
+  { tag: [tags.keyword, tags.controlKeyword], color: csharpPalette.keyword, fontWeight: "700" },
+  { tag: [tags.typeName, tags.definitionKeyword], color: csharpPalette.type },
   { tag: [tags.variableName, tags.propertyName, tags.definition(tags.variableName)], color: csharpPalette.variable },
   { tag: [tags.string, tags.special(tags.string)], color: csharpPalette.string },
   { tag: [tags.number, tags.bool, tags.null], color: csharpPalette.number },
