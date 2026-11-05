@@ -1,6 +1,6 @@
 import { questions } from "./content";
 import { adoptLegacyBackroom } from "./backroomStore";
-import { levelCount, levels } from "./switchyard/levels";
+import { blasterCount, levelCount, levels, mysteryCount, mysteryEnd } from "./switchyard/levels";
 const allLevels = levels.length;
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
 // lab is the Switchyard hub; yard is the Switchyard game inside it.
@@ -62,14 +62,40 @@ export function sanitizeProgress(raw: unknown): Progress {
   p.repaired.forEach(i=>p.awards[`mission:${i}`]=50);
   return p;
 }
+/*
+ * Teacher grants, by login: a student's save is moved forward the next time it loads, on any device.
+ * quiz: every question still unanswered counts as answered right. yardFrom: every Switchyard level
+ * before this one (numbered from 1) counts as shipped, so the game opens on it. Nothing already earned is lost.
+ */
+export const grants: Record<string,{quiz?:boolean;yardFrom?:number}> = {
+  constanzacampofiorito:{quiz:true,yardFrom:5},
+};
+export function applyGrant(student:string,p:Progress):Progress {
+  const grant=grants[student.trim().toLowerCase()];
+  if(!grant)return p;
+  const next:Progress={...p,answers:{...p.answers},mastered:[...p.mastered],awards:{...p.awards},yardStars:[...p.yardStars]};
+  if(grant.quiz)for(const q of questions){
+    if(next.answers[q.id]!==undefined)continue;
+    next.answers[q.id]=q.answer;
+    if(!next.mastered.includes(q.id))next.mastered.push(q.id);
+    next.awards[`quiz:${q.id}`]=10;
+  }
+  const shipped=Math.max(0,Math.min(levelCount,(grant.yardFrom??1)-1));
+  if(shipped){
+    next.yardShipped=[...new Set([...next.yardShipped,...Array.from({length:shipped},(_,i)=>i)])].sort((a,b)=>a-b);
+    for(let i=0;i<shipped;i++){next.yardStars[i]=Math.max(1,next.yardStars[i]);next.awards[`yard:${i}`]=30;}
+    if(next.yardLevel<shipped)next.yardLevel=shipped;
+  }
+  return next;
+}
 export function loadProgress(student:string): { progress:Progress; warning:string } {
   try {
     const raw=localStorage.getItem(storageKey(student));
     const data:unknown=raw?JSON.parse(raw):null;
     // Older saves held Backrooms Run too; it moves to the game's own device save.
     adoptLegacyBackroom(student,data);
-    return {progress:sanitizeProgress(data),warning:""};
-  } catch { return {progress:freshProgress(),warning:"Saved progress could not be read. This session is still available; your unreadable save has not been deleted."}; }
+    return {progress:applyGrant(student,sanitizeProgress(data)),warning:""};
+  } catch { return {progress:applyGrant(student,freshProgress()),warning:"Saved progress could not be read. This session is still available; your unreadable save has not been deleted."}; }
 }
 export function saveProgress(student:string,p:Progress):boolean {
   try {localStorage.setItem(storageKey(student),JSON.stringify(p));return true;} catch{return false;}
@@ -83,14 +109,17 @@ export const syncSummary = (p:Progress): FinalProjectSyncState => ({
   quizMissed:questions.flatMap((q,i)=>p.answers[q.id]!==undefined&&p.answers[q.id]!==q.answer?[i+1]:[]),
   // The main line counts for the grade; the Mystery line is reported on its own.
   levels:p.yardShipped.filter(i=>i<levelCount).map(i=>i+1), stars:p.yardStars.slice(0,levelCount).reduce((a,b)=>a+b,0),
-  mystery:p.yardShipped.filter(i=>i>=levelCount).length,
+  mystery:p.yardShipped.filter(i=>i>=levelCount&&i<mysteryEnd).length,
+  blaster:p.yardShipped.filter(i=>i>=mysteryEnd).length,
   policies:p.repaired.length, reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
 });
 /** Every quiz question answered, right or wrong: the Switchyard game opens. */
 export const quizDone = (p:Progress) => questions.every(q=>p.answers[q.id]!==undefined);
 export const mainShipped = (p:Progress) => p.yardShipped.filter(i=>i<levelCount).length;
 /** All three Mystery levels shipped: the Super Maker Master title. */
-export const superMaker = (p:Progress) => p.yardShipped.filter(i=>i>=levelCount).length===allLevels-levelCount;
+export const superMaker = (p:Progress) => p.yardShipped.filter(i=>i>=levelCount&&i<mysteryEnd).length===mysteryCount;
+/** All three Super Mega Blaster Plus Advanced levels shipped: the MEGA CAT BRIAN badge. */
+export const megaCat = (p:Progress) => p.yardShipped.filter(i=>i>=mysteryEnd).length===blasterCount;
 export const stageTwoDone = (p:Progress) => quizDone(p) && mainShipped(p)===levelCount;
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
 // allOpen: the teacher, or the teacher preview.

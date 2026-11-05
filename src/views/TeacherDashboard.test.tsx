@@ -154,7 +154,7 @@ describe("Teacher dashboard", () => {
         attempts: {},
         finalProject: {
           xp: 640, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
-          levels: [1, 2, 3, 4], stars: 10, mystery: 2, policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
+          levels: [1, 2, 3, 4], stars: 10, mystery: 2, blaster: 0, policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
         },
       },
     ]);

@@ -3,12 +3,22 @@ import { missions, questions } from "./content";
 import { compare, conditionResult } from "./logic";
 import { substitute, traceProgram } from "./labStories";
 import { parseFinalProjectSync } from "../../lib/finalProjectSync";
-import { award, canOpen, freshProgress, loadProgress, quizDone, sanitizeProgress, saveProgress, stageTwoDone, storageKey, superMaker, syncSummary, xp } from "./progress";
-import { levelCount, levels, mysteryCount } from "./switchyard/levels";
+import { applyGrant, award, canOpen, freshProgress, loadProgress, megaCat, quizDone, sanitizeProgress, saveProgress, stageTwoDone, storageKey, superMaker, syncSummary, xp } from "./progress";
+import { blasterCount, levelCount, levels, mysteryCount } from "./switchyard/levels";
 const allAnswered=Object.fromEntries(questions.map(q=>[q.id,q.answer]));
 describe("Final project curriculum and behavioral validation",()=>{
+  it("applies teacher grants on load without losing anything already earned",()=>{
+    localStorage.removeItem(storageKey("constanzacampofiorito"));
+    const granted=loadProgress("constanzacampofiorito").progress;
+    expect(quizDone(granted)).toBe(true);expect(canOpen("yard",granted,false)).toBe(true);
+    expect(granted.yardShipped).toEqual([0,1,2,3]);expect(granted.yardLevel).toBe(4);
+    expect(syncSummary(granted)).toMatchObject({quizAnswered:20,quizRight:20,levels:[1,2,3,4]});
+    const ahead=applyGrant("constanzacampofiorito",sanitizeProgress({...freshProgress(),answers:{q1:0},yardShipped:[0,1,2,3,4,5],yardStars:[3,3,3,3,3,2],yardLevel:6}));
+    expect(ahead.answers.q1).toBe(0);expect(ahead.yardShipped).toEqual([0,1,2,3,4,5]);expect(ahead.yardStars.slice(0,6)).toEqual([3,3,3,3,3,2]);expect(ahead.yardLevel).toBe(6);
+    expect(applyGrant("someone-else",freshProgress())).toEqual(freshProgress());
+  });
   it("contains exactly the requested activities and answer key",()=>{
-    expect(levels).toHaveLength(13);expect(levelCount).toBe(10);expect(mysteryCount).toBe(3);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
+    expect(levels).toHaveLength(16);expect(levelCount).toBe(10);expect(mysteryCount).toBe(3);expect(blasterCount).toBe(3);expect(questions).toHaveLength(20);expect(missions).toHaveLength(4);
     expect(questions.map(q=>q.answer)).toEqual([1,0,2,3,1,2,1,0,2,1,2,1,2,0,3,1,2,0,3,0]);
     expect(questions.every(q=>q.options.length===4)).toBe(true);
   });
@@ -57,7 +67,7 @@ describe("Final project profile persistence and milestones",()=>{
     localStorage.removeItem(storageKey("ana"));
   });
   it("recovers malformed fields and reports inaccessible or corrupt storage",()=>{
-    expect(sanitizeProgress({version:1,activity:"other",yardShipped:[0,0,-1,13],yardStars:[9,"x"],yardLevel:40,answers:{q1:8},yardDrafts:{cinema:["too","short"]}})).toMatchObject({activity:"overview",yardShipped:[0],yardStars:[3,0,0,0,0,0,0,0,0,0,0,0,0],yardLevel:12,answers:{},yardDrafts:{}});
+    expect(sanitizeProgress({version:1,activity:"other",yardShipped:[0,0,-1,16],yardStars:[9,"x"],yardLevel:40,answers:{q1:8},yardDrafts:{cinema:["too","short"]}})).toMatchObject({activity:"overview",yardShipped:[0],yardStars:[3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],yardLevel:15,answers:{},yardDrafts:{}});
     localStorage.setItem(storageKey("broken"),"{");expect(loadProgress("broken").warning).not.toBe("");expect(localStorage.getItem(storageKey("broken"))).toBe("{");localStorage.removeItem(storageKey("broken"));
   });
   it("summarizes progress for the teacher dashboard and survives the round trip",()=>{
@@ -67,8 +77,11 @@ describe("Final project profile persistence and milestones",()=>{
     expect(parseFinalProjectSync(JSON.parse(JSON.stringify(summary)))).toEqual(summary);
     // The Mystery line is reported apart from the ten graded levels.
     const master=sanitizeProgress({...freshProgress(),yardShipped:levels.map((_,i)=>i),yardStars:levels.map(()=>3)});
-    expect(syncSummary(master)).toMatchObject({levels:[1,2,3,4,5,6,7,8,9,10],stars:30,mystery:3});
+    expect(syncSummary(master)).toMatchObject({levels:[1,2,3,4,5,6,7,8,9,10],stars:30,mystery:3,blaster:3});
     expect(superMaker(master)).toBe(true);expect(superMaker({...master,yardShipped:master.yardShipped.slice(0,12)})).toBe(false);
+    // The Blaster line earns the MEGA CAT BRIAN badge, apart from the Mystery title.
+    expect(megaCat(master)).toBe(true);expect(megaCat({...master,yardShipped:master.yardShipped.slice(0,15)})).toBe(false);
+    expect(superMaker({...master,yardShipped:master.yardShipped.slice(0,13)})).toBe(true);
     expect(parseFinalProjectSync({levels:[99,-1,"x"],quizRight:500,stars:90})).toMatchObject({levels:[10],quizRight:20,stars:30});
     // Older summaries from the IF / ELSE Lab do not count as Switchyard levels.
     expect(parseFinalProjectSync({built:[1,2,3],flows:3})).toMatchObject({levels:[],stars:0});

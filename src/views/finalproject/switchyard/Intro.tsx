@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Blocks, Check, Clock3, Code2, Lock, Split, Star, TrainFront, X } from "lucide-react";
 import type { Input } from "../content";
-import { ifLine, levelCount, levels, printLine, stages } from "./levels";
+import { ifLine, levelCount, levels, mysteryEnd, printLine, stages } from "./levels";
 import { buildYard, route } from "./yard";
 import { TrackDiagram, type TrainState } from "./TrackDiagram";
 import { WorldArt } from "./WorldArt";
@@ -125,14 +125,15 @@ function Moves() {
 function Route() {
   return <div className="sy-tour-route">
     {/* The Mystery line is only a rumour here: three sealed stops after level 10. */}
-    <ol>{levels.map((level, i) => {
+    {/* The Blaster line is not even a rumour: it stays out of the tour. */}
+    <ol>{levels.slice(0, mysteryEnd).map((level, i) => {
       const secret = i >= levelCount;
       return <li key={level.id} className={`${i === 0 ? "is-now" : ""} ${secret ? "is-mystery" : ""}`} style={{ "--i": i } as CSSProperties}>
         <b>{i === 0 ? 1 : secret ? "?" : <Lock size={12} />}</b>
         <small>{secret ? "???" : level.title}</small>
       </li>;
     })}</ol>
-    <div className="sy-tour-stages">{stages.map((stage, s) => <span key={stage.name} style={{ "--n": levels.filter((level) => level.stage === s).length } as CSSProperties}>{stage.short} · {stage.name}</span>)}</div>
+    <div className="sy-tour-stages">{stages.slice(0, 5).map((stage, s) => <span key={stage.name} style={{ "--n": levels.filter((level) => level.stage === s).length } as CSSProperties}>{stage.short} · {stage.name}</span>)}</div>
     <p className="sy-tour-note"><TrainFront size={16} /> Level 1 is open. Ship it to unlock level 2. And after level 10… something is sealed.</p>
   </div>;
 }

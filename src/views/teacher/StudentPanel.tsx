@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
-import { FINAL_LEVELS, FINAL_MYSTERY, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
+import { FINAL_BLASTER, FINAL_LEVELS, FINAL_MYSTERY, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, RUSH_ROUNDS, formatWhen, isActiveNow, percent, relativeTime } from "./progress";
 import type { ModuleKey, StudentProgress } from "./progress";
 import { ModuleBar, ProgressRing, stateOf } from "./visuals";
@@ -101,6 +101,7 @@ export function StudentPanel({ progress, now, onClose }: StudentPanelProps) {
               )}
               {record.levels.length > 0 && record.levels.length < FINAL_LEVELS && <p className="tdb-note">Switchyard levels shipped: {record.levels.join(", ")}</p>}
               {record.mystery > 0 && <p className="tdb-note">{record.mystery === FINAL_MYSTERY ? <b>★ Super Maker Master: all {FINAL_MYSTERY} Mystery line levels shipped</b> : <>Mystery line (bonus): <b>{record.mystery} / {FINAL_MYSTERY}</b></>}</p>}
+              {record.blaster > 0 && <p className="tdb-note">{record.blaster === FINAL_BLASTER ? <b>🐱 MEGA CAT BRIAN badge: all {FINAL_BLASTER} Super Mega Blaster Plus Advanced levels shipped</b> : <>Super Mega Blaster Plus Advanced (bonus): <b>{record.blaster} / {FINAL_BLASTER}</b></>}</p>}
               {record.reflection.trim() && (
                 <blockquote className="tdb-reflection">
                   <small>WHITE HAT REFLECTION</small>

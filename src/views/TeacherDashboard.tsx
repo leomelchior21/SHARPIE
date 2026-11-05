@@ -7,7 +7,7 @@ import { fetchClassMathlerProgress, fetchClassMathlerScores } from "../lib/basic
 import type { MathlerProgressRow, MathlerScoreRow } from "../lib/basicOps/survivalLeaderboard";
 import { fetchClassProgress } from "../lib/bossSync";
 import type { ClassProgressRow } from "../lib/bossSync";
-import { FINAL_LEVELS, FINAL_MYSTERY } from "../lib/finalProjectSync";
+import { FINAL_BLASTER, FINAL_LEVELS, FINAL_MYSTERY } from "../lib/finalProjectSync";
 import { supabase } from "../lib/supabase";
 import {
   BOSS_TOTAL,
@@ -154,7 +154,7 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
   const selected = students.find((item) => item.student.login === selectedLogin) ?? null;
 
   const exportCsv = () => {
-    const header = ["name", "login", "class", "group", "overall_pct", "mathler_pct", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_pct", "final_quiz_right", "final_quiz_answered", "final_switchyard_levels", "final_switchyard_stars", "final_switchyard_mystery", "final_xp", "last_active"];
+    const header = ["name", "login", "class", "group", "overall_pct", "mathler_pct", "translate_warmup", "rush_completed", "rush_rounds", "target_steps", "time_attack_best", "survival_streak", "survival_score", "bosses", "xp", "final_pct", "final_quiz_right", "final_quiz_answered", "final_switchyard_levels", "final_switchyard_stars", "final_switchyard_mystery", "final_switchyard_blaster", "final_xp", "last_active"];
     const lines = filtered.map((item) => {
       const { mathler, final } = item;
       const record = final.record;
@@ -182,9 +182,10 @@ export function TeacherDashboard({ onOpenModules, onSignOut }: TeacherDashboardP
               `${record.levels.length}/${FINAL_LEVELS}`,
               String(record.stars),
               `${record.mystery}/${FINAL_MYSTERY}`,
+              `${record.blaster}/${FINAL_BLASTER}`,
               String(record.xp),
             ]
-          : Array.from({ length: 6 }, () => "")),
+          : Array.from({ length: 7 }, () => "")),
         item.lastActive ?? "",
       ]
         .map(csvCell)

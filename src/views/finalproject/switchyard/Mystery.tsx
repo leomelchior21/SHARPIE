@@ -58,7 +58,8 @@ export function MasterCrown({ stars, onDone }: { stars: number; onDone: () => vo
       <h2 className="sy-holo">SUPER MAKER MASTER</h2>
       <div className="sy-stars" aria-label={`${stars} of ${mysteryCount * 3} mystery stars`}>{Array.from({ length: mysteryCount * 3 }, (_, n) => <Star key={n} size={22} className={n < stars ? "is-on" : ""} style={{ "--i": n } as CSSProperties} />)}</div>
       <p>You read the evidence, found every edge, wrote C# from nothing and proved it with tests. That is what a maker does.</p>
-      <button className="sy-go is-cue" autoFocus onClick={onDone}>BACK TO THE SWITCHYARD <ArrowRight size={16} /></button>
+      <p className="sy-night-goal">…wait. Something chonky is shaking the yard.</p>
+      <button className="sy-go is-cue" autoFocus onClick={onDone}>WHAT IS THAT NOISE?! <ArrowRight size={16} /></button>
     </div>
   </div>;
 }

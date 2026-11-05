@@ -15,6 +15,8 @@ export type FinalProjectSyncState = {
   stars: number;
   /** Mystery line levels shipped after level 10 (0 to 3); all three is Super Maker Master. */
   mystery: number;
+  /** Super Mega Blaster Plus Advanced levels shipped (0 to 3); all three earns the MEGA CAT BRIAN badge. */
+  blaster: number;
   policies: number;
   reportDone: boolean;
   reflection: string;
@@ -26,6 +28,7 @@ export const FINAL_LEVELS = 10;
 export const FINAL_STARS = FINAL_LEVELS * 3;
 export const FINAL_POLICIES = 4;
 export const FINAL_MYSTERY = 3;
+export const FINAL_BLASTER = 3;
 
 function count(value: unknown, max: number): number {
   const numeric = Number(value);
@@ -47,6 +50,7 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
     levels: numbers(raw.levels, FINAL_LEVELS),
     stars: count(raw.stars, FINAL_STARS),
     mystery: count(raw.mystery, FINAL_MYSTERY),
+    blaster: count(raw.blaster, FINAL_BLASTER),
     policies: count(raw.policies, FINAL_POLICIES),
     reportDone: raw.reportDone === true,
     reflection: typeof raw.reflection === "string" ? raw.reflection.slice(0, 600) : "",

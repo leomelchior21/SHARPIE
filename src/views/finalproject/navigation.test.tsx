@@ -21,7 +21,7 @@ const mount = () => render(<FinalProject name="Ada" studentKey={student} isTeach
 const back = () => fireEvent.click(screen.getByRole("button", { name: "BACK" }));
 const saved = () => JSON.parse(localStorage.getItem(storageKey(student))!) as Progress;
 const licensed = Object.fromEntries(questions.map((q) => [q.id, q.answer]));
-const atLevel = (yardLevel: number, extra: Partial<Progress> = {}) => saveProgress(student, { ...freshProgress(), activity: "yard", answers: licensed, quizIndex: 20, yardLevel, yardShipped: Array.from({ length: yardLevel }, (_, i) => i), yardStars: Array.from({ length: 13 }, (_, i) => i < yardLevel ? 1 : 0), yardIntro: true, ...extra });
+const atLevel = (yardLevel: number, extra: Partial<Progress> = {}) => saveProgress(student, { ...freshProgress(), activity: "yard", answers: licensed, quizIndex: 20, yardLevel, yardShipped: Array.from({ length: yardLevel }, (_, i) => i), yardStars: Array.from({ length: 16 }, (_, i) => i < yardLevel ? 1 : 0), yardIntro: true, ...extra });
 const playOut = () => act(async () => { await vi.advanceTimersByTimeAsync(60000); });
 const verdict = (container: HTMLElement) => container.querySelector(".sy-verdict")?.textContent ?? "";
 
@@ -76,7 +76,7 @@ describe("Student Final project navigation", () => {
     await playOut();
     expect(container.querySelectorAll(".sy-board li.is-ok")).toHaveLength(3);
     expect(verdict(container)).toMatch(/You called train 12 right/);
-    expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+    expect(saved()).toMatchObject({ yardShipped: [0], yardStars: [3, ...Array(15).fill(0)] });
     const dialog = screen.getByRole("dialog", { name: "Level shipped" });
     // The right answer is not parked in the first spot.
     expect(within(dialog).getAllByRole("button").map((b) => b.textContent)[1]).toMatch(/includes 12/);
@@ -248,6 +248,41 @@ describe("Student Final project navigation", () => {
     expect(screen.getByLabelText("Clue log")).toHaveTextContent("17");
     expect(screen.getByRole("button", { name: "Mystery 2: locked" })).toBeDisabled();
     expect(saved().yardLevel).toBe(10);
+  });
+
+  it("hides the Blaster line until the Mystery line is solved, then crashes it in", async () => {
+    atLevel(12);
+    mount();
+    expect(screen.queryByRole("button", { name: /^Blaster/ })).toBeNull();
+    cleanup();
+    vi.useFakeTimers();
+    atLevel(12, { yardShipped: Array.from({ length: 13 }, (_, i) => i) });
+    mount();
+    expect(screen.getByRole("button", { name: "Blaster 1: Cat on the Keyboard" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Blaster 2: Mirror Dimension" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /CLAIM YOUR TITLE/ }));
+    fireEvent.click(screen.getByRole("button", { name: /WHAT IS THAT NOISE/ }));
+    expect(screen.getByRole("dialog", { name: "Super Mega Blaster Plus Advanced unlocked" })).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    fireEvent.click(screen.getByRole("button", { name: /BLAST OFF/ }));
+    expect(screen.getByRole("heading", { name: "Cat on the Keyboard" })).toBeInTheDocument();
+    expect(saved().yardLevel).toBe(13);
+  });
+
+  it("lets Brian walk on the keyboard once, and the MEOW must go before the tests run", async () => {
+    vi.useFakeTimers();
+    atLevel(13);
+    mount();
+    const editor = screen.getByLabelText("Your if / else") as HTMLTextAreaElement;
+    fireEvent.change(editor, { target: { value: 'if (laser >= 7)\n{\n    Console.WriteLine("ZOOMIES!");\n}\nelse\n{\n    Console.WriteLine("Nap time");\n}' } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    expect(editor.value).toMatch(/meow MEOW mrrrp/);
+    expect(document.querySelector(".sy-verdict")?.textContent).toMatch(/BRIAN WALKED ON YOUR KEYBOARD/);
+    expect(screen.getByRole("button", { name: /PICK YOUR TESTS/ })).toBeDisabled();
+    fireEvent.change(editor, { target: { value: editor.value.replace(/\nmeow MEOW mrrrp =\^\.\^=/, "") } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(editor.value).not.toMatch(/meow/);
+    expect(screen.getByRole("button", { name: /PICK YOUR TESTS/ })).toBeEnabled();
   });
 
   it("gives the teacher every quiz question, the answer on demand and free steps", () => {

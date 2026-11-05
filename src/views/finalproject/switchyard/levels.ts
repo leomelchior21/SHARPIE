@@ -15,8 +15,9 @@ export interface Why { question: string; options: string[]; answer: number; expl
 
 export interface YardLevel {
   id: string;
-  /** 4 is the Mystery line: three secret levels that open after level 10. */
-  stage: 0 | 1 | 2 | 3 | 4;
+  /** 4 is the Mystery line: three secret levels that open after level 10.
+   *  5 is the Super Mega Blaster Plus Advanced line: three hidden levels that only appear once the Mystery line is solved. */
+  stage: 0 | 1 | 2 | 3 | 4 | 5;
   title: string;
   place: string;
   /** The yard boss's radio message: the rule in plain words. */
@@ -47,6 +48,13 @@ export interface YardLevel {
   incident?: string;
   /** Mystery levels hide the rule: only a log of trains already seen and where they went. */
   clues?: [Input, string][];
+  /** Blaster levels: the twist that makes the level weird.
+   *  paws: MEGA CAT BRIAN walks across the keyboard and leaves a MEOW in your code.
+   *  mirror: the dispatch and the track are mirrored; three peeks show them the right way round.
+   *  boss: Brian is the boss; every passing test is a hit on his HP bar. */
+  twist?: "paws" | "mirror" | "boss";
+  /** The three tests a written level starts with. */
+  picks?: number[];
   /** Three trains per level: just below, at and just above the edge. */
   timetable: Input[];
   /** The train the student predicts before the first run. */
@@ -61,6 +69,7 @@ export const stages = [
   { name: "INCIDENTS", short: "C" },
   { name: "HEAD CONTROLLER", short: "D" },
   { name: "MYSTERY LINE", short: "?" },
+  { name: "SUPER MEGA BLASTER PLUS ADVANCED", short: "★" },
 ];
 
 const five = (condition: string, yes: string, no: string): Line[] => ["decl", ifLine(condition), printLine(yes), "else", printLine(no)];
@@ -200,9 +209,43 @@ export const levels: YardLevel[] = [
     why: { question: "What turns a guess into proof?", options: ["Tests just below, on and just above the edge: 49, 50, 51.", "Testing 0 and 100 only.", "Running the same train three times."], answer: 0, explain: "The clues suggest the edge; your tests prove it. Below, at and above leaves the bug nowhere to hide." },
     note: "You read evidence, wrote a real C# decision and proved it. That is what a maker does.",
   },
+  // Super Mega Blaster Plus Advanced: hidden until the Mystery line is solved. Every level is typed by hand, and each one has a twist.
+  {
+    id: "keyboard", stage: 5, title: "Cat on the Keyboard", place: "Brian's laser lab", twist: "paws",
+    dispatch: "MEGA CAT BRIAN chases the laser dot only when its power is 7 or more: ZOOMIES! Below 7 he goes back to his Nap time. Type the whole switch. Warning: Brian LOVES warm keyboards.",
+    variable: "laser", min: 0, max: 20, condition: "laser >= 7", yes: "ZOOMIES!", no: "Nap time",
+    tool: "write", preset: [], given: [0], picks: [3, 5, 10],
+    timetable: [6, 7, 8], spotlight: 7,
+    why: { question: "Brian typed MEOW after your else block. Why did the yard refuse to run?", options: ["The if / else ends with the else block: nothing may follow it here.", "C# only understands dog words.", "MEOW is a secret C# keyword."], answer: 0, explain: "Once the else block closes, the decision is complete. Stray text after it is not C#, so the program cannot run." },
+    note: "Real programmers clean up after their cats. Read your code before you run it.",
+  },
+  {
+    id: "mirror", stage: 5, title: "Mirror Dimension", place: "The backwards fish bowl", twist: "mirror",
+    dispatch: "In the mirror dimension Brian counts his fish. Fewer than 12 fish: Brian is HANGRY. With 12 or more: Brian is purring.",
+    variable: "fish", min: 0, max: 30, condition: "fish < 12", yes: "Brian is HANGRY", no: "Brian is purring",
+    tool: "write", preset: [], given: [0], picks: [9, 15, 16],
+    timetable: [11, 12, 13], spotlight: 12,
+    why: { question: "A mirror makes < look like >. In C#, which bowls does fish < 12 send to HANGRY?", options: ["0 to 11: 12 itself is not less than 12.", "12 and every bowl above it.", "Any number that looks like 12 in a mirror."], answer: 0, explain: "< is strictly less than. 11 is in, 12 is out, whichever way the mirror points." },
+    note: "Text can be flipped, scrambled or upside down: the rule is still the rule. Read slowly, then prove the edge.",
+  },
+  {
+    id: "boss", stage: 5, title: "MEGA CAT BOSS", place: "Brian's throne room", twist: "boss",
+    dispatch: "The final boss is MEGA CAT BRIAN himself. When his power is over 9000 the screen must scream MAXIMUM CHONK! At 9000 or less he is just a Tiny kitten. Every test that passes is a hit. Three hits and he is down.",
+    variable: "power", min: 8980, max: 9020, condition: "power > 9000", yes: "MAXIMUM CHONK!", no: "Tiny kitten",
+    tool: "write", preset: [], given: [0], picks: [8996, 9004, 9005],
+    timetable: [8999, 9000, 9001], spotlight: 9000,
+    why: { question: "Brian's power is exactly 9000. What does power > 9000 print?", options: ["Tiny kitten: 9000 is not over 9000.", "MAXIMUM CHONK!: 9000 is a huge number.", "Both messages, because he is the boss."], answer: 0, explain: "> leaves the edge out. Only 9001 and up are over 9000, so exactly 9000 takes the else block." },
+    note: "Big numbers, same rule: the edge decides. You beat the boss with three trains and one if / else.",
+  },
 ];
 
-/** The ten levels of the main line; the Mystery line comes after them. */
+/** The ten levels of the main line; the Mystery line comes after them, then the Blaster line. */
 export const levelCount = levels.filter((level) => level.stage < 4).length;
-export const mysteryCount = levels.length - levelCount;
-export const isMystery = (index: number) => index >= levelCount;
+export const mysteryCount = levels.filter((level) => level.stage === 4).length;
+export const blasterCount = levels.filter((level) => level.stage === 5).length;
+/** The first Blaster level, right after the last Mystery level. */
+export const mysteryEnd = levelCount + mysteryCount;
+export const isMystery = (index: number) => index >= levelCount && index < mysteryEnd;
+export const isBlaster = (index: number) => index >= mysteryEnd;
+export const BLASTER_NAME = "SUPER MEGA BLASTER PLUS ADVANCED";
+export const BADGE_NAME = "MEGA CAT BRIAN";

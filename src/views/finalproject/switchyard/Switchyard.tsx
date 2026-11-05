@@ -2,19 +2,21 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { ArrowRight, Blocks, Check, CircleHelp, Clock3, Gauge, Hand, Keyboard, Lock, RotateCcw, Split, Star, Volume2, VolumeX, X } from "lucide-react";
 import type { Input } from "../content";
-import { award, type Progress, type Update } from "../progress";
+import { award, superMaker, type Progress, type Update } from "../progress";
 import { useExecution, waitStep } from "../shared";
-import { isMystery, levelCount, levels, mysteryCount, stages, type Line, type YardLevel } from "./levels";
+import { blasterCount, isBlaster, isMystery, levelCount, levels, mysteryCount, mysteryEnd, stages, type Line, type YardLevel } from "./levels";
 import { buildYard, dialLine, expected, firstWrong, provesEdge, readDial, readWritten, route, starsFor, swapStations, writtenCode, yardCode, type Route, type Yard } from "./yard";
 import { runYard, warmYard } from "./runYard";
 import { TrackDiagram, type TrainState } from "./TrackDiagram";
 import { WorldArt } from "./WorldArt";
-import { Fx, playFx, setSoundOn, soundOn, type FxKind, type FxState } from "./Fx";
+import { Fx, playFx, playMega, playMeow, setSoundOn, soundOn, type FxKind, type FxState } from "./Fx";
 import { Cs } from "./Cs";
 import { SwitchyardIntro } from "./Intro";
 import { MasterCrown, MysteryReveal } from "./Mystery";
+import { BlasterReveal, BossHud, BrianArt, MegaCatBadge, PawWalk } from "./Blaster";
 import "./switchyard.css";
 import "./tour.css";
+import "./blaster.css";
 
 const slotNames = ["Create the variable", "Test a condition", "TRUE action", "ELSE path", "ELSE action"];
 type Side = "true" | "false";
@@ -34,7 +36,13 @@ const whyOrder = (index: number, count: number, answer: number) => {
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // allOpen: the teacher, or the teacher preview, has every level open.
-export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1);
+// The Blaster line also needs the whole Mystery line solved.
+export const levelOpen = (p: Progress, index: number, allOpen: boolean) => allOpen || index === 0 || p.yardShipped.includes(index - 1) && (!isBlaster(index) || superMaker(p));
+/** Blaster stops are not even shown until the Mystery line is solved. */
+export const levelShown = (p: Progress, index: number, allOpen: boolean) => !isBlaster(index) || allOpen || superMaker(p);
+
+// The Blaster line shouts louder: a different word on every stamp.
+const megaWords: Record<FxKind, string[]> = { good: ["KAPOW!", "MEGA!", "BLAM!", "PURRFECT!"], bad: ["HISSSS!", "CAT-ASTROPHE!", "NOPE!"], win: ["SUPER MEGA WIN!!!"], fail: ["CAT-ASTROPHE!!!"] };
 
 /** headerSlot: a spot in the Final Project header where the level line goes, so the game keeps the whole screen. */
 export function Switchyard({ progress: p, update, allOpen, onHub, headerSlot = null }: { progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot?: HTMLElement | null }) {
@@ -44,16 +52,21 @@ export function Switchyard({ progress: p, update, allOpen, onHub, headerSlot = n
   // The animated tour plays the first time the game opens; HOW TO PLAY brings it back.
   const [touring, setTouring] = useState(!p.yardIntro);
   const done = () => { setTouring(false); if (!p.yardIntro) update((current) => ({ ...current, yardIntro: true })); };
-  // Shipping level 10 opens the Mystery line with a reveal; shipping its last level crowns the Super Maker Master.
+  // Shipping level 10 opens the Mystery line with a reveal; shipping its last level crowns the Super Maker Master,
+  // and then the Blaster line crashes in. Its last level earns the MEGA CAT BRIAN badge.
   const [reveal, setReveal] = useState(false);
   const [crown, setCrown] = useState(false);
+  const [blast, setBlast] = useState(false);
+  const [badge, setBadge] = useState(false);
   const before = useRef(index);
   useEffect(() => { if (before.current === levelCount - 1 && index === levelCount) setReveal(true); before.current = index; }, [index]);
-  return <section className={`sy ${isMystery(index) ? "is-mystery" : ""}`}>
-    <Level key={index} index={index} progress={p} update={update} allOpen={allOpen} onHub={onHub} headerSlot={headerSlot} onHelp={() => setTouring(true)} onMaster={() => setCrown(true)} />
+  return <section className={`sy ${isMystery(index) ? "is-mystery" : ""} ${isBlaster(index) ? "is-blaster" : ""}`}>
+    <Level key={index} index={index} progress={p} update={update} allOpen={allOpen} onHub={onHub} headerSlot={headerSlot} onHelp={() => setTouring(true)} onMaster={() => setCrown(true)} onMega={() => setBadge(true)} />
     {touring && <SwitchyardIntro onDone={done} />}
     {reveal && !touring && <MysteryReveal onDone={() => setReveal(false)} />}
-    {crown && <MasterCrown stars={p.yardStars.slice(levelCount).reduce((a, b) => a + b, 0)} onDone={() => { setCrown(false); onHub(); }} />}
+    {crown && <MasterCrown stars={p.yardStars.slice(levelCount, mysteryEnd).reduce((a, b) => a + b, 0)} onDone={() => { setCrown(false); setBlast(true); }} />}
+    {blast && <BlasterReveal onDone={() => { setBlast(false); update((current) => ({ ...current, yardLevel: mysteryEnd })); }} />}
+    {badge && <MegaCatBadge stars={p.yardStars.slice(mysteryEnd).reduce((a, b) => a + b, 0)} onDone={() => { setBadge(false); onHub(); }} />}
   </section>;
 }
 
@@ -61,17 +74,20 @@ export function Switchyard({ progress: p, update, allOpen, onHub, headerSlot = n
 function Rail({ progress: p, index, allOpen, update }: { progress: Progress; index: number; allOpen: boolean; update: Update }) {
   const stage = stages[levels[index].stage];
   const mystery = isMystery(index);
-  return <nav className={`sy-route ${mystery ? "is-mystery" : ""}`} aria-label="Switchyard levels">
-    <div className="sy-route-head">{mystery ? <b>Mystery {index - levelCount + 1} <span>/ {mysteryCount}</span></b> : <b>Level {index + 1} <span>/ {levelCount}</span></b>}<small>{stage.short} · {stage.name}</small></div>
+  const blaster = isBlaster(index);
+  return <nav className={`sy-route ${mystery ? "is-mystery" : ""} ${blaster ? "is-blaster" : ""}`} aria-label="Switchyard levels">
+    <div className="sy-route-head">{blaster ? <b>Blaster {index - mysteryEnd + 1} <span>/ {blasterCount}</span></b> : mystery ? <b>Mystery {index - levelCount + 1} <span>/ {mysteryCount}</span></b> : <b>Level {index + 1} <span>/ {levelCount}</span></b>}<small>{stage.short} · {stage.name}</small></div>
     <ol>{levels.map((level, i) => {
+      if (!levelShown(p, i, allOpen)) return null;
       const open = levelOpen(p, i, allOpen);
+      const mega = isBlaster(i);
       const stars = p.yardStars[i] ?? 0;
       // Mystery stops stay question marks until level 10 ships.
       const secret = isMystery(i);
-      const name = secret ? `Mystery ${i - levelCount + 1}` : `Level ${i + 1}`;
-      return <li key={level.id} className={`${i > 0 && levels[i - 1].stage !== level.stage ? "is-new-stage" : ""} ${secret ? "is-mystery" : ""} ${i > 0 && p.yardShipped.includes(i - 1) ? "is-linked" : ""} ${p.yardShipped.includes(i) ? "is-done" : ""} ${i === index ? "is-now" : ""}`}>
+      const name = mega ? `Blaster ${i - mysteryEnd + 1}` : secret ? `Mystery ${i - levelCount + 1}` : `Level ${i + 1}`;
+      return <li key={level.id} className={`${i > 0 && levels[i - 1].stage !== level.stage ? "is-new-stage" : ""} ${secret ? "is-mystery" : ""} ${mega ? "is-blaster" : ""} ${i > 0 && p.yardShipped.includes(i - 1) ? "is-linked" : ""} ${p.yardShipped.includes(i) ? "is-done" : ""} ${i === index ? "is-now" : ""}`}>
         <button aria-label={secret && !open ? `${name}: locked` : `${name}: ${level.title}`} title={open ? `${name} · ${level.title}` : secret ? "Ship level 10 to open the Mystery line" : name} aria-current={i === index ? "step" : undefined} disabled={!open}
-          onClick={() => update((current) => ({ ...current, yardLevel: i }))}>{secret ? "?" : open ? i + 1 : <Lock size={10} />}</button>
+          onClick={() => update((current) => ({ ...current, yardLevel: i }))}>{secret ? "?" : mega ? open ? "★" : <Lock size={10} /> : open ? i + 1 : <Lock size={10} />}</button>
         <i aria-hidden="true">{[0, 1, 2].map((n) => <em key={n} className={n < stars ? "is-on" : ""} />)}</i>
       </li>;
     })}</ol>
@@ -107,8 +123,10 @@ function NumberLine({ level, yard, trains, current }: { level: YardLevel; yard: 
   </div>;
 }
 
-function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp, onMaster }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot: HTMLElement | null; onHelp: () => void; onMaster: () => void }) {
+function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp, onMaster, onMega }: { index: number; progress: Progress; update: Update; allOpen: boolean; onHub: () => void; headerSlot: HTMLElement | null; onHelp: () => void; onMaster: () => void; onMega: () => void }) {
   const level = levels[index];
+  const blaster = isBlaster(index);
+  const twist = level.twist;
   const writing = level.tool === "write";
   const shippedBefore = p.yardShipped.includes(index);
   const draft = p.yardDrafts[level.id];
@@ -131,7 +149,8 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const [why, setWhy] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [stage, setStage] = useState<"write" | "timetable">("write");
-  const [picks, setPicks] = useState<number[]>([10, 20, 30]);
+  const startPicks = level.picks ?? [10, 20, 30];
+  const [picks, setPicks] = useState<number[]>(startPicks);
   // Reset asks twice: the first tap arms it for a few seconds, the second puts the level back as it started.
   const [sure, setSure] = useState(false);
   useEffect(() => { if (!sure) return; const timer = window.setTimeout(() => setSure(false), 3000); return () => window.clearTimeout(timer); }, [sure]);
@@ -141,13 +160,22 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const [bigFx, setBigFx] = useState<FxState | null>(null);
   const [whyFx, setWhyFx] = useState<FxState | null>(null);
   const [shakes, setShakes] = useState(0);
+  // Blaster levels: the whole level quakes on the big moments.
+  const [quakes, setQuakes] = useState(0);
   const [whyShakes, setWhyShakes] = useState(0);
   const [won, setWon] = useState(false);
   const [sound, setSound] = useState(soundOn);
   const fxId = useRef(0);
   const showTimer = useRef<number>();
   useEffect(() => () => window.clearTimeout(showTimer.current), []);
-  const burst = (set: (value: FxState) => void, kind: FxKind, text: string) => { fxId.current += 1; set({ id: fxId.current, kind, text }); playFx(kind); };
+  const burst = (set: (value: FxState) => void, kind: FxKind, text: string) => {
+    fxId.current += 1;
+    const words = megaWords[kind];
+    const shout = blaster && text ? twist === "boss" && kind === "win" ? "BOSS DEFEATED!!!" : words[fxId.current % words.length] : text;
+    set({ id: fxId.current, kind, text: shout });
+    (blaster ? playMega : playFx)(kind);
+    if (blaster && set === setBigFx) setQuakes((n) => n + 1);
+  };
   const { run, busy, error } = useExecution();
   const [slow] = useState(() => !reducedMotion());
 
@@ -157,9 +185,10 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   // Nothing to reset while the program is still the one the level started with.
   const pristine = writing ? !code && stage === "write" : lines.every((line, slot) => line === level.preset[slot]);
   const last = index === levels.length - 1;
+  const lastMystery = index === mysteryEnd - 1;
   const mystery = isMystery(index);
-  // Level 10 leads into the Mystery line; the last mystery level ends in the crown.
-  const nextLabel = last ? "CLAIM YOUR TITLE ★" : index === levelCount - 1 ? "★ THE MYSTERY LINE" : "NEXT LEVEL";
+  // Level 10 leads into the Mystery line; the last mystery level ends in the crown; the last Blaster level in the badge.
+  const nextLabel = last ? "CLAIM THE BADGE 😼" : lastMystery ? "CLAIM YOUR TITLE ★" : index === levelCount - 1 ? "★ THE MYSTERY LINE" : blaster ? "NEXT BLASTER ★" : "NEXT LEVEL";
   const edge = edgeOf(level.condition);
   const proof = writing ? provesEdge(edge, picks) : null;
   const spot = route(yard, level.variable, level.spotlight);
@@ -168,6 +197,29 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const clear = () => { setBoard([]); setVerdict(null); setLever(null); setArrived(null); setTrain(null); setReadout([]); };
   const save = (next: string[]) => { update((current) => ({ ...current, yardDrafts: { ...current.yardDrafts, [level.id]: next } })); clear(); };
   const setLines = (next: Line[]) => save(next);
+
+  // Twist "paws": the first time the program is complete, Brian walks over the keyboard and leaves a MEOW after the else block.
+  const [struck, setStruck] = useState(false);
+  const [walking, setWalking] = useState(false);
+  useEffect(() => {
+    if (twist !== "paws" || struck || shippedBefore || !written?.complete || busy) return;
+    const timer = window.setTimeout(() => {
+      setStruck(true); setWalking(true); setShakes((n) => n + 1);
+      playMeow(); playMeow(.45, 1.3);
+      save([`${code.trimEnd()}\nmeow MEOW mrrrp =^.^=`]); setStage("write");
+    }, 1100);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [twist, struck, shippedBefore, written?.complete, code, busy]);
+  useEffect(() => { if (!walking) return; const timer = window.setTimeout(() => setWalking(false), 2800); return () => window.clearTimeout(timer); }, [walking]);
+  const pawHint = twist === "paws" && struck && writing && stage === "write" && !written?.complete && /meow|mrrrp|=\^/i.test(code)
+    ? "🐾 BRIAN WALKED ON YOUR KEYBOARD! Find his MEOW and delete it: nothing goes after the else block." : null;
+
+  // Twist "mirror": the dispatch and the track are mirrored until the level ships; three peeks show them the right way round.
+  const [peeks, setPeeks] = useState(3);
+  const [peeking, setPeeking] = useState(false);
+  useEffect(() => { if (!peeking) return; const timer = window.setTimeout(() => setPeeking(false), 2200); return () => window.clearTimeout(timer); }, [peeking]);
+  const mirrored = twist === "mirror" && !shippedBefore && !shipped && !won && !peeking;
 
   const ship = (stars: number) => {
     // The celebration plays first; the "why?" question opens once it has landed.
@@ -269,6 +321,7 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
     : verdict ? verdict.text
       : shippedBefore ? "Shipped. Replay any level, or move on to the next one."
         : !ran ? (level.incident ? "Incident report on your desk. Run the yard as it is and watch what happens." : "Somebody built this yard before you. Run it as it is and watch where the trains go.")
+          : pawHint ? pawHint
           : writing ? (stage === "write" ? written!.next : proof ?? "Your three trains prove the edge. Run them.")
             : level.tool === "blocks" ? (target === undefined ? "Program complete. Run the tests." : `Tap the code for line ${target + 1}${level.labels ? `: ${slotNames[target].toLowerCase()}` : ""}.`)
               : level.tool === "ifs" ? (lines[1] ? "Run the tests, or pick another switch test." : "Pick the if line for the switch.")
@@ -322,23 +375,25 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
   const outputSide = lastRow?.route.side ?? null;
   const caption = (text: string) => text.split(/(\btrue\b|\bfalse\b|\bTRUE\b|\bFALSE\b)/).map((part, i) => /^(true|TRUE)$/.test(part) ? <b key={i} className="is-true">{part}</b> : /^(false|FALSE)$/.test(part) ? <b key={i} className="is-false">{part}</b> : part);
 
-  const next = () => last ? onMaster() : update((current) => ({ ...current, yardLevel: index + 1 }));
+  const next = () => last ? onMega() : lastMystery ? onMaster() : update((current) => ({ ...current, yardLevel: index + 1 }));
 
   return <>
     {headerSlot ? createPortal(<Rail progress={p} index={index} allOpen={allOpen} update={update} />, headerSlot) : <header className="sy-top"><Rail progress={p} index={index} allOpen={allOpen} update={update} /></header>}
 
-    <div className="sy-main">
+    <div className={`sy-main ${quakes ? `is-quake-${quakes % 2}` : ""}`}>
       <aside className="sy-left">
         <div className="sy-mission">
-          <div className="sy-mission-top"><span className="sy-cs">{mystery ? "?" : "C#"}</span><small>{mystery ? `Mystery ${index - levelCount + 1}` : `Level ${index + 1}`} · {level.place}</small><button className="sy-help" onClick={onHelp}><CircleHelp size={14} /> HOW TO PLAY</button></div>
+          <div className="sy-mission-top"><span className="sy-cs">{blaster ? "★" : mystery ? "?" : "C#"}</span><small>{blaster ? `Blaster ${index - mysteryEnd + 1}` : mystery ? `Mystery ${index - levelCount + 1}` : `Level ${index + 1}`} · {level.place}</small><button className="sy-help" onClick={onHelp}><CircleHelp size={14} /> HOW TO PLAY</button></div>
           <h1 className="sy-label">{level.title}</h1>
-          <p>{level.dispatch}</p>
+          <p className={mirrored ? "sy-mirror" : ""}>{level.dispatch}</p>
+          {twist === "mirror" && !shippedBefore && !shipped && <button className="sy-peek" disabled={peeking || peeks === 0} onClick={() => { setPeeks((n) => n - 1); setPeeking(true); }}>🙃 {peeking ? "PEEKING…" : peeks ? `PEEK · ${peeks} left` : "NO PEEKS LEFT: READ IT BACKWARDS"}</button>}
           {level.incident && <p className="sy-incident"><b>INCIDENT</b> {level.incident}</p>}
         </div>
 
-        <div className="sy-editor">
+        <div className={`sy-editor ${walking ? "is-pawed" : ""}`}>
+          {walking && <PawWalk />}
           <button className={`sy-reset ${sure ? "is-sure" : ""}`} aria-label={sure ? "Tap again to reset the code" : "Reset the code"} disabled={locked || shipped || pristine}
-            onClick={() => { if (!sure) { setSure(true); return; } setSure(false); setSelected(null); if (writing) { save([""]); setStage("write"); setPicks([10, 20, 30]); } else setLines([...level.preset]); }}>
+            onClick={() => { if (!sure) { setSure(true); return; } setSure(false); setSelected(null); if (writing) { save([""]); setStage("write"); setPicks(startPicks); } else setLines([...level.preset]); }}>
             <RotateCcw size={13} strokeWidth={2.5} /> {sure ? "TAP AGAIN" : "RESET"}
           </button>
           {writing ? <div className="sy-write">
@@ -384,8 +439,8 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
       </aside>
 
       <div className="sy-right">
-        <div className={`sy-stage ${shakes ? `is-shake-${shakes % 2}` : ""}`}>
-          <Fx fx={fx} scope="stage" />
+        <div className={`sy-stage ${shakes ? `is-shake-${shakes % 2}` : ""} ${mirrored ? "is-mirror" : ""}`}>
+          <Fx fx={fx} scope="stage" mega={blaster} />
           <TrackDiagram yard={yard} train={train} lever={lever} readout={readout} arrived={arrived} duration={900 * (slow ? 1 : 0.2)} />
           <NumberLine level={level} yard={yard} trains={timetable} current={train?.value ?? null} />
           {/* The caption: what to do now, or what just happened. */}
@@ -395,7 +450,9 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
         <div className="sy-bottom">
           <div className={`sy-world ${lastRow && printed !== null ? lastRow.ok ? "is-ok" : "is-wrong" : ""}`}>
             <div className="sy-world-head"><small>{level.place}</small>{lastRow && printed !== null && <em>{lastRow.ok ? <><Check size={13} strokeWidth={3} /> matches the rule</> : <><X size={13} strokeWidth={3} /> the rule wants “{lastRow.want}”</>}</em>}</div>
-            {level.clues ? <ClueLog level={level} value={trainValue} printed={printed} /> : <WorldArt level={level} value={trainValue} printed={printed} />}
+            {twist === "boss" ? <BossHud hits={board.filter((row) => row.ok).length} misses={board.filter((row) => !row.ok).length} running={busy} />
+              : blaster ? <BrianArt printed={printed} ok={lastRow && printed !== null ? lastRow.ok : null} value={trainValue} />
+                : level.clues ? <ClueLog level={level} value={trainValue} printed={printed} /> : <WorldArt level={level} value={trainValue} printed={printed} />}
           </div>
           <div className="sy-desk">
             <div className="sy-board" aria-label="Tests">
@@ -430,8 +487,8 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
         <div><button className="is-true" onClick={() => predict("true")}>▲ TRUE TRACK</button><button className="is-false" onClick={() => predict("false")}>▼ ELSE TRACK</button></div>
       </div>}
       {shipped && <div className={`sy-overlay sy-shipped ${whyShakes ? `is-shake-${whyShakes % 2}` : ""}`} role="dialog" aria-label="Level shipped">
-        <Fx fx={whyFx} scope="inline" />
-        <span className="sy-stamp">SHIPPED</span>
+        <Fx fx={whyFx} scope="inline" mega={blaster} />
+        <span className="sy-stamp">{blaster ? "BLASTED!" : "SHIPPED"}</span>
         <div className="sy-stars" aria-label={`${p.yardStars[index]} stars`}>{[0, 1, 2].map((n) => <Star key={n} size={28} className={n < p.yardStars[index] ? "is-on" : ""} />)}</div>
         <p className="sy-why-q">{level.why.question}</p>
         <div className="sy-why">{whyOrder(index, level.why.options.length, level.why.answer).map((i) => <button key={level.why.options[i]} disabled={why === level.why.answer}
@@ -440,6 +497,6 @@ function Level({ index, progress: p, update, allOpen, onHub, headerSlot, onHelp,
         {why === level.why.answer && <button className="sy-go is-cue" onClick={next}>{nextLabel} <ArrowRight size={16} /></button>}
       </div>}
     </div>}
-    <Fx fx={bigFx} scope="screen" />
+    <Fx fx={bigFx} scope="screen" mega={blaster} />
   </>;
 }
