@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ArrowUpRight, Check, Eye, Footprints, LockKeyhole, ShieldCheck, TrainFront } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, Eye, Footprints, LockKeyhole, ShieldCheck, TrainFront, Wrench } from "lucide-react";
 import { Brand } from "../../components/Brand";
-import { SHADOW_FEED_OPEN, canOpen, freshProgress, loadProgress, saveProgress, stageThreeDone, stageTwoDone, syncSummary, xp, type Activity, type Progress } from "./progress";
+import { SHADOW_FEED_OPEN, canOpen, repairOpen, freshProgress, loadProgress, saveProgress, stageThreeDone, stageTwoDone, syncSummary, xp, type Activity, type Progress } from "./progress";
 import { queueFinalProjectSync } from "../../lib/finalProjectSync";
 import { Code, useExecution } from "./shared";
 import { executeCSharp } from "../../lib/runner";
@@ -13,10 +13,14 @@ import { Switchyard } from "./switchyard/Switchyard";
 import { SwitchyardHome } from "./switchyard/SwitchyardHome";
 import { ShadowFeed } from "./ShadowFeed";
 import { AuditReport } from "./AuditReport";
+import { RepairShop } from "./repair/RepairShop";
+import { loadShop } from "./repair/logic";
+import { findStudent, type ClassCode } from "../../data/roster";
 import "./finalproject.css";
 import "./lab.css";
-const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"SWITCHYARD",yard:"THE SWITCHYARD","quiz-intro":"QUIZ",quiz:"QUIZ",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
-export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;studentKey:string;isTeacher:boolean;onBack:()=>void}) {
+const labels:Record<Activity,string>={overview:"FINAL PROJECT",matrix:"BACKROOMS RUN",transition:"THE C# CONNECTION",lab:"SWITCHYARD",yard:"THE SWITCHYARD","quiz-intro":"QUIZ",quiz:"QUIZ",repair:"REPAIR SHOP",shadow:"SHADOW FEED",report:"AUDIT REPORT"};
+// classCode: the student's class; it comes from the roster unless a QA page passes one.
+export function FinalProject({name,studentKey,isTeacher,onBack,classCode=findStudent(studentKey)?.classCode}:{name:string;studentKey:string;isTeacher:boolean;onBack:()=>void;classCode?:ClassCode}) {
   const [loaded]=useState(()=>loadProgress(studentKey));
   const [p,setP]=useState(loaded.progress);const [preview,setPreview]=useState(false);const [previewProgress,setPreviewProgress]=useState(freshProgress);
   const [warning,setWarning]=useState(loaded.warning);
@@ -38,17 +42,22 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
   useEffect(()=>{if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(loaded.progress));},[isTeacher,studentKey,loaded]);
   // Teachers always have the quiz and every Switchyard level open, preview or not.
   const allOpen=preview||isTeacher;
-  const activity=canOpen(active.activity,active,allOpen)?active.activity:"overview";
-  const go=(next:Activity)=>{if(canOpen(next,active,allOpen))update(p=>({...p,activity:next}));};
+  // A save left inside a stage this student cannot open (e.g. the Repair Shop in 9A) falls back to the stage list.
+  const activity=canOpen(active.activity,active,allOpen,classCode)?active.activity:"overview";
+  const go=(next:Activity)=>{if(canOpen(next,active,allOpen,classCode))update(p=>({...p,activity:next}));};
+  // The Repair Shop (only some classes) keeps its coins and tools on this device.
+  const repair=repairOpen(classCode,allOpen);
+  const repairShop=activity==="overview"&&!preview?loadShop(studentKey):null;
+  const repairDetail=repairShop?`${repairShop.fixed} machines fixed · ${repairShop.coins} coins`:"Arcade and vending machine";
   const one=backroomStageDone(activeBackroom),two=stageTwoDone(active),three=stageThreeDone(active);
   // Inside the Switchyard, Back returns to its two stations.
   const inLab=["yard","quiz-intro","quiz"].includes(activity);
-  return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""} ${["lab","yard","quiz-intro","quiz"].includes(activity)?"fp-yard-theme":""}`}>
+  return <section className={`fp-shell fp-activity-${activity} ${activity==="shadow"||activity==="report"?"fp-audit-theme":""} ${activity==="matrix"?"fp-game-shell":""} ${["lab","yard","quiz-intro","quiz"].includes(activity)?"fp-yard-theme":""} ${activity==="repair"?"fp-yard-theme fp-repair-theme":""}`}>
     <header className="fp-header">
       <Brand compact/>
       <div className="fp-header-title"><small>FINAL PROJECT {preview&&<span className="fp-preview-marker">· PREVIEW</span>}</small><b>{labels[activity]}</b></div>
       {/* The Switchyard puts its level line here. */}
-      {activity==="yard"&&<div className="fp-header-slot" ref={setHeaderSlot}/>}
+      {(activity==="yard"||activity==="repair")&&<div className="fp-header-slot" ref={setHeaderSlot}/>}
       <div className="fp-header-actions"><span className="fp-xp">ϟ {xp(active)} XP</span>
         {isTeacher&&<button className={preview?"preview-on":""} aria-label={preview?"Exit teacher preview":"Teacher preview"} aria-pressed={preview} onClick={()=>setPreview(!preview)}><Eye size={16}/></button>}
         <button className="fp-back" onClick={()=>activity==="overview"?onBack():go(inLab?"lab":"overview")}><ArrowLeft size={15}/> BACK</button>
@@ -57,12 +66,14 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {warning&&<div className="fp-save-warning" role="status">{warning}</div>}
     <div className="fp-content" key={`${preview}-${activity}`}>
     {activity==="overview"&&<><div className="fp-stage-grid memory-experience-grid">{[
-      {n:"01",title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple fp-stage--backrooms",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${activeBackroom.levelStars.filter(stars=>stars>0).length}/${activeBackroom.levelStars.length} · Endless best: ${activeBackroom.backroomRunBest} gates`},
-      {n:"02",title:"Switchyard",copy:"Pass the quiz, then run the yard: your C# throws every switch.",icon:TrainFront,color:"fp-stage--yard",activity:"lab" as Activity,enabled:true,done:two,unlock:"",detail:`${Object.keys(active.answers).length}/20 quiz · ${active.yardShipped.length}/10 levels`},
+      {title:"Backrooms Run",copy:"Every gate runs C#. Read it right or lose a battery.",icon:Footprints,color:"memory-card-purple fp-stage--backrooms",activity:"matrix" as Activity,enabled:true,done:one,unlock:"",detail:`Tapes: ${activeBackroom.levelStars.filter(stars=>stars>0).length}/${activeBackroom.levelStars.length} · Endless best: ${activeBackroom.backroomRunBest} gates`},
+      {title:"Switchyard",copy:"Pass the quiz, then run the yard: your C# throws every switch.",icon:TrainFront,color:"fp-stage--yard",activity:"lab" as Activity,enabled:true,done:two,unlock:"",detail:`${Object.keys(active.answers).length}/20 quiz · ${active.yardShipped.length}/10 levels`},
+      // Not every class has the Repair Shop yet: no card at all, and the cards after it move up a number.
+      ...(repair?[{title:"Repair Shop",copy:"Open broken machines, fix the insides, reprogram the logic chip.",icon:Wrench,color:"fp-stage--repair",activity:"repair" as Activity,enabled:true,done:false,unlock:"",detail:repairDetail}]:[]),
       // Shadow Feed is hidden for now.
-      ...(SHADOW_FEED_OPEN?[{n:"03",title:"Shadow Feed",copy:"Operation White Hat. Audit the rules behind the feed.",icon:ShieldCheck,color:"memory-card-red",activity:"shadow" as Activity,enabled:two||preview,done:three,unlock:"SWITCHYARD",detail:`${active.repaired.length}/4 policies repaired · ${three?"Report ready":"Audit pending"}`}]:[]),
-    ].map(s=><button
-      key={s.n}
+      ...(SHADOW_FEED_OPEN?[{title:"Shadow Feed",copy:"Operation White Hat. Audit the rules behind the feed.",icon:ShieldCheck,color:"memory-card-red",activity:"shadow" as Activity,enabled:two||preview,done:three,unlock:"SWITCHYARD",detail:`${active.repaired.length}/4 policies repaired · ${three?"Report ready":"Audit pending"}`}]:[]),
+    ].map((s,i)=>({...s,n:String(i+1).padStart(2,"0")})).map(s=><button
+      key={s.title}
       className={`fp-stage memory-experience-card ${s.color} ${s.enabled?"is-available":"is-locked"}`}
       disabled={!s.enabled}
       onClick={()=>go(s.activity)}
@@ -71,7 +82,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
       <span className="memory-card-number">{s.n}</span>
       <span className="memory-card-icon"><s.icon size={28}/></span>
       <span className="memory-card-copy"><strong>{s.title}</strong><small>{s.copy}</small></span>
-      <span className="memory-card-status">{s.enabled?s.done?<><Check size={14}/> COMPLETE</>:<><i/> {s.n!=="03"?"AVAILABLE":"UNLOCKED"}</>:<><LockKeyhole size={14}/> UNLOCK: {s.unlock}</>}</span>
+      <span className="memory-card-status">{s.enabled?s.done?<><Check size={14}/> COMPLETE</>:<><i/> {s.unlock?"UNLOCKED":"AVAILABLE"}</>:<><LockKeyhole size={14}/> UNLOCK: {s.unlock}</>}</span>
       {s.enabled&&<span className="memory-card-enter">ENTER <ArrowUpRight size={18}/></span>}
     </button>)}</div><div className="fp-overview-bottom"><p>Welcome back, <b>{name}</b>. Your progress is saved in this browser.</p>{SHADOW_FEED_OPEN&&three&&<button onClick={()=>go("report")}>OPEN AUDIT REPORT →</button>}</div></>}
     {activity==="matrix"&&<MatrixRun progress={{...activeBackroom,isTeacher:isTeacher||preview}} onProgress={saveBackroom} preview={preview} onBack={()=>go("overview")}/>}
@@ -80,6 +91,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack}:{name:string;stu
     {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")} onPick={allOpen?index=>update(p=>({...p,quizIndex:index,activity:"quiz"})):undefined}/>}
     {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} headerSlot={headerSlot} onHub={()=>go("lab")}/>}
     {activity==="quiz"&&<Quiz progress={active} update={update} allOpen={allOpen} onYard={()=>go("yard")}/>}
+    {activity==="repair"&&<RepairShop name={name} studentKey={studentKey} progress={active} teacher={allOpen} preview={preview} headerSlot={headerSlot}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}
     </div></section>;

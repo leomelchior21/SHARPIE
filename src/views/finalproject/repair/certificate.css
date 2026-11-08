@@ -1,0 +1,83 @@
+/* The Maker Family certificate: a golden scroll that unties and unrolls. */
+.mk { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; overflow: hidden; padding: 16px; background: radial-gradient(circle at 50% 40%, #3b2470 0%, #1a1030 60%, #0d0818 100%); color: #3a2a10; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; animation: mk-fade .4s; user-select: none; -webkit-user-select: none; }
+.mk-rays { position: absolute; left: 50%; top: 45%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; background: repeating-conic-gradient(from 0deg, rgba(255, 215, 106, .16) 0 8deg, transparent 8deg 20deg); animation: mk-spin 40s linear infinite; pointer-events: none; }
+.mk-sparkles i { position: absolute; left: var(--x); bottom: -20px; width: var(--s); height: var(--s); background: #ffe08a; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: mk-rise var(--d) linear infinite; animation-delay: calc(var(--i) * -.37s); filter: drop-shadow(0 0 6px #ffd76a); pointer-events: none; }
+.fp-shell .mk button.mk-x { position: absolute; top: 14px; right: 14px; z-index: 3; width: 46px; height: 46px; display: grid; place-items: center; padding: 0; border: 3px solid #1d1d1f; border-radius: 12px; background: #fffaf0; box-shadow: 3px 3px 0 #1d1d1f; color: #1d1d1f; cursor: pointer; }
+
+/* The gift: a rolled scroll with a red ribbon and a bow. */
+.mk-gift { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.fp-shell .mk .mk-kicker { display: flex; align-items: center; gap: 10px; margin: 0; color: #ffe08a; font: 800 clamp(18px, 3vh, 26px) "Space Grotesk", system-ui, sans-serif; letter-spacing: .04em; text-shadow: 0 2px 0 #5a3d00, 0 0 18px rgba(255, 215, 106, .6); animation: mk-pulse 1.6s ease-in-out infinite; }
+.fp-shell .mk .mk-hint { margin: 0; color: #fffaf0; font: 700 16px "Space Grotesk", system-ui, sans-serif; opacity: .85; }
+.fp-shell .mk button.mk-scroll { position: relative; width: min(220px, 50vw); height: min(380px, 52vh); padding: 0; border: 0; background: none; cursor: pointer; animation: mk-float 3s ease-in-out infinite; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .5)); }
+.mk-paper { position: absolute; left: 12%; right: 12%; top: 8%; bottom: 8%; border-radius: 6px; background: linear-gradient(90deg, #c99a3a 0%, #ffe9a8 22%, #fff6d6 50%, #ffe9a8 78%, #c99a3a 100%); box-shadow: inset 0 0 0 4px #b8862b; }
+.mk-roll { position: absolute; left: 0; right: 0; height: 16%; border-radius: 40px; background: linear-gradient(180deg, #8a5a12 0%, #ffd76a 35%, #fff2c0 50%, #d9a33a 70%, #6e4510 100%); box-shadow: inset 0 0 0 4px #5a3d00; }
+.mk-roll-top { top: 0; } .mk-roll-bottom { bottom: 0; }
+.mk-shine { position: absolute; inset: 0; overflow: hidden; border-radius: 30px; pointer-events: none; }
+.mk-shine::before { content: ""; position: absolute; top: -20%; bottom: -20%; width: 30%; left: -40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .8), transparent); transform: skewX(-20deg); animation: mk-shine 2.6s ease-in-out infinite; }
+.mk-ribbon { position: absolute; left: 0; right: 0; top: 50%; height: 26px; margin-top: -13px; background: linear-gradient(180deg, #ff6b6b, #c0392b 60%, #8e1f16); box-shadow: inset 0 0 0 3px #6e140d; transition: transform .6s cubic-bezier(.5, 0, .7, 0), opacity .6s; }
+.mk-bow { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.mk-bow i { position: absolute; top: -30px; width: 58px; height: 60px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: radial-gradient(circle at 40% 40%, #ff8a80, #c0392b 60%, #8e1f16); box-shadow: inset 0 0 0 4px #6e140d; transition: transform .7s cubic-bezier(.5, 0, .7, 0), opacity .7s; }
+.mk-bow i:first-child { right: 2px; transform: rotate(-25deg); transform-origin: right center; }
+.mk-bow i:nth-child(2) { left: 2px; transform: rotate(25deg); transform-origin: left center; }
+.mk-bow b { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 10px; background: radial-gradient(circle at 40% 40%, #ff8a80, #a52a1f); box-shadow: inset 0 0 0 4px #6e140d, 0 0 0 0 rgba(255, 215, 106, .8); animation: mk-knot 1.4s ease-in-out infinite; transition: transform .5s, opacity .5s; }
+/* Untying: the bow flies apart, the ribbon slides off, the scroll spins up. */
+.mk.is-untying .mk-bow i:first-child { transform: translate(-120px, -160px) rotate(-200deg); opacity: 0; }
+.mk.is-untying .mk-bow i:nth-child(2) { transform: translate(120px, -160px) rotate(200deg); opacity: 0; }
+.mk.is-untying .mk-bow b { transform: scale(0); opacity: 0; }
+.mk.is-untying .mk-ribbon { transform: translateX(140%) rotate(8deg); opacity: 0; transition-delay: .25s; }
+.mk.is-untying button.mk-scroll { animation: mk-unroll 1.3s .4s cubic-bezier(.6, -.3, .4, 1.3) forwards; }
+
+/* The certificate, unrolled. */
+.mk-open { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(980px, 100%); max-height: 100%; animation: mk-open .9s cubic-bezier(.2, 1.3, .4, 1); }
+.mk-cert { position: relative; width: 100%; aspect-ratio: 1.414; max-height: calc(100vh - 140px); padding: 4.5% 6% 3.5%; display: flex; flex-direction: column; border-radius: 6px; background: radial-gradient(ellipse at 50% 45%, #fffaf0 30%, #f3e3bd 100%); box-shadow: 0 0 0 10px #c99a3a, 0 0 0 13px #ffe08a, 0 0 0 16px #8a5a12, 0 30px 60px rgba(0, 0, 0, .55), 0 0 80px rgba(255, 215, 106, .45); container-type: inline-size; overflow: hidden; }
+.mk-cert::before { content: ""; position: absolute; inset: 2.2%; border: 2px solid #c99a3a; border-radius: 4px; pointer-events: none; }
+.mk-cert::after { content: ""; position: absolute; top: -30%; bottom: -30%; width: 18%; left: -30%; background: linear-gradient(90deg, transparent, rgba(255, 246, 214, .9), transparent); transform: skewX(-18deg); animation: mk-shine 1.4s .8s ease-in-out 2 both; pointer-events: none; }
+.mk-corner { position: absolute; width: 4.5cqw; height: 4.5cqw; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff2c0, #c99a3a 60%, #8a5a12); }
+.mk-corner.is-tl { left: 1.1%; top: 1.6%; } .mk-corner.is-tr { right: 1.1%; top: 1.6%; } .mk-corner.is-bl { left: 1.1%; bottom: 1.6%; } .mk-corner.is-br { right: 1.1%; bottom: 1.6%; }
+.mk-cert header { text-align: center; }
+.fp-shell .mk .mk-cert header small { display: block; font: 700 1.7cqw "Iowan Old Style", Palatino, Georgia, serif; letter-spacing: .3em; color: #8a6a2a; }
+.fp-shell .mk .mk-cert h1 { margin: .6cqw 0 0; font-size: 4.2cqw; line-height: 1.1; color: #3a2a10; letter-spacing: .02em; background: linear-gradient(90deg, #8a5a12, #c99a3a, #5a3d00); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mk-body { flex: 1; display: flex; align-items: center; gap: 4cqw; margin-top: 2cqw; }
+.fp-shell .mk button.mk-photo { flex: none; position: relative; width: 22cqw; height: 22cqw; padding: 0; border-radius: 50%; border: 1.1cqw solid #c99a3a; background: #efe2c2; box-shadow: 0 0 0 .4cqw #ffe08a, 0 0 0 .7cqw #8a5a12, 0 8px 20px rgba(0, 0, 0, .25); overflow: hidden; cursor: pointer; color: #8a6a2a; }
+.mk-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mk-photo span { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 700 1.6cqw "Space Grotesk", system-ui, sans-serif; animation: mk-pulse 1.6s ease-in-out infinite; }
+.mk-words { flex: 1; text-align: center; }
+.fp-shell .mk .mk-welcome { margin: 0; font: 400 4.2cqw "Snell Roundhand", "Segoe Script", "Brush Script MT", "Apple Chancery", cursive; color: #3a2a10; }
+.fp-shell .mk .mk-name { margin: .3cqw 0 1.2cqw; font: 700 7.2cqw/1.05 "Snell Roundhand", "Segoe Script", "Brush Script MT", "Apple Chancery", cursive; background: linear-gradient(180deg, #ffd76a 0%, #b8862b 55%, #7a4f0c 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 rgba(90, 61, 0, .35)); animation: mk-name 1s .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+.fp-shell .mk .mk-text { margin: 0 auto; max-width: 52cqw; font-size: 1.9cqw; line-height: 1.45; color: #3a2a10; }
+.mk-text b { color: #8a5a12; }
+.mk-cert footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 3cqw; margin-top: 1.5cqw; }
+.mk-sign, .mk-date { display: flex; flex-direction: column; align-items: center; width: 30cqw; }
+.mk-sign svg { width: 24cqw; height: auto; margin-bottom: -1.2cqw; }
+.mk-sign path { fill: none; stroke: #1f3b8a; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: mk-sign 2.6s 1.2s ease-out forwards; }
+.mk-sign > span, .mk-date b { display: block; width: 100%; padding-top: .6cqw; border-top: 2px solid #8a6a2a; text-align: center; font: 700 2cqw "Iowan Old Style", Palatino, Georgia, serif; color: #3a2a10; }
+.fp-shell .mk .mk-sign small, .fp-shell .mk .mk-date small { font: 400 1.4cqw "Iowan Old Style", Palatino, Georgia, serif; color: #6b5530; }
+.mk-date b { border: 0; border-bottom: 2px solid #8a6a2a; padding: 0 0 .6cqw; }
+.mk-seal { position: relative; flex: none; display: grid; place-items: center; width: 13cqw; height: 13cqw; margin-bottom: -1cqw; clip-path: none; animation: mk-stamp .6s 1s cubic-bezier(.2, 1.6, .4, 1) both; }
+.mk-seal span { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff2c0, #ffd76a 35%, #c99a3a 70%, #8a5a12); box-shadow: 0 0 0 .5cqw #b8862b, 0 6px 14px rgba(0, 0, 0, .3); text-align: center; font: 800 1.5cqw/1.15 "Iowan Old Style", Palatino, Georgia, serif; color: #5a3d00; letter-spacing: .08em; }
+.mk-seal b { font-size: 2.4cqw; }
+.mk-seal i { position: absolute; bottom: -3.5cqw; width: 3.6cqw; height: 6cqw; background: #c0392b; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
+.mk-seal i:first-of-type { left: 22%; transform: rotate(14deg); } .mk-seal i:last-of-type { right: 22%; transform: rotate(-14deg); }
+.mk-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.fp-shell .mk .mk-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 10px 20px; border: 3px solid #1d1d1f; border-radius: 12px; background: #fffaf0; box-shadow: 4px 4px 0 #1d1d1f; color: #1d1d1f; font: 800 16px "Space Grotesk", system-ui, sans-serif; cursor: pointer; }
+.fp-shell .mk .mk-btn.is-gold { background: linear-gradient(180deg, #ffe08a, #ffc93c); animation: mk-glow 1.6s ease-in-out infinite; }
+.fp-shell .mk .mk-btn:disabled { opacity: .6; }
+
+@keyframes mk-fade { from { opacity: 0; } }
+@keyframes mk-spin { to { transform: rotate(360deg); } }
+@keyframes mk-rise { 0% { transform: translateY(0) rotate(0) scale(.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-110vh) rotate(360deg) scale(1.1); opacity: 0; } }
+@keyframes mk-float { 50% { transform: translateY(-14px) rotate(-2deg); } }
+@keyframes mk-shine { 0% { left: -40%; } 60%, 100% { left: 130%; } }
+@keyframes mk-knot { 50% { box-shadow: inset 0 0 0 4px #6e140d, 0 0 0 12px rgba(255, 215, 106, 0); transform: scale(1.12); } }
+@keyframes mk-pulse { 50% { opacity: .65; transform: scale(1.04); } }
+@keyframes mk-unroll { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(-90deg) scale(1.05); } 100% { transform: rotate(-90deg) scale(3, .2); opacity: 0; } }
+@keyframes mk-open { from { transform: scaleY(.05) scaleX(.7); opacity: .3; } }
+@keyframes mk-name { from { transform: scale(.4); opacity: 0; } }
+@keyframes mk-sign { to { stroke-dashoffset: 0; } }
+@keyframes mk-stamp { from { transform: scale(2.4) rotate(-30deg); opacity: 0; } }
+@keyframes mk-glow { 50% { box-shadow: 4px 4px 0 #1d1d1f, 0 0 0 6px rgba(255, 215, 106, .5), 0 0 24px rgba(255, 215, 106, .8); } }
+@media (orientation: portrait) {
+  .mk-cert { max-height: none; }
+  .mk-open { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .mk *, .mk *::before, .mk *::after { animation: none !important; transition: none !important; } .mk-sign path { stroke-dashoffset: 0; } }

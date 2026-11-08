@@ -3,8 +3,10 @@ import { adoptLegacyBackroom } from "./backroomStore";
 import { blasterCount, levelCount, levels, mysteryCount, mysteryEnd } from "./switchyard/levels";
 const allLevels = levels.length;
 import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
+import type { ClassCode } from "../../data/roster";
 // lab is the Switchyard hub; yard is the Switchyard game inside it.
-export const activities = ["overview","matrix","transition","lab","yard","quiz-intro","quiz","shadow","report"] as const;
+// repair is the Repair Shop: stage 03, saved on the device (repair/logic.ts), only for repairClasses.
+export const activities = ["overview","matrix","transition","lab","yard","quiz-intro","quiz","repair","shadow","report"] as const;
 export type Activity = typeof activities[number];
 // Shadow Feed is hidden for now; its stage, save fields and code stay in place.
 export const SHADOW_FEED_OPEN = false;
@@ -122,8 +124,15 @@ export const superMaker = (p:Progress) => p.yardShipped.filter(i=>i>=levelCount&
 export const megaCat = (p:Progress) => p.yardShipped.filter(i=>i>=mysteryEnd).length===blasterCount;
 export const stageTwoDone = (p:Progress) => quizDone(p) && mainShipped(p)===levelCount;
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
-// allOpen: the teacher, or the teacher preview.
-export function canOpen(activity:Activity,p:Progress,allOpen:boolean) {
+/*
+ * The classes that get the Repair Shop. Its logic chip builds on the Switchyard, which 9A has not had yet:
+ * add "9A" here when it has. Students outside these classes (and logins not in the roster) never see it.
+ */
+export const repairClasses: ClassCode[] = ["9B","9C","9D"];
+export const repairOpen = (classCode:ClassCode|undefined,allOpen:boolean) => allOpen||(!!classCode&&repairClasses.includes(classCode));
+// allOpen: the teacher, or the teacher preview. classCode: the student's class from the roster.
+export function canOpen(activity:Activity,p:Progress,allOpen:boolean,classCode?:ClassCode) {
+  if(activity==="repair")return repairOpen(classCode,allOpen);
   if(["shadow","report"].includes(activity))return SHADOW_FEED_OPEN&&(allOpen||stageTwoDone(p)&&(activity!=="report"||stageThreeDone(p)));
   if(activity==="yard")return allOpen||quizDone(p);
   return true;
