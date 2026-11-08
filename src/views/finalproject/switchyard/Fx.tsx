@@ -46,7 +46,7 @@ export function setSoundOn(on: boolean) {
 }
 
 let audio: AudioContext | null = null;
-function context(): AudioContext | null {
+export function context(): AudioContext | null {
   if (!soundOn() || typeof window === "undefined") return null;
   const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Context) return null;
