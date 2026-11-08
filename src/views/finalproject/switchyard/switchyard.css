@@ -342,9 +342,22 @@
 .fp-shell .fp-stage.memory-experience-card.fp-stage--yard {
   border-color: rgba(255,210,63,.7);
   background:
-    linear-gradient(180deg, rgba(29,29,31,0) 0%, rgba(29,29,31,.55) 45%, rgba(29,29,31,.96) 80%),
-    radial-gradient(circle, rgba(29,29,31,.18) 1px, transparent 1.3px) 0 0 / 18px 18px,
-    linear-gradient(160deg, #ffd23f 0%, #22b07d 55%, #ff7a45 100%);
+    linear-gradient(180deg, rgba(29,29,31,0) 0%, rgba(29,29,31,0) 30%, rgba(29,29,31,.72) 52%, rgba(29,29,31,.97) 78%),
+    url("../assets/switchyard-card.svg") center top / cover no-repeat,
+    #f3eee0;
+}
+/* The drawn yard is light: the icon gets a dark chip so it still reads. */
+.fp-shell .fp-stage.fp-stage--yard .memory-card-icon { background: rgba(29,29,31,.82); border-color: rgba(255,210,63,.6); }
+.fp-shell .fp-stage.fp-stage--yard .memory-card-number { color: #1d1d1f; opacity: .55; }
+/* Phones stack the cards wide and short: the drawing sits at the right, full height, clear of the icon. */
+@media (max-width: 760px) {
+  .fp-shell .fp-stage.memory-experience-card.fp-stage--yard {
+    background:
+      linear-gradient(180deg, rgba(29,29,31,0) 0%, rgba(29,29,31,0) 30%, rgba(29,29,31,.72) 55%, rgba(29,29,31,.97) 80%),
+      url("../assets/switchyard-card.svg") right top / auto 100% no-repeat,
+      radial-gradient(circle, rgba(29,29,31,.16) 1.3px, transparent 1.6px) 0 0 / 18px 18px,
+      #f3eee0;
+  }
 }
 .fp-shell .fp-stage.fp-stage--yard .memory-card-icon { color: #ffd23f; }
 

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- Stage 2 card: a train rolling up to the if / else switch, drawn like the yard itself. -->
+  <defs>
+    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="9" cy="9" r="1.3" fill="#1d1d1f" opacity=".16"/>
+    </pattern>
+    <radialGradient id="sun" cx="78%" cy="8%" r="60%">
+      <stop offset="0" stop-color="#ffd23f" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ffd23f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="#f3eee0"/>
+  <rect width="400" height="400" fill="url(#sun)"/>
+  <rect width="400" height="400" fill="url(#dots)"/>
+
+  <g fill="none" stroke-linecap="round">
+    <!-- Sleepers under the main line. -->
+    <path d="M8 94v22M30 94v22M52 94v22M74 94v22M96 94v22M118 94v22M140 94v22M162 94v22M184 94v22M206 94v22" stroke="#cbbf9f" stroke-width="5"/>
+    <!-- Rails: an inked outline with a cream middle, like the yard's track. -->
+    <g stroke="#1d1d1f" stroke-width="15">
+      <path d="M-10 105H236"/>
+      <path d="M236 105C282 105 280 67 326 67H410"/>
+      <path d="M236 105C286 105 282 181 330 181H410"/>
+    </g>
+    <g stroke="#efe6cf" stroke-width="7">
+      <path d="M-10 105H236"/>
+      <path d="M236 105C282 105 280 67 326 67H410"/>
+      <path d="M236 105C286 105 282 181 330 181H410"/>
+    </g>
+    <!-- The switch is thrown up: the if branch glows. -->
+    <path d="M236 105C282 105 280 67 326 67H410" stroke="#22b07d" stroke-width="5"/>
+  </g>
+  <circle cx="236" cy="105" r="7" fill="#1d1d1f"/>
+
+  <!-- The condition sign under the switch. -->
+  <path d="M226 110V128" stroke="#1d1d1f" stroke-width="4"/>
+  <rect x="131" y="129" width="112" height="34" rx="9" fill="#1d1d1f"/>
+  <rect x="126" y="124" width="112" height="34" rx="9" fill="#fffaf0" stroke="#1d1d1f" stroke-width="3.5"/>
+  <text x="182" y="147" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="16" font-weight="700" fill="#1d1d1f">age &lt;= 12</text>
+
+  <!-- Platforms at the end of each branch. -->
+  <g font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-weight="800" text-anchor="middle">
+    <rect x="323" y="81" width="76" height="44" rx="8" fill="#1d1d1f"/>
+    <rect x="318" y="76" width="76" height="44" rx="8" fill="#fffaf0" stroke="#1d1d1f" stroke-width="3.5"/>
+    <path d="M326 76h60a8 8 0 0 1 8 8v8h-76v-8a8 8 0 0 1 8-8z" fill="#22b07d" stroke="#1d1d1f" stroke-width="3.5"/>
+    <text x="356" y="89" font-size="11" fill="#fff">IF</text>
+    <text x="356" y="110" font-size="10" fill="#1d1d1f" font-weight="700">DISCOUNT</text>
+
+    <rect x="323" y="195" width="76" height="44" rx="8" fill="#1d1d1f"/>
+    <rect x="318" y="190" width="76" height="44" rx="8" fill="#fffaf0" stroke="#1d1d1f" stroke-width="3.5"/>
+    <path d="M326 190h60a8 8 0 0 1 8 8v8h-76v-8a8 8 0 0 1 8-8z" fill="#ff7a45" stroke="#1d1d1f" stroke-width="3.5"/>
+    <text x="356" y="203" font-size="11" fill="#fff">ELSE</text>
+    <text x="356" y="224" font-size="10" fill="#1d1d1f" font-weight="700">REGULAR</text>
+  </g>
+
+  <!-- The signal by the switch shows green. -->
+  <g transform="translate(262 14)">
+    <path d="M11 38V76" stroke="#1d1d1f" stroke-width="4"/>
+    <rect x="2" y="2" width="24" height="40" rx="7" fill="#1d1d1f"/>
+    <rect x="-1" y="-1" width="24" height="40" rx="7" fill="#2a2a2e" stroke="#1d1d1f" stroke-width="3"/>
+    <circle cx="11" cy="10" r="10" fill="#22b07d" opacity=".3"/>
+    <circle cx="11" cy="10" r="6" fill="#22b07d"/>
+    <circle cx="11" cy="27" r="6" fill="#5a4a44"/>
+  </g>
+
+  <!-- The train: a wagon and the engine, rolling right toward the switch. -->
+  <g transform="translate(-14 -62)">
+    <g stroke="#1d1d1f" stroke-width="3.5" stroke-linejoin="round">
+      <path d="M14 112h22M8 126h34M18 140h18" stroke-linecap="round" fill="none"/>
+      <rect x="44" y="110" width="70" height="44" rx="7" fill="#22b07d"/>
+      <rect x="54" y="120" width="22" height="16" rx="3" fill="#fffaf0"/>
+      <rect x="82" y="120" width="22" height="16" rx="3" fill="#fffaf0"/>
+      <path d="M114 144h12" stroke-width="5"/>
+      <circle cx="62" cy="160" r="9" fill="#2a2a2e"/>
+      <circle cx="96" cy="160" r="9" fill="#2a2a2e"/>
+      <path d="M126 104h34v50h-34z" fill="#ffd23f"/>
+      <rect x="133" y="112" width="20" height="16" rx="3" fill="#bfe7ff"/>
+      <path d="M120 98h46v8h-46z" fill="#ff7a45"/>
+      <path d="M160 120h44a8 8 0 0 1 8 8v26h-52z" fill="#ffd23f"/>
+      <rect x="178" y="104" width="12" height="16" fill="#2a2a2e"/>
+      <path d="M174 100h20v6h-20z" fill="#2a2a2e"/>
+      <circle cx="208" cy="136" r="5" fill="#fffaf0"/>
+      <path d="M212 154l14 8h-14z" fill="#ff7a45"/>
+      <circle cx="140" cy="160" r="10" fill="#2a2a2e"/>
+      <circle cx="164" cy="160" r="10" fill="#2a2a2e"/>
+      <circle cx="192" cy="161" r="8" fill="#2a2a2e"/>
+    </g>
+    <g fill="#ffd23f">
+      <circle cx="62" cy="160" r="2.5"/><circle cx="96" cy="160" r="2.5"/>
+      <circle cx="140" cy="160" r="3"/><circle cx="164" cy="160" r="3"/><circle cx="192" cy="161" r="2.5"/>
+    </g>
+    <path d="M213 136L246 125V147Z" fill="#ffd23f" opacity=".5"/>
+  </g>
+  <!-- Steam drifting back. -->
+  <g fill="#fffaf0" stroke="#1d1d1f" stroke-width="3">
+    <circle cx="166" cy="26" r="8"/>
+    <circle cx="146" cy="16" r="10"/>
+    <circle cx="120" cy="12" r="12"/>
+  </g>
+</svg>
