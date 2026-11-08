@@ -56,10 +56,163 @@ export type Rig = {
   coils: THREE.Mesh[][];
   /** Looking around: how far the camera stands (landscape, portrait), how high, and the height it looks at. */
   orbit: { r: number; rp: number; y: number; look: number };
+  /** The board's surface (its z), and where each fault's parts sit on it. */
+  plane: number;
+  spots: Spots;
+  /** How the customer works it: coins into the slot, or a tap on a button. */
+  token: "coin" | "tap";
+  /** Little animations of its own, every frame (a record spinning, wheels turning). */
+  tick?: (t: number) => void;
 };
-const bigOrbit = { r: 3.4, rp: 4.3, y: 1.42, look: 1.0 };
+export const bigOrbit = { r: 3.4, rp: 4.3, y: 1.42, look: 1.0 };
 
-const frontSpot = (portrait: boolean): Spot => ({ pos: portrait ? [0.35, 1.2, 4.6] : [0.5, 1.15, 3.75], look: [0.32, 1.02, 0] });
+/** Where the parts of each fault sit, in the world. The plugs are dragged inside box. */
+export type Spots = {
+  sockets: THREE.Vector3[]; anchors: THREE.Vector3[]; rests: THREE.Vector3[];
+  fuse: { holder: THREE.Vector3; spare: THREE.Vector3 };
+  tape: { a: THREE.Vector3; b: THREE.Vector3 };
+  jam: THREE.Vector3;
+  chip: THREE.Vector3;
+  box: { x0: number; x1: number; y0: number; y1: number };
+};
+/**
+ * The standard layout of a board, in fractions of its size, seen from the work side (u: right, v: up).
+ * It is the arcade's layout: cables in a row near the top, the fuse on the left, the chip in the middle.
+ */
+export function boardSpots(cx: number, cy: number, plane: number, f: 1 | -1, w: number, h: number, over: Partial<Spots> = {}): Spots {
+  const P = (u: number, v: number, out: number) => new THREE.Vector3(cx + u * w * f, cy + v * h, plane + out * f);
+  return {
+    sockets: [-0.283, 0, 0.283].map((u) => P(u, 0.25, 0.018)),
+    anchors: [-0.2, 0, 0.2].map((u) => P(u, -0.414, 0.03)),
+    rests: [-0.35, 0, 0.35].map((u, i) => P(u, -0.25 + (i % 2) * 0.043, 0.09)),
+    fuse: { holder: P(-0.333, -0.017, 0.035), spare: P(-0.333, -0.293, 0.05) },
+    tape: { a: P(-0.4, 0.42, 0.03), b: P(0.05, 0.42, 0.03) },
+    jam: P(0.3, 0.02, 0.03),
+    chip: P(0.133, -0.017, 0.01),
+    box: { x0: cx - w / 2, x1: cx + w / 2, y0: cy - 0.388 * h, y1: cy + 0.474 * h },
+    ...over,
+  };
+}
+/** The work views of a board: the panel with its screws (door), and the whole board (inside). */
+export function workViews(cx: number, cy: number, plane: number, f: 1 | -1, w: number, h: number) {
+  return (portrait: boolean): Pick<Record<CamView, Spot>, "door" | "inside"> => {
+    const d = Math.max(h * 2.25, w * 3.3) * (portrait ? 1.14 : 1);
+    return {
+      door: { pos: [cx + w * 0.55, cy + 0.08, plane + f * d * 0.98], look: [cx, cy - h * 0.1, plane] },
+      inside: { pos: [cx, cy - h * 0.04, plane + f * d], look: [cx, cy - h * 0.08, plane] },
+    };
+  };
+}
+/** A green circuit board with traces. */
+export function pcbPlane(w: number, h: number) {
+  return labelPlane(w, h, (c, cw, ch) => {
+    c.fillStyle = "#1f8f5a"; c.fillRect(0, 0, cw, ch);
+    c.strokeStyle = "#5fd39a"; c.lineWidth = 5; c.globalAlpha = 0.55;
+    for (let i = 0; i < Math.max(8, Math.round(26 * w * h / 0.7)); i++) {
+      const x = 20 + ((i * 97) % (cw - 40)), y = 20 + ((i * 151) % Math.max(1, ch - 40));
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + 30 + (i % 4) * 16); c.lineTo(x + 40 + (i % 3) * 30, y + 30 + (i % 4) * 16); c.stroke();
+      c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.stroke();
+    }
+    c.globalAlpha = 1;
+  }, 300);
+}
+/**
+ * The work area on a machine's face: a frame, the board, the logic chip and the screwed panel over them.
+ * plane: the board's z, just outside the body. The panel sits 0.035 further out.
+ */
+export function workArea(g: THREE.Group, chipMaterial: THREE.Material, o: { cx: number; cy: number; plane: number; f: 1 | -1; w: number; h: number; panel: string; slats: string; frame: string; screws?: 4 | 6; spots?: Partial<Spots>; chipScale?: number }) {
+  const { cx, cy, plane, f, w, h } = o;
+  const spots = boardSpots(cx, cy, plane, f, w, h, o.spots);
+  const frameMat = toon(o.frame);
+  const fz = plane - f * 0.01;
+  g.add(mesh(box(w + 0.1, 0.04, 0.04), frameMat, cx, cy + h / 2 + 0.03, fz), mesh(box(w + 0.1, 0.04, 0.04), frameMat, cx, cy - h / 2 - 0.03, fz));
+  g.add(mesh(box(0.04, h + 0.1, 0.04), frameMat, cx + w / 2 + 0.03, cy, fz), mesh(box(0.04, h + 0.1, 0.04), frameMat, cx - w / 2 - 0.03, cy, fz));
+  const pcb = pcbPlane(w, h);
+  pcb.position.set(cx, cy, plane - f * 0.004);
+  pcb.rotation.y = f < 0 ? Math.PI : 0;
+  g.add(pcb);
+  const chip = logicChip(chipMaterial, f);
+  chip.scale.setScalar(o.chipScale ?? 1);
+  chip.position.copy(spots.chip);
+  g.add(chip);
+  const pw = w + 0.06, ph = h + 0.04, panelZ = plane + f * 0.035;
+  const panel = new THREE.Group();
+  panel.add(mesh(box(pw, ph, 0.02), toon(o.panel), 0, 0, 0, 0.012), hitArea(Math.min(pw, ph) * 0.45), hitBox(pw, ph, 0.05));
+  const slats = Math.max(2, Math.min(6, Math.round(ph / 0.2)));
+  for (let i = 0; i < slats; i++) panel.add(mesh(box(pw * 0.55, 0.022, 0.01), toon(o.slats), 0, -ph * 0.3 + i * (ph * 0.6 / Math.max(1, slats - 1)), f * 0.012));
+  const home = new THREE.Vector3(cx, cy, panelZ);
+  panel.position.copy(home);
+  g.add(panel);
+  const ix = pw / 2 - 0.06, iy = ph / 2 - 0.05;
+  const screwSpots: [number, number][] = [[cx + ix, cy + iy], [cx - ix, cy + iy], [cx + ix, cy - iy], [cx - ix, cy - iy], ...(o.screws === 6 ? [[cx + ix, cy], [cx - ix, cy]] as [number, number][] : [])];
+  return {
+    chip, panel, plane, spots, screwSpots, screwZ: panelZ + f * 0.019,
+    board: { center: new THREE.Vector3(cx, cy, plane + f * 0.12), w, h },
+    // Off: up, out and leaning against the machine's left side, on the floor.
+    panelPose: (e: number) => {
+      panel.position.set(home.x - e * (pw / 2 + 0.45 + Math.abs(cx)), home.y + Math.sin(e * Math.PI) * 0.22 - e * (home.y - ph / 2 - 0.03), home.z + f * e * 0.3);
+      panel.rotation.set(0, e * 0.9, e * 0.12);
+    },
+    door: (id = "back") => door(id, panel, new THREE.Vector3(0, 0, f), new THREE.Vector3(cx, cy, panelZ + f * 0.02), null),
+    views: workViews(cx, cy, plane, f, w, h),
+  };
+}
+/** A small hatch that swings open on a hinge, with a handle and a dark hole behind it. normal: the way it faces. */
+export function hatch(o: { id: string; w: number; h: number; color: string; at: THREE.Vector3; normal: THREE.Vector3; hinge: "side" | "top"; open?: number }) {
+  const { w, h, at, normal } = o;
+  const side = Math.abs(normal.x) > 0.5;
+  const pivot = new THREE.Group();
+  const plate = side ? mesh(box(0.02, h, w), toon(o.color), 0, 0, 0, 0.01) : mesh(box(w, h, 0.02), toon(o.color), 0, 0, 0, 0.01);
+  plate.add(side ? mesh(box(0.02, 0.05, 0.03), toon("#1d1d1f"), normal.x * 0.012, 0, w * 0.3) : mesh(box(0.03, 0.05, 0.02), toon("#1d1d1f"), w * 0.3, 0, normal.z * 0.012));
+  const hit = side ? hitBox(0.07, h + 0.04, w + 0.04) : hitBox(w + 0.04, h + 0.04, 0.07);
+  const holder = new THREE.Group();
+  holder.add(plate, hit);
+  // The pivot sits on the hinge edge and the plate hangs off it.
+  if (o.hinge === "top") { pivot.position.set(at.x, at.y + h / 2, at.z); holder.position.set(0, -h / 2, 0); }
+  else if (side) { pivot.position.set(at.x, at.y, at.z - w / 2); holder.position.set(0, 0, w / 2); }
+  else { pivot.position.set(at.x - w / 2, at.y, at.z); holder.position.set(w / 2, 0, 0); }
+  pivot.add(holder);
+  const gap = hole(w * 0.92, h * 0.92);
+  gap.position.copy(at).addScaledVector(normal, -0.008);
+  gap.rotation.y = Math.atan2(normal.x, normal.z);
+  const amount = o.open ?? 1.7;
+  const swing = (e: number) => {
+    if (o.hinge === "top") { if (side) pivot.rotation.z = normal.x * amount * 0.75 * e; else pivot.rotation.x = -normal.z * amount * 0.75 * e; }
+    else pivot.rotation.y = (side ? normal.x : -normal.z) * amount * e;
+  };
+  const d = door(o.id, pivot, normal.clone(), at.clone().addScaledVector(normal, 0.01), swing, at.clone().addScaledVector(normal, -0.004), at.clone().addScaledVector(normal, 0.06));
+  return { pivot, gap, door: d };
+}
+/** A machine's small screen: a dark bezel with a canvas, facing front. */
+export function screenOn(g: THREE.Object3D, tex: CanvasTex, w: number, h: number, at: THREE.Vector3, tilt = 0) {
+  const bezel = mesh(box(w + 0.03, h + 0.03, 0.012), toon("#111018"), at.x, at.y, at.z, 0.006);
+  bezel.rotation.x = tilt;
+  const lcd = texturePlane(w, h, tex);
+  lcd.position.set(0, 0, 0.0075);
+  bezel.add(lcd);
+  g.add(bezel);
+  return bezel;
+}
+/** A screen that shows the machine's name, a message, or a party. */
+export function screenPainter(tex: CanvasTex, o: { bg: string; title: string; sub: string; color: string; msg?: string }) {
+  return (st: ScreenState, time: number) => {
+    const c = tex.ctx, w = tex.canvas.width, h = tex.canvas.height;
+    c.fillStyle = st.mode === "off" ? "#050507" : o.bg;
+    c.fillRect(0, 0, w, h);
+    if (st.mode !== "off") {
+      c.textAlign = "center"; c.textBaseline = "middle";
+      const blink = Math.floor(time * 2) % 2 === 0;
+      if (st.mode === "attract") { c.fillStyle = o.color; c.font = `900 ${h * 0.24}px system-ui, sans-serif`; c.fillText(o.title, w / 2, h * 0.36); if (blink) { c.fillStyle = "#ffffff"; c.font = `700 ${h * 0.14}px monospace`; c.fillText(o.sub, w / 2, h * 0.7); } }
+      if (st.mode === "message") { c.fillStyle = o.msg ?? "#ff8a8a"; c.font = `800 ${h * 0.22}px system-ui, sans-serif`; wrapText(c, st.text, w / 2, h * 0.44, w - 24, h * 0.24); }
+      if (st.mode === "blank") { c.fillStyle = "#3a3f6a"; c.font = `700 ${h * 0.17}px monospace`; c.fillText(blink ? "_" : "", w / 2, h / 2); }
+      if (st.mode === "game") { c.fillStyle = `hsl(${(time * 120) % 360},90%,65%)`; c.font = `900 ${h * 0.26}px system-ui, sans-serif`; wrapText(c, st.text, w / 2, h * 0.45 + Math.sin(time * 6) * 3, w - 20, h * 0.28); }
+      if (st.note) { c.fillStyle = "#c8d6ff"; c.font = `700 ${h * 0.12}px monospace`; c.fillText(st.note, w / 2, h * 0.88); }
+    }
+    tex.texture.needsUpdate = true;
+  };
+}
+
+export const frontSpot = (portrait: boolean): Spot => ({ pos: portrait ? [0.35, 1.2, 4.6] : [0.5, 1.15, 3.75], look: [0.32, 1.02, 0] });
 const markDoor = (o: THREE.Object3D, id: string) => o.traverse((x) => { x.userData.door = id; });
 export const hole = (w: number, h: number) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: "#0d0d12" }));
 export function door(id: string, pivot: THREE.Object3D, normal: THREE.Vector3, center: THREE.Vector3, swing: DoorRig["swing"], propIn = center.clone(), propOut = center.clone()): DoorRig {
@@ -88,10 +241,10 @@ export function logicChip(material: THREE.Material, f: 1 | -1) {
 
 /* ---------- 1. The arcade cabinet: the fault is behind the back panel ---------- */
 
-export const ARCADE = { BOARD_Z: -0.365, PANEL_Z: -0.4, SOCKET_Y: 1.24, socketX: [0.17, 0, -0.17] };
+export const ARCADE = { BOARD_Z: -0.365, PANEL_Z: -0.4 };
 
 export function buildArcade(chipMaterial: THREE.Material): Rig {
-  const { BOARD_Z, PANEL_Z, SOCKET_Y } = ARCADE;
+  const { BOARD_Z, PANEL_Z } = ARCADE;
   const cab = new THREE.Group();
   const screen = canvasTexture(512, 384), marqueeTex = canvasTexture(512, 128), sticker = canvasTexture(256, 160);
   const purple = toon("#6c3df4"), dark = toon("#2a2340"), yellow = toon("#ffd23f"), pink = toon("#ff5fa2");
@@ -153,7 +306,7 @@ export function buildArcade(chipMaterial: THREE.Material): Rig {
   pcb.rotation.y = Math.PI;
   const chip = logicChip(chipMaterial, -1);
   chip.position.set(-0.08, 0.93, BOARD_Z - 0.01);
-  cab.add(pcb, chip, mesh(box(0.52, 0.12, 0.02), toon("#1b1b22"), 0, SOCKET_Y, BOARD_Z - 0.005, 0.008), mesh(box(0.4, 0.06, 0.04), toon("#1b1b22"), 0, 0.46, BOARD_Z - 0.01, 0.008));
+  cab.add(pcb, chip, mesh(box(0.52, 0.12, 0.02), toon("#1b1b22"), 0, 1.24, BOARD_Z - 0.005, 0.008), mesh(box(0.4, 0.06, 0.04), toon("#1b1b22"), 0, 0.46, BOARD_Z - 0.01, 0.008));
 
   const panel = new THREE.Group();
   panel.add(mesh(box(0.66, 1.2, 0.02), toon("#454f73"), 0, 0, 0, 0.012), hitArea(0.3));
@@ -228,6 +381,7 @@ export function buildArcade(chipMaterial: THREE.Material): Rig {
       inside: { pos: portrait ? [0, 0.9, -3.3] : [0, 0.9, -2.95], look: [0, 0.86, -0.36] },
     }),
     seeThrough: false, coils: [], orbit: bigOrbit,
+    plane: BOARD_Z, spots: boardSpots(0, 0.95, BOARD_Z, -1, 0.6, 1.16), token: "coin",
   };
 }
 
@@ -402,6 +556,7 @@ export function buildVending(chipMaterial: THREE.Material): Rig {
       inside: { pos: portrait ? [-0.15, 1.12, 3.75] : [-0.15, 1.12, 3.05], look: [-0.15, 1.1, 0.25] },
     }),
     seeThrough: true, coils, orbit: bigOrbit,
+    plane: 0.002, spots: boardSpots(-0.15, 1.16, 0.002, 1, 0.58, 1.26), token: "coin",
   };
 }
 
@@ -483,5 +638,6 @@ export function buildPractice(chipMaterial: THREE.Material): Rig {
       inside: { pos: portrait ? [0, 1.0, -1.95] : [0, 0.98, -1.45], look: [0, 0.86, -0.2] },
     }),
     seeThrough: false, coils: [], orbit: { r: 1.55, rp: 2.1, y: 1.25, look: 0.78 },
+    plane: BOARD_Z, spots: boardSpots(0, TOP + 0.17, BOARD_Z, -1, 0.4, 0.24), token: "coin",
   };
 }

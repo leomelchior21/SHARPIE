@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Award, Bot, Candy, Check, CircleDot, Coffee, Coins, Cpu, DoorOpen, Eye, Gamepad, Hammer, Hand, Lamp, ListChecks, Lock, Music, PackageOpen, PartyPopper, Play, Pointer, Power, RotateCcw, Scissors, ShoppingCart, SkipForward, Sparkles, Store, Wind, Wrench, X, Zap, Grid3x3, Armchair, Cable } from "lucide-react";
-import { loadProgress as loadRemote } from "../../../lib/progressStore";
-import { sanitizeBossProgress } from "../../../lib/bossProgress";
+import { ArrowRight, Award, Bandage, Bike, Bot, Candy, Check, CircleDot, Coffee, Cog, Coins, Cpu, DoorOpen, Eye, Gamepad, Hammer, Hand, Lamp, ListChecks, Lock, Music, PackageOpen, PartyPopper, Play, Pointer, Power, RotateCcw, Scissors, ShoppingCart, SkipForward, Sparkles, Store, Wind, Wrench, X, Zap, Grid3x3, Armchair, Cable } from "lucide-react";
 import type { Progress } from "../progress";
 import { LabCode } from "../LabParts";
 import { Cs } from "../switchyard/Cs";
 import {
-  HAMMER, UNLOCK_EVERY, afterTicket, allMachines, bench, brokenTest, buy, catalog, categories, chipCode, clueText, equip, evidenceFrom, freshShop, hidesProblem, itemById, jokeText, loadShop, lookOf,
-  machineInfo, machineOrder, makeJob, nextMachine, overrideFor, owns, parseCondition, payout, practiceJob, printed, profileTier, rightTest, roadmap, saveShop, shiftTier, slotName, tierNames, tiers, toolFor, toolInfo, unlockedBy,
-  type BenchRow, type Category, type Evidence, type Job, type MachineId, type ScrewHead, type Shop, type Slips, type Tier, type ToolKind,
+  HAMMER, TAPE_WRAPS, afterTicket, allMachines, bench, brokenRun, buy, catalog, categories, chipCode, cleared, clueText, equip, freshShop, itemById, jokeText, levelOf, levelOpen, loadShop, lookOf,
+  machineInfo, makeJob, nextMachine, owns, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, rightRun, roadmap, runWith, saveShop, slotName, toolFor, toolInfo, unlockedBy,
+  type BenchRow, type Category, type Job, type MachineId, type Run, type ScrewHead, type Shop, type Slips, type ToolKind,
 } from "./logic";
 import { Workshop, headColors, webglAvailable, type Points, type TourSpot, type View, type Work } from "./workshop";
 import { sfx } from "./sound";
@@ -17,13 +15,13 @@ import { Certificate } from "./Certificate";
 import "./repair.css";
 
 /** tour and ready: the tutorial before the first customer (the tour of the shop, and the end of the practice box). */
-type Phase = "tour" | "arrive" | "find" | "screws" | "panel" | "dust" | "wires" | "fuse" | "snack" | "claw" | "chip" | "close" | "lock" | "power" | "paid" | "ready";
-type Ticket = { seed: number; tier: Tier; machine: MachineId; hide: boolean };
+type Phase = "tour" | "arrive" | "find" | "screws" | "panel" | "dust" | "wires" | "fuse" | "snack" | "jam" | "claw" | "tape" | "chip" | "close" | "lock" | "power" | "paid" | "ready";
+type Ticket = { seed: number; machine: MachineId };
 const customers = ["Nina", "Theo", "Kai", "Lia", "Sam", "Bia", "Joe", "Ravi", "Duda", "Gabi"];
 const noSlips = (): Slips => ({ door: 0, tools: 0, wires: 0, chip: 0, help: 0 });
-const handsOn: Phase[] = ["find", "screws", "panel", "dust", "wires", "fuse", "snack", "claw", "chip", "close", "lock"];
+const handsOn: Phase[] = ["find", "screws", "panel", "dust", "wires", "fuse", "snack", "jam", "claw", "tape", "chip", "close", "lock"];
 const drivers: ToolKind[] = ["cross", "flat", "star"];
-const views: Record<Phase, View> = { tour: "tour", ready: "front", arrive: "front", find: "orbit", screws: "door", panel: "door", dust: "inside", wires: "inside", fuse: "inside", snack: "inside", claw: "inside", chip: "inside", close: "door", lock: "door", power: "front", paid: "front" };
+const views: Record<Phase, View> = { tour: "tour", ready: "front", arrive: "front", find: "orbit", screws: "door", panel: "door", dust: "inside", wires: "inside", fuse: "inside", snack: "inside", jam: "inside", claw: "inside", tape: "inside", chip: "inside", close: "door", lock: "door", power: "front", paid: "front" };
 const seedNow = () => Math.floor(Math.random() * 1e9);
 /** The tour of the shop, before the practice box. highlight: a button on screen to point at. */
 type TourStep = { spot: TourSpot; title: string; text: string; tag?: string; highlight?: "coins" | "menu" };
@@ -31,48 +29,57 @@ const tourSteps: TourStep[] = [
   { spot: "machine", title: "Machines stand here", text: "Customers bring their broken machines to this spot. You fix them right here.", tag: "MACHINE SPOT" },
   { spot: "bench", title: "Your workbench", text: "Customers come in, show you what's wrong and pay you when it works again. This bench is a bit old. Coins buy a better bench, a new floor, lights and decorations.", tag: "WORKBENCH" },
   { spot: "wide", title: "Your coins", text: "Every repair pays. Tap your coins any time to open the shop.", highlight: "coins" },
-  { spot: "wide", title: "Your machines", text: "Tap the list to see the machines you've fixed and the ones still to come.", highlight: "menu" },
+  { spot: "wide", title: "Your levels", text: "Seven machines, a little harder each time. Tap the list to see them, play one again or restart it.", highlight: "menu" },
   { spot: "box", title: "Warm-up time!", text: "A practice box! Open it, clean it and close it again: every repair starts like this." },
 ];
 
-function localEvidence(p: Progress, login: string): Evidence {
-  let bosses = null;
-  try { const raw = localStorage.getItem(`sharpie:final-bosses:v2:${login}`); bosses = raw ? sanitizeBossProgress(JSON.parse(raw)) : null; } catch { /* no boss save on this device */ }
-  return evidenceFrom(p, bosses);
+/** What each customer says: hello, what they see when they try it, the clue, and thanks at the end. */
+const talk: Record<MachineId, { hello: string; seen: (out: string, job: Job) => string; clue: string; thanks: (job: Job) => string }> = {
+  arcade: { hello: "My arcade is broken! Watch this…", seen: (out, j) => out ? `${j.price} coins! A game costs ${j.price}! And it says “${out}”?!` : `I put in ${j.price} coins… and NOTHING happened!`, clue: " And smoke is coming out of the back!", thanks: (j) => `IT WORKS!! ${j.price} coins and the game starts!` },
+  vending: { hello: "This vending machine stole my money! Watch…", seen: (out, j) => `Slot ${slotName(j.empty)} is EMPTY! I paid ${j.price} coins and it says “${out}”?! Enjoy WHAT?`, clue: " And my other snack is stuck behind the glass!", thanks: (j) => `“${j.chip.no}” for the empty slot, and the full one works! Thank you!` },
+  jukebox: { hello: "My jukebox won't play my song! Listen…", seen: (out) => `I put in 2 credits and it says “${out}”?! I paid for TWO songs!`, clue: " And sparks are coming out of the back!", thanks: () => "2 credits and the song plays! ♪ Thank you!" },
+  scooter: { hello: "My scooter never warns me when I'm too fast! Watch…", seen: (out) => `I'm doing 30 km/h and it says “${out}”?! That's WAY too fast!`, clue: " And it sparks under the deck, at the back!", thanks: () => "At 30 it says “Too fast!” now, and at 20 “Speed OK”. Safe riding! Thank you!" },
+  claw: { hello: "My claw machine never grabs anything! Watch…", seen: (out) => `The timer hit 0 and it says “${out}”?! The claw never drops!`, clue: " And one claw finger looks bent! Sparks come out of the back, too.", thanks: (j) => `${j.chip.yes} The claw grabbed an egg! Thank you!` },
+  coffee: { hello: "My coffee machine has gone crazy! Watch…", seen: (out) => `The tank is EMPTY and it says “${out}”?! And it never tells me to refill!`, clue: " And smoke is coming out of the back!", thanks: () => "Empty tank: “Refill water”. Full tank: “Brewing”! Thank you!" },
+  robot: { hello: "My robot's program got wiped! It just stands there. Can you write it again, from scratch?", seen: () => "", clue: " Sparks come out of its back, too.", thanks: (j) => `Battery 20: “${j.chip.yes}” Battery 5: “${j.chip.no}” It's ALIVE! Thank you!` },
+};
+/** What the screen says under a value: the variable and its value. */
+const noteFor = (job: Job, value: number) => job.machine === "vending" ? `${slotName(job.empty)} · stock = ${value}` : job.machine === "arcade" ? "" : `${job.chip.variable} = ${value}${job.machine === "coffee" ? " ml" : job.machine === "scooter" ? " km/h" : ""}`;
+/** Power on: what the fixed machine shows, step by step. The last step is the party. */
+function powerSteps(job: Job): { value: number; note: string }[] {
+  const right = (v: number) => ({ value: v, note: noteFor(job, v) });
+  if (job.machine === "vending") return [right(0), { value: 3, note: "A1 · stock = 3" }];
+  if (job.machine === "scooter") return [right(20), right(30)];
+  if (job.machine === "coffee") return [right(0), right(300)];
+  if (job.machine === "robot") return [right(5), right(20)];
+  return [right(job.chip.demo)];
 }
 
 /** headerSlot: the middle of the Final Project header, where the ticket goes so the screen keeps its room. */
-export function RepairShop({ name, studentKey, progress, teacher, preview, headerSlot = null }: { name: string; studentKey: string; progress: Progress; teacher: boolean; preview: boolean; headerSlot?: HTMLElement | null }) {
+export function RepairShop({ name, studentKey, progress: _progress, teacher, preview, headerSlot = null }: { name: string; studentKey: string; progress: Progress; teacher: boolean; preview: boolean; headerSlot?: HTMLElement | null }) {
   const [shop, setShopState] = useState<Shop>(() => preview ? freshShop() : loadShop(studentKey));
   const setShop = useCallback((next: Shop) => { setShopState(next); if (!preview) saveShop(studentKey, next); }, [preview, studentKey]);
-  const [evidence, setEvidence] = useState<Evidence>(() => localEvidence(progress, studentKey));
-  const auto = profileTier(evidence);
-  const [teacherTier, setTeacherTier] = useState<Tier>("guided");
   const [teacherMachine, setTeacherMachine] = useState<MachineId | "auto">("auto");
-  // The tier the next ticket gets. A ticket keeps its tier until it is paid.
-  const tierNow: Tier = teacher ? teacherTier : overrideFor(studentKey) ?? shiftTier(auto, shop.shift);
-  const ticketFor = (tier: Tier, fixed: number, machine: MachineId | "auto" = teacher ? teacherMachine : "auto"): Ticket => {
+  const ticketFor = (machine?: MachineId, from = shop): Ticket => {
     const seed = seedNow();
-    // The teacher can bring any machine; students get the machines they have unlocked.
-    return { seed, tier, machine: machine === "auto" ? nextMachine(fixed, seed) : machine, hide: !teacher && hidesProblem(shop, tier) };
+    return { seed, machine: machine ?? (teacher && teacherMachine !== "auto" ? teacherMachine : nextMachine(from, seed)) };
   };
-  const [ticket, setTicket] = useState<Ticket>(() => ticketFor(tierNow, shop.fixed));
-  const newTicket = (tier: Tier, machine?: MachineId | "auto") => setTicket(ticketFor(tier, shop.fixed, machine));
-  const { seed, tier, machine, hide } = ticket;
-  // The first visit starts with the tutorial: a tour of the shop and a practice box. The teacher can replay it from the menu.
+  const [ticket, setTicket] = useState<Ticket>(() => ticketFor());
+  const { seed, machine } = ticket;
+  // The first visit starts with the tutorial: a tour of the shop and a practice box. The menu replays it.
   const [tutorial, setTutorial] = useState(() => !shop.tutorial && !teacher);
   // Practice from the menu: straight to the practice box, no shutter and no tour.
   const [practiceOnly, setPracticeOnly] = useState(false);
-  // Bumped on every replay, so a new practice starts even from the middle of one.
-  const [practiceRun, setPracticeRun] = useState(0);
+  // Bumped on every replay or restart, so a new job starts even from the middle of one.
+  const [run, setRun] = useState(0);
   const [tourAt, setTourAt] = useState(-1);
   const [landed, setLanded] = useState(false);
   const [looked, setLooked] = useState(false);
-  const job = useMemo(() => tutorial ? practiceJob() : makeJob(tier, seed, machine, hide), [tutorial, practiceRun, tier, seed, machine, hide]);
+  const job = useMemo(() => tutorial ? practiceJob() : makeJob(seed, machine), [tutorial, run, seed, machine]);
   const practice = !!job.practice;
   const who = customers[seed % customers.length];
-  const [levelNote, setLevelNote] = useState("");
   const [unlockNote, setUnlockNote] = useState<MachineId | null>(null);
+  const [bossDone, setBossDone] = useState(false);
 
   const [phase, setPhase] = useState<Phase>("arrive");
   const [demoState, setDemoState] = useState<"ready" | "running" | "seen">("ready");
@@ -83,6 +90,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const [plugged, setPlugged] = useState<Record<string, string | null>>({});
   const [fuseState, setFuseState] = useState<"blown" | "out" | "in">("blown");
   const [snacksLeft, setSnacksLeft] = useState(0);
+  const [gearFree, setGearFree] = useState(false);
+  const [wraps, setWraps] = useState(0);
   const [tool, setTool] = useState<ToolKind>("hand");
   const [toolHelp, setToolHelp] = useState(false);
   const [say, setSay] = useState("");
@@ -91,7 +100,14 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const [paid, setPaid] = useState<ReturnType<typeof payout> | null>(null);
   const [gl] = useState(webglAvailable);
   const [pts, setPts] = useState<Points | null>(null);
+  // The coins on the counter: they count up while the pay flies in.
+  const [shownCoins, setShownCoins] = useState(shop.coins);
+  const [rain, setRain] = useState<{ key: number; x: number; y: number; dx: number; dy: number } | null>(null);
+  const counting = useRef(false);
+  const coinsBefore = useRef(shop.coins);
 
+  const root = useRef<HTMLDivElement>(null);
+  const coinBtn = useRef<HTMLButtonElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
   const tag = useRef<HTMLDivElement>(null);
@@ -101,31 +117,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const toolMisses = useRef({ count: 0, at: 0 });
   const doorsTried = useRef(new Set<string>());
 
-  // Remote results reach a student on any device; they only change a ticket that has not started.
-  useEffect(() => {
-    if (teacher || preview) return;
-    let active = true;
-    loadRemote(studentKey).then((row) => {
-      if (!active || !row) return;
-      const fp = (row.codes?.finalProject ?? null) as { quizAnswered?: number; quizRight?: number; levels?: number[] } | null;
-      const done = row.completed_bosses ?? [];
-      const runs = done.reduce((t, id) => t + Math.max(1, row.attempts?.[id] ?? 1), 0);
-      setEvidence((local) => ({
-        quizRight: local.quizRight ?? (fp?.quizAnswered === 20 ? fp.quizRight ?? null : null),
-        bosses: Math.max(local.bosses, done.length),
-        bossRunsPerPass: local.bosses >= done.length ? local.bossRunsPerPass : done.length ? runs / done.length : 0,
-        yardLevels: Math.max(local.yardLevels, fp?.levels?.length ?? 0),
-      }));
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [teacher, preview, studentKey]);
-  useEffect(() => {
-    if (phase === "arrive" && demoState === "ready" && tierNow !== tier) setTicket((t) => ({ ...t, tier: tierNow, hide: !teacher && hidesProblem(shop, tierNow) }));
-  }, [tierNow]);
-
   const flash = (text: string, tone: "good" | "bad" = "good", ms = 2000) => { setToast({ text, tone }); window.setTimeout(() => setToast((t) => t?.text === text ? null : t), ms); };
   const slip = (kind: keyof Slips) => setSlips((s) => ({ ...s, [kind]: s[kind] + 1 }));
-  const named = job.tier === "guided" || job.tier === "supported";
   const order = stepsFor(job);
   /** The step after this one on this machine. */
   const advance = (from: Phase) => setPhase(order[order.indexOf(from) + 1] as Phase);
@@ -172,8 +165,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
         if (now - toolMisses.current.at > 1200) { slip("tools"); toolMisses.current.count++; }
         toolMisses.current.at = now;
         const text = drivers.includes(need) && drivers.includes(used) ? `Doesn't fit! This screw has a ${toolInfo[need].short.toLowerCase()} head.`
-          : drivers.includes(used) ? `Put the screwdriver down.${named ? ` This needs: ${toolInfo[need].short}.` : ""}`
-          : `${toolInfo[used].joke}${named ? ` Try: ${toolInfo[need].short}.` : ""}`;
+          : drivers.includes(used) ? `Put the screwdriver down. This needs: ${toolInfo[need].short}.`
+          : `${toolInfo[used].joke} Try: ${toolInfo[need].short}.`;
         flash(text, "bad");
         if (toolMisses.current.count >= 3 && !toolHelp) { setToolHelp(true); setSlips((s) => ({ ...s, help: s.help + 1 })); }
       },
@@ -194,11 +187,13 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
       fuseOut: () => { sfx.pop(); setFuseState("out"); },
       fuseIn: () => { sfx.snap(); setFuseState("in"); },
       hammer: (result, freed, left) => {
+        const gear = live.current.phase === "jam";
         if (result === "soft") { sfx.tick(); flash("Too soft! A little harder.", "bad"); }
-        if (result === "good") { sfx.thud(); if (freed) sfx.pop(); flash(freed ? "It dropped!" : "Good tap! Again…"); }
-        if (result === "hard") { sfx.crack(); slip("tools"); flash("CRACK! Too hard: the spiral bent. Gentle taps!", "bad", 2600); }
-        setSnacksLeft(left);
+        if (result === "good") { sfx.thud(); if (freed) sfx.pop(); flash(freed ? (gear ? "It turns!" : "It dropped!") : "Good tap! Again…"); }
+        if (result === "hard") { sfx.crack(); slip("tools"); flash(gear ? "CRACK! Too hard: a tooth chipped. Gentle taps!" : "CRACK! Too hard: the spiral bent. Gentle taps!", "bad", 2600); }
+        if (gear) setGearFree(left === 0); else setSnacksLeft(left);
       },
+      tape: (n) => { sfx.snap(); setWraps(n); },
       chip: () => { sfx.good(); setOpen("chip"); },
       coin: () => sfx.coin(),
       look: () => setLooked(true),
@@ -210,8 +205,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   // A new ticket: a new machine on the bench and a customer at the door.
   useEffect(() => {
     const w = scene.current;
-    setPhase("arrive"); setDemoState("ready"); setSlips(noSlips()); setScrewsOut(0); setScrewsLocked(0); setDust(0); setFuseState("blown"); setSnacksLeft(job.snacks.length);
-    setPaid(null); setOpen(null); setTool("hand"); setToolHelp(false); setUnlockNote(null);
+    setPhase("arrive"); setDemoState("ready"); setSlips(noSlips()); setScrewsOut(0); setScrewsLocked(0); setDust(0); setFuseState("blown"); setSnacksLeft(job.snacks.length); setGearFree(false); setWraps(0);
+    setPaid(null); setOpen(null); setTool("hand"); setToolHelp(false); setUnlockNote(null); setBossDone(false);
     toolMisses.current = { count: 0, at: 0 };
     doorsTried.current = new Set();
     setLooked(false);
@@ -226,8 +221,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
       w.tour("wide");
       return;
     }
-    setSay(job.demo === null ? (job.machine === "vending" ? "It eats money. That's all I know. You're the expert!" : job.machine === "claw" ? "It never gives prizes. That's all I know. You're the expert!" : "It's broken. I'm not explaining. You're the expert!")
-      : job.machine === "vending" ? "This vending machine stole my money! Watch…" : job.machine === "claw" ? "My claw machine never grabs anything! Watch…" : "My arcade is broken! Watch this…");
+    setSay(talk[job.machine].hello);
     if (!w) return;
     w.setJob(job);
     w.setView("front");
@@ -240,6 +234,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   useEffect(() => { scene.current?.setLook(lookOf(shop)); }, [shop.owned, shop.equipped]);
   useEffect(() => { scene.current?.setTool(tool); }, [tool]);
   useEffect(() => { toolMisses.current = { count: 0, at: 0 }; }, [phase]);
+  useEffect(() => { if (!counting.current) setShownCoins(shop.coins); }, [shop.coins]);
 
   // Each phase: where the camera looks and what the hands can do. The clue shows until the door is found.
   useEffect(() => {
@@ -253,11 +248,13 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
 
   // Moving on when the hands-on part is done.
   useEffect(() => { if (phase === "screws" && screwsOut >= job.screws.length) { flash("All screws out!"); setPhase("panel"); } }, [phase, screwsOut, job]);
-  useEffect(() => { if (phase === "dust" && dust >= 0.95) { flash(job.mess === "crumbs" ? "No more crumbs!" : job.mess === "fluff" ? "Fluff-free!" : "Squeaky clean!"); window.setTimeout(() => advance("dust"), 500); } }, [phase, dust]);
+  useEffect(() => { if (phase === "dust" && dust >= 0.95) { flash({ crumbs: "No more crumbs!", fluff: "Fluff-free!", mud: "Mud gone!", grounds: "No more coffee grounds!", dust: "Squeaky clean!" }[job.mess]); window.setTimeout(() => advance("dust"), 500); } }, [phase, dust]);
   const wired = job.cables.filter((c) => plugged[c.id] === c.socket).length;
   useEffect(() => { if (phase === "wires" && wired === job.cables.length) { scene.current?.showHint(null); flash("Wiring OK!"); window.setTimeout(() => advance("wires"), 600); } }, [phase, wired, job]);
   useEffect(() => { if (phase === "fuse" && fuseState === "in") { flash("New fuse in!"); window.setTimeout(() => advance("fuse"), 500); } }, [phase, fuseState]);
-  useEffect(() => { if (phase === "snack" && snacksLeft === 0) { flash(job.snacks.length > 1 ? "Both snacks freed!" : "Snack freed!"); window.setTimeout(() => advance("snack"), 700); } }, [phase, snacksLeft]);
+  useEffect(() => { if (phase === "snack" && snacksLeft === 0) { flash("Snack freed!"); window.setTimeout(() => advance("snack"), 700); } }, [phase, snacksLeft]);
+  useEffect(() => { if (phase === "jam" && gearFree) { flash("The gear turns again!"); window.setTimeout(() => advance("jam"), 700); } }, [phase, gearFree]);
+  useEffect(() => { if (phase === "tape" && wraps >= TAPE_WRAPS) { flash("Cable taped up!"); window.setTimeout(() => advance("tape"), 600); } }, [phase, wraps]);
   useEffect(() => {
     if (phase !== "lock" || screwsLocked < job.screws.length) return;
     flash("Locked tight!");
@@ -268,53 +265,67 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     window.setTimeout(() => { sfx.cash(); scene.current?.setScreen("game"); scene.current?.celebrate(); }, 700);
   }, [phase, screwsLocked, job]);
 
-  // Gesture hints: in the tutorial, on the first ticket ever, and on every Guided machine.
-  const hints = gl && (practice || job.tier === "guided" || shop.fixed === 0);
+  // Gesture hints on every machine: a finger shows each move.
+  const hints = gl;
   useEffect(() => {
     if (!hints || !handsOn.includes(phase)) { setPts(null); return; }
     const id = window.setInterval(() => setPts(scene.current?.points() ?? null), 200);
     return () => window.clearInterval(id);
   }, [hints, phase]);
 
-  const vending = job.machine === "vending";
-  const claw = job.machine === "claw";
   const watch = () => {
     if (job.demo === null) return;
     const value = job.demo;
     setDemoState("running");
     setSay("");
     const finish = () => {
-      const out = printed(job, brokenTest(job), value);
-      scene.current?.setScreen(out ? "message" : "blank", out, vending || claw ? 0 : value, vending ? `${slotName(job.empty)} · stock = ${value}` : claw ? `seconds = ${value}` : "");
+      const out = brokenRun(job)(value);
+      scene.current?.setScreen(out ? "message" : "blank", out, job.machine === "arcade" ? value : 0, noteFor(job, value));
       scene.current?.setMood("angry");
       sfx.angry();
-      const clue = job.tier === "guided"
-        ? vending ? " And my other snack is stuck behind the glass!" : claw ? " And one claw finger looks bent!" : " And smoke is coming out of the back!"
-        : vending ? " Also, something's stuck in there." : claw ? " And the claw looks weird…" : " And it smells like smoke…";
-      setSay(claw ? `The timer hit 0 and it says “${out}”?! The claw never drops!${clue}` : vending ? `Slot ${slotName(job.empty)} is EMPTY! I paid ${job.price} coins and it says “${out}”?! Enjoy WHAT?${clue}`
-        : out ? `${value} coins! A game costs ${job.price}! And it says “${out}”?!${clue}` : `I put in ${value} coins… and NOTHING happened!${clue}`);
+      setSay(talk[job.machine].seen(out, job) + talk[job.machine].clue);
       setDemoState("seen");
     };
-    if (scene.current) scene.current.insertCoins(vending || claw ? job.price : value, finish); else finish();
+    const w = scene.current;
+    if (w) w.insertCoins(w.token() === "tap" ? 1 : job.machine === "arcade" ? value : job.price, finish); else finish();
   };
   const takeJob = () => { setSay(""); scene.current?.setMood("idle"); setPhase("find"); };
   const chipFixed = () => { setOpen(null); sfx.flash(); flash("Chip reprogrammed!"); setPhase("close"); };
+
+  /** The pay flies from the card to the coin counter, and the counter counts up. */
+  const payAnimation = (from: number, to: number) => {
+    counting.current = true;
+    const box = root.current?.getBoundingClientRect(), btn = coinBtn.current?.getBoundingClientRect();
+    const total = root.current?.querySelector(".rp-paid .rp-total")?.getBoundingClientRect();
+    if (box && btn && btn.width) {
+      const x = (total && total.width ? total.left + total.width / 2 : box.left + box.width / 2) - box.left;
+      const y = (total && total.width ? total.top + total.height / 2 : box.top + box.height / 2) - box.top;
+      setRain({ key: Date.now(), x, y, dx: btn.left + btn.width / 2 - box.left - x, dy: btn.top + btn.height / 2 - box.top - y });
+      for (let i = 0; i < 6; i++) window.setTimeout(() => sfx.coin(), 650 + i * 120);
+    }
+    const start = Date.now(), delay = 600, dur = 1300;
+    const id = window.setInterval(() => {
+      const k = Math.min(1, Math.max(0, (Date.now() - start - delay) / dur));
+      setShownCoins(Math.round(from + (to - from) * k));
+      if (k >= 1) { window.clearInterval(id); counting.current = false; window.setTimeout(() => setRain(null), 400); }
+    }, 40);
+  };
+  useEffect(() => { if (phase === "paid" && paid) payAnimation(coinsBefore.current, shop.coins); }, [phase, paid]);
+
   const powerOn = () => {
     const w = scene.current;
     sfx.power();
-    const test = vending ? 0 : job.demo ?? job.price;
     const pay = () => {
       const money = payout(slips, job);
       window.setTimeout(() => {
         sfx.cash();
+        coinsBefore.current = shop.coins;
+        const next = afterTicket(shop, money.total, job.machine);
+        setUnlockNote(unlockedBy(shop, job.machine));
+        setBossDone(job.machine === "robot" && !cleared(shop, "robot"));
+        setShop(next);
         setPaid(money);
         setPhase("paid");
-        const next = teacher ? { ...shop, coins: shop.coins + money.total, fixed: shop.fixed + 1, made: { ...shop.made, [job.machine]: (shop.made[job.machine] ?? 0) + 1 } } : afterTicket(shop, slips, money.total, job.tier, job.machine);
-        if (!teacher) setLevelNote(next.shift > shop.shift ? "Word is spreading: trickier machines are on their way."
-          : next.shift < shop.shift ? "Next customers bring friendlier machines."
-          : next.streak === 2 ? "Customers trust you now: they won't explain the problem anymore." : "");
-        setUnlockNote(unlockedBy(shop.fixed, next.fixed));
-        setShop(next);
       }, w ? 1600 : 0);
     };
     const happy = (line: string) => { w?.setMood("happy"); w?.celebrate(); setSay(line); pay(); };
@@ -322,20 +333,17 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     w.setMarquee(false);
     w.setScreen("off");
     window.setTimeout(() => { w.setMarquee(true); w.setScreen("attract"); }, 900);
-    if (vending) {
-      // The empty slot now says Sold out, and a full one sells.
-      window.setTimeout(() => w.insertCoins(job.price, () => {
-        w.setScreen("message", printed(job, rightTest(job), 0), 0, `${slotName(job.empty)} · stock = 0`);
-        window.setTimeout(() => { w.setScreen("game", job.chip.yes, 0, "A1 · stock = 3"); happy(`“${job.chip.no}” for the empty slot, and the full one works! Thank you!`); }, 1400);
-      }), 1700);
-      return;
-    }
-    if (claw) {
-      // At 0 the claw drops, grabs an egg and comes back up.
-      window.setTimeout(() => w.insertCoins(job.price, () => { w.setScreen("game", job.chip.yes, 0, "seconds = 0"); w.clawDrop(); happy(`${job.chip.yes} The claw grabbed an egg! Thank you!`); }), 1700);
-      return;
-    }
-    window.setTimeout(() => w.insertCoins(test, () => { w.setScreen("game", job.chip.yes, test); happy(`IT WORKS!! ${test} coins and the game starts!`); }), 1700);
+    const steps = powerSteps(job);
+    const right = rightRun(job);
+    const show = (i: number) => {
+      const s = steps[i], last = i === steps.length - 1;
+      const text = right(s.value) || job.chip.yes;
+      w.setScreen(last ? "game" : "message", text, job.machine === "arcade" ? s.value : 0, s.note);
+      if (!last) { window.setTimeout(() => show(i + 1), 1400); return; }
+      if (job.machine === "claw") w.clawDrop();
+      happy(talk[job.machine].thanks(job));
+    };
+    window.setTimeout(() => w.insertCoins(w.token() === "tap" ? 1 : job.machine === "arcade" ? job.chip.demo : job.price, () => show(0)), 1700);
   };
   /** The tutorial is over (or skipped): the shop opens and the first customer comes in. */
   const finishTutorial = () => {
@@ -343,17 +351,19 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     setTutorial(false);
     setPracticeOnly(false);
     setOpen(null);
-    setTicket(ticketFor(tierNow, shop.fixed));
+    setTicket(ticketFor());
   };
   /** Back to the practice box any time (only: no tour), or the whole warm-up from the shutter. */
-  const replayTutorial = (only: boolean) => { setOpen(null); scene.current?.leave(); setSay(""); setPracticeOnly(only); setPracticeRun((n) => n + 1); setTutorial(true); };
+  const replayTutorial = (only: boolean) => { setOpen(null); scene.current?.leave(); setSay(""); setPracticeOnly(only); setRun((n) => n + 1); setTutorial(true); };
+  /** A level from the menu: that machine comes in now, from the start. */
+  const playLevel = (m: MachineId) => { setOpen(null); scene.current?.leave(); setSay(""); setTutorial(false); setPracticeOnly(false); setRun((n) => n + 1); setTicket(ticketFor(m)); };
   const nextTour = () => {
     sfx.tick();
     if (tourAt < tourSteps.length - 1) { setTourAt(tourAt + 1); return; }
     setPhase("find");
   };
   const openShutter = () => { sfx.whoosh(); setTourAt(0); };
-  const nextCustomer = () => { scene.current?.leave(); setSay(""); setLevelNote(""); window.setTimeout(() => newTicket(tierNow), scene.current ? 900 : 0); };
+  const nextCustomer = () => { scene.current?.leave(); setSay(""); window.setTimeout(() => setTicket(ticketFor()), scene.current ? 900 : 0); };
 
   // The teacher (and a device without 3D) can finish any step with one tap.
   const skip = () => {
@@ -371,6 +381,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     if (phase === "wires") setPlugged(Object.fromEntries(job.cables.map((c) => [c.id, c.socket])));
     if (phase === "fuse") setFuseState("in");
     if (phase === "snack") setSnacksLeft(0);
+    if (phase === "jam") setGearFree(true);
+    if (phase === "tape") setWraps(TAPE_WRAPS);
     if (phase === "claw") advance("claw");
     if (phase === "close") setPhase("lock");
     if (phase === "lock") setScrewsLocked(job.screws.length);
@@ -392,12 +404,13 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     : phase in toolFor ? toolFor[phase as keyof typeof toolFor] : null;
   const glowTool = (hints || toolHelp) ? needTool : null;
   const freed = job.snacks.length - snacksLeft;
-  const mission = missionFor(phase, job, { screwsOut, screwsLocked, dust, wired, fuseState, demoState, who, named, need: needTool, gl, freed, tool });
+  const mission = missionFor(phase, job, { screwsOut, screwsLocked, dust, wired, fuseState, demoState, who, need: needTool, gl, freed, tool, wraps });
   const step = phase === "tour" && tourAt >= 0 ? tourSteps[tourAt] : null;
   const showSteps = phase !== "paid" && phase !== "tour" && phase !== "ready";
-  const ticketTag = <div className="rp-ticket" aria-live="polite"><Wrench size={16} /><span>{practice ? <><small>{practiceOnly ? "ANY TIME" : "BEFORE WE OPEN"}</small><b>Warm-up · Practice box</b></> : <><small>TICKET #{phase === "paid" ? shop.fixed : shop.fixed + 1}</small><b>{who} · {machineInfo[job.machine].model}</b></>}</span></div>;
+  const level = levelOf(job.machine);
+  const ticketTag = <div className="rp-ticket" aria-live="polite"><Wrench size={16} /><span>{practice ? <><small>{practiceOnly ? "ANY TIME" : "BEFORE WE OPEN"}</small><b>Warm-up · Practice box</b></> : <><small>LEVEL {level} OF {allMachines.length}{machineInfo[job.machine].boss ? " · BOSS" : ""}</small><b>{who} · {machineInfo[job.machine].model}</b></>}</span></div>;
 
-  return <div className={`rp rp-phase-${phase}`}>
+  return <div className={`rp rp-phase-${phase}`} ref={root}>
     <div className="rp-stage" ref={host} aria-hidden={gl ? "true" : undefined}>
       {!gl && <div className="rp-nogl"><Wrench size={42} /><p>This device can't draw the 3D workshop. Use the big buttons to do each step.</p></div>}
     </div>
@@ -411,9 +424,9 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     <div className="rp-top">
       {!headerSlot && ticketTag}
       <span className="rp-spacer" />
-      {teacher && <TeacherBar tier={tier} machine={teacherMachine} onTier={(t) => { setTeacherTier(t); setTutorial(false); newTicket(t); }} onMachine={(m) => { setTeacherMachine(m); setTutorial(false); newTicket(tierNow, m); }} onSkip={skip} canSkip={phase !== "paid" && !open} />}
-      <button className={`rp-coins ${step?.highlight === "coins" ? "is-spot" : ""}`} aria-label={`${shop.coins} coins. Open the shop`} onClick={() => setOpen("shop")}><Coins size={18} /> {shop.coins} <ShoppingCart size={16} /></button>
-      <button className={`rp-menu ${step?.highlight === "menu" ? "is-spot" : ""}`} aria-label="Your machines" onClick={() => setOpen("menu")}><ListChecks size={22} /></button>
+      {teacher && <TeacherBar machine={teacherMachine} onMachine={(m) => { setTeacherMachine(m); playLevel(m === "auto" ? nextMachine(shop, seedNow()) : m); }} onSkip={skip} canSkip={phase !== "paid" && !open} />}
+      <button ref={coinBtn} className={`rp-coins ${step?.highlight === "coins" ? "is-spot" : ""} ${rain ? "is-bump" : ""}`} aria-label={`${shop.coins} coins. Open the shop`} onClick={() => setOpen("shop")}><Coins size={18} /> {shownCoins} <ShoppingCart size={16} /></button>
+      <button className={`rp-menu ${step?.highlight === "menu" ? "is-spot" : ""}`} aria-label="Your levels" onClick={() => setOpen("menu")}><ListChecks size={22} /></button>
     </div>
 
     {/* Landscape: the steps run down a thin ruler on the left, clear of the machine. Portrait keeps them in the card. */}
@@ -424,7 +437,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
       <h2>{mission.title}</h2>
       <p>{mission.text}</p>
       {mission.meter !== undefined && <div className="rp-meter"><i style={{ width: `${Math.round(mission.meter * 100)}%` }} /></div>}
-      {phase === "snack" && gl && <div className="rp-hammer" aria-hidden="true" ref={(el) => { if (scene.current) scene.current.hammerMeter = el; }} style={{ "--soft": HAMMER.soft, "--hard": HAMMER.hard } as CSSProperties}>
+      {(phase === "snack" || phase === "jam") && gl && <div className="rp-hammer" aria-hidden="true" ref={(el) => { if (scene.current) scene.current.hammerMeter = el; }} style={{ "--soft": HAMMER.soft, "--hard": HAMMER.hard } as CSSProperties}>
         <span>SOFT</span><span>JUST RIGHT</span><span>TOO HARD</span><b />
       </div>}
     </section>}
@@ -442,26 +455,31 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
 
     {toast && <div className={`rp-toast is-${toast.tone}`} role="status">{toast.text}</div>}
 
-    {phase === "paid" && paid && <div className="rp-modal"><section className="rp-card rp-paid" aria-label="Paid">
-      <span className="rp-stamp">FIXED!</span>
+    {phase === "paid" && paid && <div className="rp-modal"><section className={`rp-card rp-paid ${bossDone ? "is-boss" : ""}`} aria-label="Paid">
+      <span className="rp-stamp">{bossDone ? "BOSS BEATEN!" : `LEVEL ${level} CLEARED!`}</span>
       <h2>{who} pays up</h2>
       <ul>
         <li><span>Repair fee</span><b>+{paid.base}</b></li>
         {paid.tips.map((t) => <li key={t.label}><span>{t.label}</span><b>+{t.coins}</b></li>)}
       </ul>
-      <p className="rp-total"><Coins size={22} /> +{paid.total} <small>· you have {shop.coins}</small></p>
-      {unlockNote && <p className="rp-unlock"><Sparkles size={18} /> New machine unlocked: <b>{machineInfo[unlockNote].name}</b>! Customers start bringing it now.</p>}
-      {levelNote && <p className="rp-level">{levelNote}</p>}
+      <p className="rp-total"><Coins size={22} /> <span className="rp-sum">+{paid.total}</span> <small>· you have {shop.coins}</small></p>
+      {unlockNote && <p className="rp-unlock"><Sparkles size={18} /><span>Level {levelOf(unlockNote)} unlocked: <b>{machineInfo[unlockNote].name}</b>! It's your next customer.</span></p>}
+      {bossDone && <p className="rp-unlock is-gold"><Award size={18} /><span>You beat the final level! Your Maker certificate is ready.</span></p>}
       <div className="rp-actions">
         <button className="rp-tool" onClick={() => setOpen("shop")}><Store size={17} /> Shop</button>
-        <button className="rp-go" autoFocus onClick={nextCustomer}>NEXT CUSTOMER <ArrowRight size={18} /></button>
+        {bossDone ? <button className="rp-go" autoFocus onClick={() => setOpen("cert")}><Award size={18} /> OPEN YOUR CERTIFICATE</button>
+          : <button className="rp-go" autoFocus onClick={nextCustomer}>NEXT CUSTOMER <ArrowRight size={18} /></button>}
       </div>
     </section></div>}
+    {rain && <div className="rp-rain" aria-hidden="true" key={rain.key}>{Array.from({ length: 14 }, (_, i) => {
+      const ox = ((i * 37) % 70) - 35, oy = ((i * 53) % 44) - 22;
+      return <i key={i} style={{ left: rain.x + ox, top: rain.y + oy, "--dx": `${rain.dx - ox}px`, "--dy": `${rain.dy - oy}px`, animationDelay: `${i * 75}ms` } as CSSProperties} />;
+    })}</div>}
 
     {open === "chip" && <div className="rp-modal"><ChipBench job={job} onSlip={() => slip("chip")} onHelp={() => setSlips((s) => ({ ...s, help: s.help + 1 }))} onClose={() => setOpen(null)} onDone={chipFixed} /></div>}
     {open === "shop" && <div className="rp-modal"><Catalog shop={shop} onAction={shopAction} onClose={() => setOpen(null)} /></div>}
 
-    {open === "menu" && <div className="rp-modal"><MachineMenu shop={shop} teacher={teacher} onClose={() => setOpen(null)} onPractice={() => replayTutorial(true)} onTutorial={() => replayTutorial(false)} onCertificate={() => setOpen("cert")} /></div>}
+    {open === "menu" && <div className="rp-modal"><LevelMenu shop={shop} teacher={teacher} current={practice ? null : job.machine} onClose={() => setOpen(null)} onPlay={playLevel} onPractice={() => replayTutorial(true)} onTutorial={() => replayTutorial(false)} onCertificate={() => setOpen("cert")} /></div>}
     {open === "cert" && <Certificate name={name} login={studentKey} onClose={() => setOpen(null)} />}
 
     {/* The tutorial: the shutter goes up, a tour of the shop, then the practice box. */}
@@ -536,41 +554,39 @@ function GestureHint({ phase, pts, job, dust, fuseState }: { phase: Phase; pts: 
   const at = (p: { x: number; y: number }, kind: string, label: string, extra: CSSProperties = {}) =>
     <div className={`rp-gesture is-${kind}`} style={{ left: p.x, top: p.y, ...extra } as CSSProperties}><i className="rp-gesture-ring" />{finger}<b>{label}</b></div>;
   if (phase === "find") {
-    // The right door in view: tap it. Otherwise: drag to look around.
     // Dragging has its own hint; this one points at the right door once it is in view.
     const right = pts.doors.find((d) => d.right);
     if (right?.facing) hint = at(right, "tap", job.practice ? "TAP THE PANEL" : "TAP THIS DOOR");
   }
-  // The practice box shows the twist on every screw; a real machine only on the first one.
-  if (phase === "screws" && (job.practice || pts.screws.every((x) => !x.out))) { const s = pts.screws.find((x) => !x.out); if (s) hint = at(s, "twist-ccw", "TWIST ↺"); }
-  if (phase === "lock" && (job.practice || pts.screws.every((x) => !x.locked))) { const s = pts.screws.find((x) => !x.locked); if (s) hint = at(s, "twist-cw", "TWIST ↻"); }
+  // The twist shows on every screw.
+  if (phase === "screws") { const s = pts.screws.find((x) => !x.out); if (s) hint = at(s, "twist-ccw", "TWIST ↺"); }
+  if (phase === "lock") { const s = pts.screws.find((x) => !x.locked); if (s) hint = at(s, "twist-cw", "TWIST ↻"); }
   if (phase === "panel" || phase === "close") hint = at(pts.panel, "tap", "TAP");
   if (phase === "chip") hint = at(pts.chip, "tap", "TAP");
   if (phase === "fuse" && pts.fuse) hint = at(fuseState === "blown" ? pts.fuse.blown : pts.fuse.spare, "tap", "TAP");
-  if (phase === "snack") { const s = pts.snacks.find((x) => !x.done); if (s) hint = at(s, "hold", "HOLD… LET GO"); }
+  if (phase === "snack" || phase === "jam") { const s = pts.snacks.find((x) => !x.done); if (s) hint = at(s, "hold", "HOLD… LET GO"); }
   if (phase === "claw" && pts.claw) hint = at(pts.claw, "tap", "TAP");
+  if (phase === "tape" && pts.tape) hint = at(pts.tape, "tap", "TAP × 3");
   if (phase === "dust" && dust < 0.12 + (1 - job.dust)) {
     const left = Math.min(pts.boardA.x, pts.boardB.x), top = Math.min(pts.boardA.y, pts.boardB.y);
     hint = at({ x: left, y: top }, "rub", "SWEEP", { width: Math.abs(pts.boardA.x - pts.boardB.x), height: Math.abs(pts.boardA.y - pts.boardB.y) * 0.6 });
   }
   if (phase === "wires") {
-    // Until the first cable is in place: a loose one, dragged to the ring of its colour.
-    const done = job.cables.filter((c) => pts.plugs.find((p) => p.id === c.id)?.at === c.socket && c.at !== c.socket).length;
+    // Each loose cable in turn, dragged to the ring of its colour.
     const cable = job.cables.find((c) => pts.plugs.find((p) => p.id === c.id)?.at !== c.socket);
     const plug = cable && pts.plugs.find((p) => p.id === cable.id);
     const socket = cable && pts.sockets.find((s) => s.id === cable.socket);
-    if (!done && plug && socket) hint = at(plug, "drag", "DRAG", { "--dx": `${socket.x - plug.x}px`, "--dy": `${socket.y - plug.y}px` } as CSSProperties);
+    if (plug && socket) hint = at(plug, "drag", "DRAG", { "--dx": `${socket.x - plug.x}px`, "--dy": `${socket.y - plug.y}px` } as CSSProperties);
   }
   return <div className="rp-gestures" aria-hidden="true">{hint}</div>;
 }
 
-function TeacherBar({ tier, machine, onTier, onMachine, onSkip, canSkip }: { tier: Tier; machine: MachineId | "auto"; onTier: (t: Tier) => void; onMachine: (m: MachineId | "auto") => void; onSkip: () => void; canSkip: boolean }) {
-  return <div className="rp-teacher" role="group" aria-label="Teacher: difficulty">
+function TeacherBar({ machine, onMachine, onSkip, canSkip }: { machine: MachineId | "auto"; onMachine: (m: MachineId | "auto") => void; onSkip: () => void; canSkip: boolean }) {
+  return <div className="rp-teacher" role="group" aria-label="Teacher">
     <small>TEACHER</small>
-    {tiers.map((t) => <button key={t} className={t === tier ? "is-on" : ""} aria-pressed={t === tier} onClick={() => onTier(t)}>{tierNames[t]}</button>)}
     <select aria-label="Teacher: machine" value={machine} onChange={(e) => onMachine(e.target.value as MachineId | "auto")}>
-      <option value="auto">Next machine</option>
-      {allMachines.map((m) => <option key={m} value={m}>{machineInfo[m].name}</option>)}
+      <option value="auto">Next level</option>
+      {allMachines.map((m) => <option key={m} value={m}>{levelOf(m)}. {machineInfo[m].name}</option>)}
     </select>
     <button className="rp-skip" disabled={!canSkip} onClick={onSkip} aria-label="Skip this step"><SkipForward size={15} /> SKIP</button>
   </div>;
@@ -578,9 +594,9 @@ function TeacherBar({ tier, machine, onTier, onMachine, onSkip, canSkip }: { tie
 
 const ScrewIcon = ({ size = 15 }: { size?: number; strokeWidth?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M7 12h10" /></svg>;
 const stepIcons: Record<string, (p: { size?: number; strokeWidth?: number }) => ReactNode> = {
-  find: DoorOpen, screws: ScrewIcon, panel: PackageOpen, dust: Wind, wires: Cable, fuse: Zap, snack: Hammer, claw: Scissors, chip: Cpu, close: PackageOpen, lock: Lock, power: Power,
+  find: DoorOpen, screws: ScrewIcon, panel: PackageOpen, dust: Wind, wires: Cable, fuse: Zap, snack: Hammer, jam: Cog, claw: Scissors, tape: Bandage, chip: Cpu, close: PackageOpen, lock: Lock, power: Power,
 };
-const stepLabel: Record<string, string> = { find: "Door", screws: "Screws", panel: "Open", dust: "Blow", wires: "Wires", fuse: "Fuse", snack: "Snack", claw: "Claw", chip: "Chip", close: "Close", lock: "Lock", power: "Power" };
+const stepLabel: Record<string, string> = { find: "Door", screws: "Screws", panel: "Open", dust: "Blow", wires: "Wires", fuse: "Fuse", snack: "Snack", jam: "Gear", claw: "Claw", tape: "Tape", chip: "Chip", close: "Close", lock: "Lock", power: "Power" };
 /** Every machine: find the door, screws, open, blow, then its own faults, the chip, and close up. */
 const stepsFor = (job: Job): string[] => job.practice ? ["find", "screws", "panel", "dust", "close", "lock"] : ["find", "screws", "panel", "dust", ...job.faults, "chip", "close", "lock", "power"];
 function stepState(step: string, phase: Phase, order: string[]) {
@@ -589,7 +605,7 @@ function stepState(step: string, phase: Phase, order: string[]) {
   return i < at ? "is-done" : i === at ? "is-now" : "";
 }
 
-type MissionState = { screwsOut: number; screwsLocked: number; dust: number; wired: number; fuseState: string; demoState: string; who: string; named: boolean; need: ToolKind | null; gl: boolean; freed: number; tool: ToolKind };
+type MissionState = { screwsOut: number; screwsLocked: number; dust: number; wired: number; fuseState: string; demoState: string; who: string; need: ToolKind | null; gl: boolean; freed: number; tool: ToolKind; wraps: number };
 /** The practice box talks you through every move: first the tool, then the gesture. */
 function practiceMission(phase: Phase, job: Job, s: MissionState): { title: string; text: string; meter?: number } | null {
   const pick = (t: ToolKind | null) => !t || s.tool === t ? "" : t === "hand" ? "Pick your hand in the toolbox. " : drivers.includes(t) ? `Pick the ${toolInfo[t].short} screwdriver: it matches the screw head. ` : `Pick the ${toolInfo[t].short.toLowerCase()} in the toolbox. `;
@@ -604,27 +620,30 @@ function practiceMission(phase: Phase, job: Job, s: MissionState): { title: stri
     default: return null;
   }
 }
+/** Every step says what to look at, what to do and which tool to use. */
 function missionFor(phase: Phase, job: Job, s: MissionState): { title: string; text: string; meter?: number } {
   if (job.practice) { const m = practiceMission(phase, job, s); if (m) return m; }
-  const use = (t: ToolKind | null) => !t || !s.named ? "" : t === "hand" ? " Use your hand." : ` Use the ${toolInfo[t].name.toLowerCase()}.`;
-  const mixed = new Set(job.screws).size > 1;
-  const vending = job.machine === "vending", claw = job.machine === "claw";
-  const thing = vending || claw ? "glass" : "panel";
+  const use = (t: ToolKind | null) => !t ? "" : t === "hand" ? " Use your hand." : ` Use the ${toolInfo[t].name.toLowerCase()}.`;
+  const vending = job.machine === "vending";
+  const thing = vending ? "glass" : "panel";
+  const right = job.doors.find((d) => d.right)!.name.toLowerCase();
+  const n = job.screws.length;
+  const mess = { crumbs: "crumbs", fluff: "fluff", mud: "mud", grounds: "coffee grounds", dust: "dust" }[job.mess];
   switch (phase) {
-    case "arrive": return job.demo === null ? { title: "A new customer", text: `${s.who} won't show you the problem. You'll find it.` } : s.demoState === "seen" ? { title: "You saw it", text: "Something's wrong inside. Take the job!" } : { title: "A new customer", text: `${s.who} wants to show you the problem.` };
-    case "find": return { title: "Find the right door", text: !s.gl ? `${clueText[job.machine]} Which door do you open?`
-      : job.tier === "guided" ? `Drag to look around. ${vending ? "Something is stuck behind one door" : claw ? "The claw twitches behind one door" : "Sparks fly out of one side"}: tap that door.${use("hand")}`
-      : "Drag to look around the machine. Find the clue, then tap the door that leads to the fault." };
-    case "screws": return { title: `Unscrew the ${thing} · ${s.screwsOut}/${job.screws.length}`, text: `${mixed ? "Look at each screw head and match the screwdriver. " : ""}Twist ↺ counter-clockwise: lefty loosey!${mixed ? "" : use(s.need)}`, meter: s.screwsOut / job.screws.length };
-    case "panel": return vending || claw ? { title: "Lift the glass off", text: `Tap the front glass.${use("hand")}` } : { title: "Pull the panel off", text: `Tap the back panel.${use("hand")}` };
-    case "dust": return { title: job.mess === "crumbs" ? "Blow the crumbs away" : job.mess === "fluff" ? "Blow the fluff away" : "Blow the dust away", text: `Sweep every corner.${use("blower")}`, meter: Math.min(1, s.dust / 0.95) };
+    case "arrive": return job.demo === null ? { title: "A new customer", text: `${s.who} can't show you the problem: the program is gone. Take the job!` } : s.demoState === "seen" ? { title: "You saw it", text: "Something's wrong inside. Take the job!" } : { title: "A new customer", text: `${s.who} wants to show you the problem.` };
+    case "find": return { title: "Find the right door", text: !s.gl ? `${clueText[job.machine]} Which door do you open?` : `Drag to look around. ${clueText[job.machine]} Tap the ${right}.${use("hand")}` };
+    case "screws": return { title: `Unscrew the ${thing} · ${s.screwsOut}/${n}`, text: `Look at the screw head and pick the screwdriver that fits it. Twist ↺ counter-clockwise: lefty loosey!${use(s.need)}`, meter: s.screwsOut / n };
+    case "panel": return vending ? { title: "Lift the glass off", text: `Tap the front glass.${use("hand")}` } : { title: "Pull the panel off", text: `Tap the ${right}.${use("hand")}` };
+    case "dust": return { title: `Blow the ${mess} away`, text: `Sweep every corner of the board.${use("blower")}`, meter: Math.min(1, s.dust / 0.95) };
     case "wires": return { title: `Plug in the cables · ${s.wired}/${job.cables.length}`, text: "Drag each loose cable to the ring of its colour." + use("hand"), meter: s.wired / job.cables.length };
-    case "fuse": return { title: "Swap the burnt fuse", text: (s.fuseState === "blown" ? "Pull out the burnt fuse." : "Now put the new fuse in.") + use("pliers") };
-    case "snack": return { title: `Free the stuck snack${job.snacks.length > 1 ? "s" : ""} · ${s.freed}/${job.snacks.length}`, text: `Hold on the snack to wind up the hammer, then let go. Gentle taps!${use("hammer")}` };
-    case "claw": return { title: "Fix the bent claw finger", text: `One finger points the wrong way, so the claw can't grab. Straighten it.${use("pliers")}` };
-    case "chip": return { title: "Reprogram the logic chip", text: `Tap the glowing LOGIC chip${vending ? ", bottom left" : claw ? ", on the floor by the eggs" : ""}.${use("hand")}` };
-    case "close": return { title: vending || claw ? "Put the glass back" : "Put the panel back", text: `Tap the ${thing} leaning on the side.${use("hand")}` };
-    case "lock": return { title: `Lock the screws · ${s.screwsLocked}/${job.screws.length}`, text: `Twist ↻ clockwise: righty tighty!${mixed ? " Match each head again." : use(s.need)}`, meter: s.screwsLocked / job.screws.length };
+    case "fuse": return { title: "Swap the burnt fuse", text: (s.fuseState === "blown" ? "Tap the black, burnt fuse to pull it out." : "Now tap the new fuse on the ledge to put it in.") + use("pliers") };
+    case "snack": return { title: "Free the stuck snack", text: `Hold on the snack to wind up the hammer, then let go. Gentle taps!${use("hammer")}` };
+    case "jam": return { title: "Free the stuck gear", text: `The gold gear is jammed. Hold on it to wind up the hammer, then let go. Gentle taps!${use("hammer")}` };
+    case "claw": return { title: "Fix the bent claw finger", text: `One finger points the wrong way, so the claw can't grab. Tap it to straighten it.${use("pliers")}` };
+    case "tape": return { title: `Tape the worn cable · ${s.wraps}/3`, text: `Copper shows through and it sparks. Tap the worn spot three times to wrap it.${use("tape")}`, meter: s.wraps / 3 };
+    case "chip": return { title: "Reprogram the logic chip", text: `Tap the glowing LOGIC chip${vending ? ", bottom left" : job.machine === "claw" ? ", on the floor of the glass case" : " on the board"}.${use("hand")}` };
+    case "close": return { title: vending ? "Put the glass back" : "Put the panel back", text: `Tap the ${thing} leaning on the side.${use("hand")}` };
+    case "lock": return { title: `Lock the screws · ${s.screwsLocked}/${n}`, text: `Twist ↻ clockwise: righty tighty! Match each head again.${use(s.need)}`, meter: s.screwsLocked / n };
     case "power": return { title: "Moment of truth", text: "Power it on and test it." };
     default: return { title: "", text: "" };
   }
@@ -652,49 +671,51 @@ function Catalog({ shop, onAction, onClose }: { shop: Shop; onAction: (id: strin
   </section>;
 }
 
-/* ---------- The menu: the machines fixed so far and the ones to come ---------- */
+/* ---------- The menu: the warm-up, the seven levels and the certificate ---------- */
 
-const machineIcons: Record<string, typeof Wrench> = { arcade: Gamepad, vending: Candy, jukebox: Music, crosswalk: Lamp, claw: Hand, coffee: Coffee, robot: Bot };
-function MachineMenu({ shop, teacher, onClose, onPractice, onTutorial, onCertificate }: { shop: Shop; teacher: boolean; onClose: () => void; onPractice: () => void; onTutorial: () => void; onCertificate: () => void }) {
-  const built = machineOrder as readonly string[];
-  // The first machine not unlocked yet, among the ones already built.
-  const nextIndex = roadmap.findIndex((m, i) => built.includes(m.id) && shop.fixed < i * UNLOCK_EVERY);
-  return <section className="rp-card rp-machines" aria-label="Your machines">
-    <header><h2><ListChecks size={22} /> Your machines</h2><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></header>
-    <p className="rp-machines-sum"><b>{shop.fixed}</b> {shop.fixed === 1 ? "repair" : "repairs"} so far · a new machine every {UNLOCK_EVERY} repairs</p>
+const machineIcons: Record<MachineId, typeof Wrench> = { arcade: Gamepad, vending: Candy, jukebox: Music, scooter: Bike, claw: Hand, coffee: Coffee, robot: Bot };
+function LevelMenu({ shop, teacher, current, onClose, onPlay, onPractice, onTutorial, onCertificate }: { shop: Shop; teacher: boolean; current: MachineId | null; onClose: () => void; onPlay: (m: MachineId) => void; onPractice: () => void; onTutorial: () => void; onCertificate: () => void }) {
+  const done = roadmap.filter((m) => cleared(shop, m.id)).length;
+  const certOpen = cleared(shop, "robot");
+  return <section className="rp-card rp-machines" aria-label="Your levels">
+    <header><h2><ListChecks size={22} /> Your levels</h2><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></header>
+    <p className="rp-machines-sum"><b>{done}</b> of {roadmap.length} levels cleared · fix a machine to open the next one</p>
     <ol>
-      {/* The practice box, before every machine: open any time, no customer and no coins. */}
+      {/* The warm-up comes first: the practice box any time, or the whole tour again. */}
       <li className="is-practice">
         <span className="rp-machine-icon"><PackageOpen size={22} /></span>
         <span className="rp-machine-text"><b>Practice box</b><small>Warm up any time: no customer, no coins</small></span>
-        <button className="rp-go rp-practice" onClick={onPractice}><Play size={14} /> PRACTICE</button>
+        <button className="rp-go rp-row-go" onClick={onPractice}><Play size={14} /> PRACTICE</button>
       </li>
-      {roadmap.map((m, i) => {
-      const Icon = machineIcons[m.id] ?? Wrench;
-      const isBuilt = built.includes(m.id), open = isBuilt && shop.fixed >= i * UNLOCK_EVERY;
-      const made = shop.made[m.id as MachineId] ?? 0;
-      const left = i * UNLOCK_EVERY - shop.fixed;
-      const state = open ? (made ? "done" : "open") : i === nextIndex ? "next" : "soon";
-      return <li key={m.id} className={`is-${state}`}>
-        <span className="rp-machine-icon">{state === "soon" ? <Lock size={20} /> : <Icon size={22} />}</span>
-        <span className="rp-machine-text">
-          <b>{i + 1}. {m.name}{m.boss && <em>BOSS</em>}</b>
-          <small>{state === "done" ? `Fixed ${made} ${made === 1 ? "time" : "times"}` : state === "open" ? "In your shop now: customers are bringing it" : state === "next" ? `Unlocks after ${left} more ${left === 1 ? "repair" : "repairs"}` : "Coming soon"}</small>
-          {state === "next" && <span className="rp-meter"><i style={{ width: `${Math.round(((UNLOCK_EVERY - left) / UNLOCK_EVERY) * 100)}%` }} /></span>}
-        </span>
-        {state === "done" && <span className="rp-badge"><Check size={14} /> FIXED</span>}
-        {state === "open" && <span className="rp-badge is-new">NEW</span>}
-      </li>;
-    })}
-      <li className="is-soon rp-cert-row">
+      <li className="is-practice">
+        <span className="rp-machine-icon"><Sparkles size={22} /></span>
+        <span className="rp-machine-text"><b>Replay the warm-up</b><small>The shop tour, then the practice box</small></span>
+        <button className="rp-go rp-row-go" onClick={onTutorial}><RotateCcw size={14} /> REPLAY</button>
+      </li>
+      {roadmap.map((m) => {
+        const Icon = machineIcons[m.id];
+        const made = shop.made[m.id] ?? 0;
+        const openNow = levelOpen(shop, m.id, teacher);
+        const now = current === m.id;
+        const state = !openNow ? "soon" : made ? "done" : "open";
+        return <li key={m.id} className={`is-${state} ${now ? "is-current" : ""}`}>
+          <span className="rp-machine-icon">{state === "soon" ? <Lock size={20} /> : <Icon size={22} />}</span>
+          <span className="rp-machine-text">
+            <b>Level {levelOf(m.id)} · {m.name}{m.boss && <em>BOSS</em>}</b>
+            <small>{now ? "On your bench now" : state === "done" ? `Cleared · fixed ${made} ${made === 1 ? "time" : "times"}` : state === "open" ? (teacher ? "Open: the teacher has every level" : "Open: your next customer brings it") : `Clear level ${levelOf(m.id) - 1} to open it`}</small>
+          </span>
+          {state === "done" && !now && <span className="rp-badge"><Check size={14} /></span>}
+          {now ? <button className="rp-tool rp-row-go" aria-label={`Restart level ${levelOf(m.id)}`} onClick={() => onPlay(m.id)}><RotateCcw size={14} /> RESTART</button>
+            : openNow && <button className="rp-go rp-row-go" aria-label={`Play level ${levelOf(m.id)}`} onClick={() => onPlay(m.id)}><Play size={14} /> PLAY</button>}
+        </li>;
+      })}
+      <li className={`rp-cert-row ${certOpen ? "is-open" : "is-soon"}`}>
         <span className="rp-machine-icon"><Award size={22} /></span>
-        <span className="rp-machine-text"><b>The Maker Family certificate</b><small>After the Robot: the very last repair</small></span>
+        <span className="rp-machine-text"><b>The Maker Family certificate</b><small>{certOpen ? "You earned it!" : "Beat the Robot, the final level"}</small></span>
+        {certOpen ? <button className="rp-go rp-row-go" onClick={onCertificate}><Award size={14} /> OPEN</button>
+          : teacher && <button className="rp-tool rp-row-go" aria-label="Preview the certificate" onClick={onCertificate}><Eye size={14} /> PREVIEW</button>}
       </li>
     </ol>
-    <div className="rp-actions">
-      {teacher && <button className="rp-tool" onClick={onCertificate}><Award size={16} /> Preview the certificate</button>}
-      <button className="rp-tool" onClick={onTutorial}><RotateCcw size={16} /> Replay the shop tour</button>
-    </div>
   </section>;
 }
 
@@ -703,13 +724,24 @@ function MachineMenu({ shop, teacher, onClose, onPractice, onTutorial, onCertifi
 const letter = (i: number) => String.fromCharCode(65 + i);
 /** What a bench row shows. */
 const said = (text: string) => text ? `“${text}”` : "nothing";
+const loose = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** Keys for the symbols that are hard to find on a tablet keyboard. */
+const codeKeys = ["{", "}", "(", ")", "\"", ";", "<", ">", "=", "⇥"];
 
+/**
+ * One chip, five ways to fix it, a step harder each level:
+ * pick the sign (after predicting), build the condition from pieces, type it, type it and write the else line,
+ * and in the final round write the whole if / else after line 1.
+ */
 function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip: () => void; onHelp: () => void; onClose: () => void; onDone: () => void }) {
   const chip = job.chip, v = chip.variable, n = chip.right.n;
-  const [step, setStep] = useState<"predict" | "fix" | "flash">(chip.mode === "predict-pick" ? "predict" : "fix");
-  const [mode, setMode] = useState<"pick" | "tokens" | "typed">(chip.mode === "predict-pick" ? "pick" : chip.mode === "tokens" ? "tokens" : "typed");
+  const [step, setStep] = useState<"predict" | "fix" | "flash">(chip.predict ? "predict" : "fix");
+  const [mode, setMode] = useState<"pick" | "tokens" | "typed">(chip.mode === "pick" ? "pick" : chip.mode === "tokens" ? "tokens" : "typed");
   const [built, setBuilt] = useState<string[]>([]);
   const [typed, setTyped] = useState("");
+  const [elseLine, setElseLine] = useState("");
+  const [written, setWritten] = useState("");
+  const [shape, setShape] = useState(false);
   const [misses, setMisses] = useState(0);
   const [note, setNote] = useState<{ text: string; tone: "good" | "bad" | "info" } | null>(null);
   const [rows, setRows] = useState<BenchRow[] | null>(null);
@@ -717,10 +749,11 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
   const [progress, setProgress] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const helpGiven = useRef(false);
+  const area = useRef<HTMLTextAreaElement>(null);
   // The parent re-renders often; the flash timer must not restart each time.
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
-  const hasHelp = job.tier === "guided" || job.tier === "supported";
+  const write = chip.mode === "write";
 
   const miss = (text: string) => { sfx.wrong(); onSlip(); setMisses((m) => m + 1); setNote({ text, tone: "bad" }); };
   const trimmedTray = mode === "tokens" && misses >= 2;
@@ -728,17 +761,34 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
   useEffect(() => { if (trimmedTray && !helpGiven.current) { helpGiven.current = true; onHelp(); setNote({ text: "Fewer pieces now: only the ones you need are left.", tone: "info" }); } }, [trimmedTray, onHelp]);
 
   const condition = mode === "pick" ? (built[0] ? `${v} ${built[0]} ${n}` : "") : mode === "tokens" ? built.join(" ") : typed;
+  const ready = write ? !!written.trim() : !!condition.trim() && (chip.mode !== "else" || !!elseLine.trim());
   const runBench = () => {
-    const parsed = parseCondition(condition, v);
-    if (!parsed.ok) { miss(parsed.error); return; }
-    const result = bench(job, parsed.test);
+    let program: Run;
+    if (write) {
+      const parsed = parseProgram(written, v);
+      if (!parsed.ok) { miss(parsed.error); return; }
+      program = parsed.run;
+    } else {
+      const parsed = parseCondition(condition, v);
+      if (!parsed.ok) { miss(parsed.error); return; }
+      let elseText: string | undefined;
+      if (chip.mode === "else") {
+        const line = parseWriteLine(elseLine);
+        if (!line.ok) { miss(`The else line: ${line.error}`); return; }
+        elseText = line.text;
+      }
+      program = runWith(job, parsed.test, elseText);
+    }
+    const result = bench(job, program);
     setRows(result); setShown(0); setNote(null);
     result.forEach((_, i) => window.setTimeout(() => { setShown(i + 1); if (result[i].ok) sfx.tick(); else sfx.wrong(); }, 160 * (i + 1)));
     window.setTimeout(() => {
       const bad = result.find((r) => !r.ok);
       if (!bad) { sfx.good(); setNote({ text: `All ${result.length} tests pass!`, tone: "good" }); setStep("flash"); return; }
       onSlip(); setMisses((m) => m + 1);
-      setNote({ text: `With ${v} = ${bad.value} it should show ${said(bad.expected)}, but it shows ${said(bad.got)}.`, tone: "bad" });
+      // Almost the right words: say so, so it's not taken for a logic mistake.
+      const close = bad.got && bad.expected && loose(bad.got) === loose(bad.expected);
+      setNote({ text: close ? `Almost! Check the text: it must say ${said(bad.expected)} exactly, with the same capitals and marks.` : `With ${v} = ${bad.value} it should show ${said(bad.expected)}, but it shows ${said(bad.got)}.`, tone: "bad" });
     }, 160 * (result.length + 1));
   };
 
@@ -749,10 +799,19 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
     return () => { window.clearInterval(id); window.clearTimeout(done); };
   }, [step]);
 
+  /** A symbol key: it goes in where the cursor is. */
+  const insert = (key: string) => {
+    const el = area.current;
+    const text = key === "⇥" ? "    " : key;
+    const at = el?.selectionStart ?? written.length, end = el?.selectionEnd ?? at;
+    const next = written.slice(0, at) + text + written.slice(end);
+    setWritten(next); setRows(null);
+    window.setTimeout(() => { if (el) { el.focus(); el.setSelectionRange(at + text.length, at + text.length); } }, 0);
+  };
+
   const sticker = <div className="rp-sticker" aria-label={`Sticker on the machine: ${chip.sticker.join(" ")}`}><small>ON THE MACHINE</small><b>{chip.sticker[0]}</b><b>{chip.sticker[1]}</b></div>;
-  const code = chipCode(job);
-  if (step === "predict") {
-    // Guided machines first ask for a prediction, in the same window as the Switchyard quiz.
+  if (step === "predict" && chip.predict) {
+    // The first levels ask for a prediction first, in the same window as the Switchyard quiz.
     const { predict } = chip;
     const right = picked === predict.answer;
     return <section className="rp-card rp-chipbench is-quiz" aria-label="Logic chip">
@@ -794,27 +853,42 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
       <code className="sy-code-text"><Cs code=")" /></code></>
     : <><code className="sy-code-text"><Cs code="if (" /></code>
       <span className="rp-typed"><code className="rp-typed-hl" aria-hidden="true"><Cs code={typed || " "} /></code>
-        <input value={typed} autoFocus spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Condition" placeholder="type the condition" onChange={(e) => { setTyped(e.target.value); setRows(null); }} onKeyDown={(e) => { if (e.key === "Enter") runBench(); }} /></span>
+        <input value={typed} autoFocus spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Condition" placeholder="type the condition" onChange={(e) => { setTyped(e.target.value); setRows(null); }} onKeyDown={(e) => { if (e.key === "Enter" && ready) runBench(); }} /></span>
       <code className="sy-code-text"><Cs code=")" /></code></>;
-  const editor = <div className="sy rp-sy"><div className="sy-editor">{code.map((line, i) => {
-    const indent = line.startsWith("    ");
-    const content = i === 1 ? line2 : <code className={`sy-code-text ${/^[{}]$/.test(line.trim()) ? "is-brace" : ""}`}><Cs code={line.trim()} /></code>;
-    return <div key={i} className={`sy-row ${i === 1 ? "is-now" : ""}`}><span className="sy-ln">{i + 1}</span>{indent ? <div className="sy-indent">{content}</div> : content}</div>;
-  })}</div>
-    {step === "fix" && (mode === "pick" || mode === "tokens") && <div className="sy-tools rp-pieces">
-      <small>{mode === "pick" ? chip.pickHint : "Code pieces · tap to place"}</small>
-      <div className="sy-bank">{(mode === "pick" ? chip.pick : tray).map((t) => <button key={t} aria-label={t} aria-pressed={mode === "pick" && built[0] === t} disabled={mode === "tokens" && built.length >= 5} onClick={() => { setBuilt(mode === "pick" ? [t] : [...built, t]); setRows(null); sfx.tick(); }}><code><Cs code={t} /></code></button>)}</div>
-    </div>}
-  </div>;
+  const code = chipCode(job);
+  const elseRows = chip.mode === "else" ? ["else", "{", "@else", "}"] : [];
+  const editor = write
+    ? <div className="sy rp-sy"><div className="sy-editor">
+        <div className="sy-row"><span className="sy-ln">1</span><code className="sy-code-text"><Cs code={code[0]} /></code></div>
+      </div>
+        <textarea ref={area} className="rp-write" value={written} rows={9} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Your program" placeholder="Line 2 onwards: write the if / else here…" onChange={(e) => { setWritten(e.target.value); setRows(null); }} />
+        <div className="rp-keys" aria-label="Code symbols">{codeKeys.map((k) => <button key={k} type="button" aria-label={k === "⇥" ? "Indent" : `Type ${k}`} onClick={() => insert(k)}><code>{k}</code></button>)}</div>
+      </div>
+    : <div className="sy rp-sy"><div className="sy-editor">{[...code, ...elseRows].map((line, i) => {
+      const indent = line.startsWith("    ") || line === "@else";
+      const content = i === 1 ? line2
+        : line === "@else" ? <span className="rp-typed is-line"><code className="rp-typed-hl" aria-hidden="true"><Cs code={elseLine || " "} /></code>
+            <input value={elseLine} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Else line" placeholder="write the missing line" onChange={(e) => { setElseLine(e.target.value); setRows(null); }} onKeyDown={(e) => { if (e.key === "Enter" && ready) runBench(); }} /></span>
+        : <code className={`sy-code-text ${/^[{}]$/.test(line.trim()) ? "is-brace" : ""}`}><Cs code={line.trim()} /></code>;
+      return <div key={i} className={`sy-row ${i === 1 || line === "@else" ? "is-now" : ""}`}><span className="sy-ln">{i + 1}</span>{indent ? <div className="sy-indent">{content}</div> : content}</div>;
+    })}</div>
+      {step === "fix" && (mode === "pick" || mode === "tokens") && <div className="sy-tools rp-pieces">
+        <small>{mode === "pick" ? chip.pickHint : "Code pieces · tap to place"}</small>
+        <div className="sy-bank">{(mode === "pick" ? chip.pick : tray).map((t) => <button key={t} aria-label={t} aria-pressed={mode === "pick" && built[0] === t} disabled={mode === "tokens" && built.length >= 5} onClick={() => { setBuilt(mode === "pick" ? [t] : [...built, t]); setRows(null); sfx.tick(); }}><code><Cs code={t} /></code></button>)}</div>
+      </div>}
+    </div>;
 
-  return <section className="rp-card rp-chipbench" aria-label="Logic chip">
-    <header><h2><Cpu size={22} /> Logic chip</h2><div><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></div></header>
-    <div className="rp-chip-top">{sticker}{hasHelp && <p className="rp-rule">{chip.rule}</p>}</div>
+  return <section className={`rp-card rp-chipbench ${write ? "is-write" : ""}`} aria-label="Logic chip">
+    <header><h2><Cpu size={22} /> Logic chip{write ? " · final round" : ""}</h2><div><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></div></header>
+    <div className="rp-chip-top">{sticker}<p className="rp-rule">{chip.rule}</p></div>
+    {write && <p className="rp-wiped">The program was wiped. Only line 1 is left: write the rest by hand.</p>}
     {editor}
+    {write && shape && <pre className="rp-shape" aria-label="The shape of an if / else">{"if (condition)\n{\n    Console.WriteLine(\"…\");\n}\nelse\n{\n    Console.WriteLine(\"…\");\n}"}</pre>}
 
     {step === "fix" && <div className="rp-q">
-      {mode === "typed" && misses >= 2 && <button className="rp-tool" onClick={() => { setMode("tokens"); setBuilt([]); onHelp(); setNote({ text: "Here are the code pieces.", tone: "info" }); }}><Sparkles size={15} /> Use code pieces</button>}
-      <button className="rp-go" disabled={!condition.trim()} onClick={runBench}><Play size={17} fill="currentColor" /> TEST ON THE BENCH</button>
+      {(chip.mode === "typed" || chip.mode === "else") && mode === "typed" && misses >= 2 && <button className="rp-tool" onClick={() => { setMode("tokens"); setBuilt([]); onHelp(); setNote({ text: "Here are the code pieces for the condition.", tone: "info" }); }}><Sparkles size={15} /> Use code pieces</button>}
+      {write && misses >= 2 && !shape && <button className="rp-tool" onClick={() => { setShape(true); onHelp(); }}><Eye size={15} /> Show me the shape</button>}
+      <button className="rp-go" disabled={!ready} onClick={runBench}><Play size={17} fill="currentColor" /> TEST ON THE BENCH</button>
     </div>}
 
     {/* The message comes before the bench rows, so it shows without scrolling on a short screen. */}

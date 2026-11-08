@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { hammerHit, type Job, type Joke, type Look, type MachineId, type ScrewHead, type ToolKind } from "./logic";
-import { ARCADE, VENDING, buildArcade, buildPractice, buildVending, type Rig, type ScreenMode, type ScreenState, type Spot } from "./machines";
+import { TAPE_WRAPS, hammerHit, type Job, type Joke, type Look, type MachineId, type ScrewHead, type ToolKind } from "./logic";
+import { VENDING, buildArcade, buildPractice, buildVending, type Rig, type ScreenMode, type ScreenState, type Spot } from "./machines";
+import { buildCoffee, buildJukebox, buildRobot, buildScooter } from "./levels3d";
 import { buildClaw } from "./claw";
 import { box, canvasTexture, drawSticker, hitArea, hitMaterial, labelPlane, mesh, softToon, toon } from "./toon";
 
@@ -11,7 +12,7 @@ import { box, canvasTexture, drawSticker, hitArea, hitMaterial, labelPlane, mesh
 export type View = "front" | "orbit" | "door" | "inside" | "tour";
 /** The tutorial's tour of the shop. */
 export type TourSpot = "wide" | "machine" | "bench" | "box";
-export type Work = "find" | "screws" | "panel" | "dust" | "wires" | "fuse" | "snack" | "claw" | "chip" | "close" | "lock" | null;
+export type Work = "find" | "screws" | "panel" | "dust" | "wires" | "fuse" | "snack" | "jam" | "claw" | "tape" | "chip" | "close" | "lock" | null;
 export type { ScreenMode };
 export type Mood = "idle" | "angry" | "happy";
 
@@ -42,6 +43,8 @@ export type WorkshopEvents = {
   landed: () => void;
   /** The claw's bent finger is straight again. */
   clawFixed: () => void;
+  /** One more wrap of tape round the worn cable. */
+  tape: (wraps: number) => void;
 };
 
 export type ScreenPoint = { x: number; y: number };
@@ -52,6 +55,7 @@ export type Points = {
   doors: (ScreenPoint & { id: string; facing: boolean; right: boolean })[];
   snacks: (ScreenPoint & { done: boolean })[];
   claw: ScreenPoint | null;
+  tape: ScreenPoint | null;
   chip: ScreenPoint; panel: ScreenPoint; board: ScreenPoint; boardA: ScreenPoint; boardB: ScreenPoint; center: ScreenPoint;
   fuse: { blown: ScreenPoint; spare: ScreenPoint; state: string } | null;
   moving: boolean;
@@ -63,7 +67,8 @@ export const headColors: Record<ScrewHead, string> = { cross: "#e5484d", flat: "
 type Screw = { group: THREE.Group; spinner: THREE.Group; head: ScrewHead; turned: number; out: boolean; locked: boolean; fall: number; velocity: THREE.Vector3; home: THREE.Vector3 };
 type Plug = { id: string; color: string; group: THREE.Group; tube: THREE.Mesh; anchor: THREE.Vector3; rest: THREE.Vector3; at: string | null; target: THREE.Vector3 };
 type Spark = { m: THREE.Mesh; v: THREE.Vector3; life: number; smoke?: boolean };
-type StuckSnack = { group: THREE.Group; home: THREE.Vector3; tilt: number; shelf: number; slot: number; taps: number; hits: number; freed: boolean; fall: number; v: THREE.Vector3; wob: number; rest: THREE.Vector3 };
+/** A snack stuck on its spiral, or (gear) the Robot's jammed gear: both want gentle hammer taps. */
+type StuckSnack = { group: THREE.Group; home: THREE.Vector3; tilt: number; shelf: number; slot: number; taps: number; hits: number; freed: boolean; fall: number; v: THREE.Vector3; wob: number; rest: THREE.Vector3; gear?: boolean };
 type Drag =
   | { kind: "screw"; index: number; last: number; back: number; slipped: boolean; lock: boolean }
   | { kind: "plug"; id: string }
@@ -71,7 +76,6 @@ type Drag =
   | { kind: "orbit"; x: number; yaw: number; moved: boolean }
   | { kind: "hammer"; index: number; t0: number; power: number };
 
-const { BOARD_Z, SOCKET_Y, socketX } = ARCADE;
 const shown = (o: THREE.Object3D) => { for (let x: THREE.Object3D | null = o; x; x = x.parent) if (!x.visible) return false; return true; };
 const doorOf = (o: THREE.Object3D): string | null => { for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.userData.door) return x.userData.door as string; return null; };
 const snackColor = (shelf: number, slot: number) => ["#ff6b6b", "#4ecdc4", "#ffd23f", "#b38cff", "#59e08a", "#ff9a3c", "#3d8bff"][(shelf * 3 + slot * 5) % 7];
@@ -154,6 +158,8 @@ export class Workshop {
   private clawBend = 1;
   private clawGoal = 1;
   private clawDropT = -1;
+  /** The worn cable and its wraps of tape. */
+  private tapeJob: { group: THREE.Group; copper: THREE.Mesh; wraps: THREE.Mesh[]; done: number; mid: THREE.Vector3 } | null = null;
 
   constructor(private host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -181,7 +187,10 @@ export class Workshop {
     this.walls = { front: new THREE.Group(), back: new THREE.Group() };
     this.room = this.buildRoom();
     this.claw = buildClaw(this.chipMaterial);
-    this.rigs = { arcade: buildArcade(this.chipMaterial), vending: buildVending(this.chipMaterial), claw: this.claw, practice: buildPractice(this.chipMaterial) };
+    this.rigs = {
+      arcade: buildArcade(this.chipMaterial), vending: buildVending(this.chipMaterial), jukebox: buildJukebox(this.chipMaterial), scooter: buildScooter(this.chipMaterial),
+      claw: this.claw, coffee: buildCoffee(this.chipMaterial), robot: buildRobot(this.chipMaterial), practice: buildPractice(this.chipMaterial),
+    };
     for (const rig of Object.values(this.rigs)) { this.scene.add(rig.group); rig.drawScreen(this.screenState, 0); rig.marquee(true); rig.group.visible = false; }
     this.rig = this.rigs.arcade;
     this.rig.group.visible = true;
@@ -500,6 +509,7 @@ export class Workshop {
     this.snacks = [];
     this.dust = null;
     this.fuse = null;
+    this.tapeJob = null;
     this.closing = null;
     this.swing = null;
     this.hammer.visible = false;
@@ -532,8 +542,8 @@ export class Workshop {
     job.screws.forEach((head, index) => {
       const group = new THREE.Group();
       const spinner = new THREE.Group();
-      const metal = head === "star" ? "#e2b54a" : "#c9ced9";
-      const cap = mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.016, 24), toon(metal), 0, 0, 0, 0.006);
+      // Every head is the same steel: only the slot tells them apart.
+      const cap = mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.016, 24), toon("#c9ced9"), 0, 0, 0, 0.006);
       cap.rotation.x = Math.PI / 2;
       spinner.add(cap);
       const slotMat = toon("#1d1d22");
@@ -553,16 +563,23 @@ export class Workshop {
       this.screws.push({ group, spinner, head, turned: 0, out: false, locked: true, fall: 0, velocity: new THREE.Vector3(), home });
     });
 
-    if (job.machine === "arcade" && !job.practice) this.buildWiring(job);
+    if (job.cables.length) this.buildWiring(job);
+    if (job.fuse) this.buildFuse();
+    else if (job.machine === "arcade" && !job.practice) this.goodFuse();
+    if (job.faults.includes("tape")) this.buildTape();
     if (job.machine === "vending") this.buildSnacks(job);
+    if (job.jam) this.buildGear(job.jam);
     this.buildMess(job);
     this.setChipGlow(false);
   }
 
+  /** Three sockets with colour rings, and three cables: some plugged in, some hanging loose. */
   private buildWiring(job: Job) {
+    const { spots, f } = this.rig;
+    const face = f < 0 ? Math.PI : 0;
     job.sockets.forEach((socket, i) => {
       const owner = job.cables.find((c) => c.socket === socket.id)!;
-      const pos = new THREE.Vector3(socketX[i], SOCKET_Y, BOARD_Z - 0.018);
+      const pos = spots.sockets[i].clone();
       const hole = mesh(box(0.07, 0.07, 0.016), toon("#0d0d12"), pos.x, pos.y, pos.z, 0.006);
       // Colour rings on the sockets match the cables.
       const ring = labelPlane(0.075, 0.075, (c, w, h) => {
@@ -571,19 +588,19 @@ export class Workshop {
         c.strokeStyle = owner.color;
         c.beginPath(); c.arc(w / 2, h / 2, w * 0.38, 0, Math.PI * 2); c.stroke();
       }, 128, true);
-      ring.position.set(pos.x, pos.y, pos.z - 0.0095);
-      ring.rotation.y = Math.PI;
+      ring.position.set(pos.x, pos.y, pos.z + f * 0.0095);
+      ring.rotation.y = face;
       this.interior.add(hole, ring);
       this.sockets.push({ id: socket.id, pos });
     });
     job.cables.forEach((cable, i) => {
       const group = new THREE.Group();
-      group.add(mesh(box(0.05, 0.05, 0.05), toon(cable.color), 0, 0, 0, 0.008), mesh(box(0.02, 0.02, 0.03), toon("#d8d8d8"), 0, 0, 0.03), hitArea(0.06));
+      group.add(mesh(box(0.05, 0.05, 0.05), toon(cable.color), 0, 0, 0, 0.008), mesh(box(0.02, 0.02, 0.03), toon("#d8d8d8"), 0, 0, -f * 0.03), hitArea(0.06));
       group.traverse((o) => { o.userData.id = cable.id; });
-      const anchor = new THREE.Vector3(0.12 - i * 0.12, 0.47, BOARD_Z - 0.03);
-      const rest = new THREE.Vector3(0.21 - i * 0.21, 0.66 + (i % 2) * 0.05, BOARD_Z - 0.09);
+      const anchor = spots.anchors[i].clone();
+      const rest = spots.rests[i].clone();
       const socket = this.sockets.find((s) => s.id === cable.at);
-      const target = socket ? socket.pos.clone().add(new THREE.Vector3(0, 0, -0.03)) : rest.clone();
+      const target = socket ? socket.pos.clone().add(new THREE.Vector3(0, 0, f * 0.03)) : rest.clone();
       group.position.copy(target);
       const tube = new THREE.Mesh(new THREE.BufferGeometry(), toon(cable.color));
       this.interior.add(group, tube);
@@ -591,29 +608,82 @@ export class Workshop {
       this.plugs.push(plug);
       this.updateTube(plug);
     });
-    if (job.fuse) {
-      const fuse = (burnt: boolean) => {
-        const g = new THREE.Group();
-        const glass = mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.1, 14), toon(burnt ? "#5b4a3a" : "#bfe8ff", { transparent: true, opacity: 0.9 }), 0, 0, 0, 0.006);
-        glass.rotation.z = Math.PI / 2;
-        const caps = [-0.055, 0.055].map((x) => { const m = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 14), toon("#d8d8d8"), x, 0, 0, 0.004); m.rotation.z = Math.PI / 2; return m; });
-        g.add(glass, ...caps, hitArea(0.07));
-        if (burnt) g.add(mesh(new THREE.SphereGeometry(0.012, 8, 6), toon("#111111"), 0, 0, -0.012));
-        return g;
-      };
-      const holder = [0.15, 0.25].map((x) => mesh(box(0.025, 0.05, 0.03), toon("#c0c0c8"), x, 0.93, BOARD_Z - 0.02, 0.005));
-      const ledge = mesh(box(0.2, 0.02, 0.07), toon("#3b3355"), 0.2, 0.58, BOARD_Z - 0.04, 0.006);
-      const blown = fuse(true), spare = fuse(false);
-      blown.position.set(0.2, 0.93, BOARD_Z - 0.035);
-      spare.position.set(0.2, 0.61, BOARD_Z - 0.05);
-      this.interior.add(...holder, ledge, blown, spare);
-      this.fuse = { blown, spare, state: "blown", t: 0 };
-    } else {
-      // A good fuse sits in its holder: nothing to do there this time.
-      const ok = mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.1, 14), toon("#bfe8ff"), 0.2, 0.93, BOARD_Z - 0.035, 0.006);
-      ok.rotation.z = Math.PI / 2;
-      this.interior.add(ok, ...[0.15, 0.25].map((x) => mesh(box(0.025, 0.05, 0.03), toon("#c0c0c8"), x, 0.93, BOARD_Z - 0.02, 0.005)));
-    }
+  }
+
+  private fuseMesh(burnt: boolean) {
+    const g = new THREE.Group();
+    const glass = mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.1, 14), toon(burnt ? "#5b4a3a" : "#bfe8ff", { transparent: true, opacity: 0.9 }), 0, 0, 0, 0.006);
+    glass.rotation.z = Math.PI / 2;
+    const caps = [-0.055, 0.055].map((x) => { const m = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 14), toon("#d8d8d8"), x, 0, 0, 0.004); m.rotation.z = Math.PI / 2; return m; });
+    g.add(glass, ...caps, hitArea(0.07));
+    if (burnt) g.add(mesh(new THREE.SphereGeometry(0.012, 8, 6), toon("#111111"), 0, 0, this.rig.f * 0.012));
+    return g;
+  }
+  private fuseHolder() {
+    const { holder } = this.rig.spots.fuse, f = this.rig.f;
+    return [-0.05, 0.05].map((dx) => mesh(box(0.025, 0.05, 0.03), toon("#c0c0c8"), holder.x + dx, holder.y, holder.z - f * 0.015, 0.005));
+  }
+  /** A burnt fuse in its holder, and a new one waiting on a ledge below it. */
+  private buildFuse() {
+    const { holder, spare } = this.rig.spots.fuse;
+    const ledge = mesh(box(0.2, 0.02, 0.07), toon("#3b3355"), spare.x, spare.y - 0.03, spare.z - this.rig.f * 0.01, 0.006);
+    const blown = this.fuseMesh(true), fresh = this.fuseMesh(false);
+    blown.position.copy(holder);
+    fresh.position.copy(spare);
+    this.interior.add(...this.fuseHolder(), ledge, blown, fresh);
+    this.fuse = { blown, spare: fresh, state: "blown", t: 0 };
+  }
+  /** The arcade's fuse is fine: it just sits in its holder. */
+  private goodFuse() {
+    const ok = this.fuseMesh(false);
+    ok.position.copy(this.rig.spots.fuse.holder);
+    this.interior.add(ok, ...this.fuseHolder());
+  }
+
+  /** A worn stretch of cable: bare copper that sparks. Three taps of tape wrap it up. */
+  private buildTape() {
+    const { a, b } = this.rig.spots.tape;
+    const group = new THREE.Group();
+    const dir = b.clone().sub(a), len = dir.length(), mid = a.clone().lerp(b, 0.5);
+    const along = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    const cable = mesh(new THREE.CylinderGeometry(0.014, 0.014, len * 1.5, 10), toon("#3a3f4a"), 0, 0, 0, 0.005);
+    const copper = mesh(new THREE.CylinderGeometry(0.017, 0.017, len * 0.42, 10), toon("#e8954a", { emissive: new THREE.Color("#5a2a00") }), 0, 0, 0, 0.004);
+    // A big touch target: the worn spot is small.
+    const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, len * 0.9, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    group.add(cable, copper, hit);
+    group.position.copy(mid);
+    group.quaternion.copy(along);
+    const wraps = [-0.28, 0, 0.28].map((k) => { const w = mesh(new THREE.CylinderGeometry(0.022, 0.022, len * 0.16, 12), toon("#1d1d1f"), 0, k * len * 0.42 * 1.1, 0, 0.003); w.visible = false; group.add(w); return w; });
+    this.interior.add(group);
+    this.tapeJob = { group, copper, wraps, done: 0, mid };
+  }
+  private wrap() {
+    const j = this.tapeJob;
+    if (!j || j.done >= TAPE_WRAPS) return;
+    j.wraps[j.done].visible = true;
+    j.done++;
+    if (j.done >= TAPE_WRAPS) j.copper.visible = false;
+    this.burst(j.mid, j.done >= TAPE_WRAPS ? "#59e08a" : "#d8d8d8", 8, 0.8);
+    this.events.tape?.(j.done);
+  }
+
+  /** The Robot's jammed gear: it trembles until a few gentle hammer taps free it. */
+  private buildGear(taps: number) {
+    const g = new THREE.Group();
+    const f = this.rig.f;
+    const gold = toon("#e2b54a");
+    const wheel = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 20), gold, 0, 0, 0, 0.006);
+    wheel.rotation.x = Math.PI / 2;
+    g.add(wheel, mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.03, 10), toon("#4c5266"), 0, 0, f * 0.01));
+    (g.children[1] as THREE.Mesh).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 8; i++) { const tooth = mesh(box(0.022, 0.026, 0.024), gold, Math.cos((i / 8) * Math.PI * 2) * 0.058, Math.sin((i / 8) * Math.PI * 2) * 0.058, 0, 0.003); tooth.rotation.z = (i / 8) * Math.PI * 2; g.add(tooth); }
+    g.add(hitArea(0.09));
+    const index = this.snacks.length;
+    g.traverse((o) => { o.userData.snack = index; });
+    const home = this.rig.spots.jam.clone();
+    g.position.copy(home);
+    this.interior.add(g);
+    this.snacks.push({ group: g, home, tilt: 0, shelf: 0, slot: 0, taps, hits: 0, freed: false, fall: 0, v: new THREE.Vector3(), wob: 0, rest: home.clone(), gear: true });
   }
 
   /** The snacks on the spirals: one slot empty, one or two snacks stuck at the front. */
@@ -672,6 +742,14 @@ export class Workshop {
         d.strokeStyle = ["#6e4523", "#2b1a12", "#c9a26b", "#8a8478"][i % 4];
         d.beginPath(); d.moveTo(x, y); d.bezierCurveTo(x + 14, y - 10, x - 8, y + 18, x + 12, y + 26); d.stroke();
       }
+    } else if (job.mess === "mud") {
+      // Mud splashes: brown blobs and drips.
+      d.fillStyle = "rgba(120,85,50,0.45)"; d.fillRect(0, 0, 256, 512);
+      for (let i = 0; i < 260; i++) { d.fillStyle = ["#6e4523", "#8a5a2b", "#5a3a1a"][i % 3]; d.beginPath(); d.ellipse((i * 73) % 256, (i * 131) % 512, 6 + (i % 5) * 3, 4 + (i % 3) * 3, i, 0, Math.PI * 2); d.fill(); }
+    } else if (job.mess === "grounds") {
+      // Coffee grounds: dark speckles everywhere.
+      d.fillStyle = "rgba(70,40,25,0.5)"; d.fillRect(0, 0, 256, 512);
+      for (let i = 0; i < 1400; i++) { d.fillStyle = ["#2a1a10", "#4a2a18", "#6e3b1f"][i % 3]; d.fillRect((i * 73) % 256, (i * 131) % 512, 2 + (i % 3), 2 + (i % 2)); }
     } else {
       d.fillStyle = `rgba(160,140,115,${0.55 + job.dust * 0.4})`;
       d.fillRect(0, 0, 256, 512);
@@ -702,7 +780,7 @@ export class Workshop {
     this.work = work;
     this.setChipGlow(work === "chip");
     if (work !== "wires") this.showHint(null);
-    if (this.dust && (work === "wires" || work === "fuse" || work === "snack" || work === "claw" || work === "chip")) this.dust.mesh.visible = false;
+    if (this.dust && (work === "wires" || work === "fuse" || work === "snack" || work === "jam" || work === "claw" || work === "tape" || work === "chip")) this.dust.mesh.visible = false;
   }
   setTool(tool: ToolKind) { this.tool = tool; }
   /** The clue that shows the way to the right door. */
@@ -798,6 +876,8 @@ export class Workshop {
   walkIn() { this.walk = { from: 3.2, to: 0.92, t: 0, leaving: false }; this.customer.visible = true; this.setMood("idle"); }
   leave() { this.walk = { from: this.customer.position.x, to: 3.6, t: 0, leaving: true }; }
   insertCoins(n: number, done: () => void) { this.coinQueue = { n, t: 0, done, dropped: 0 }; }
+  /** How the machine on the bench is worked: coins, or a tap on a button. */
+  token() { return this.rig.token; }
   /** The fixed claw dives into the eggs and comes back up. */
   clawDrop() { if (this.rig.id === "claw") this.clawDropT = 0; }
 
@@ -810,7 +890,8 @@ export class Workshop {
     if (work === "dust" && this.dust) { this.dust.done = true; this.dust.mesh.visible = false; this.events.dust?.(1); }
     if (work === "wires") for (const plug of this.plugs) { const cable = this.job!.cables.find((c) => c.id === plug.id)!; if (plug.at !== cable.socket) this.seat(plug, cable.socket); }
     if (work === "fuse" && this.fuse) { this.fuse.state = "in"; this.fuse.blown.visible = false; this.events.fuseIn?.(); }
-    if (work === "snack") { this.snacks.forEach((s) => this.free(s)); this.events.hammer?.("good", true, 0); }
+    if (work === "snack" || work === "jam") { this.snacks.forEach((s) => this.free(s)); this.events.hammer?.("good", true, 0); }
+    if (work === "tape" && this.tapeJob) { while (this.tapeJob.done < TAPE_WRAPS) this.wrap(); }
     if (work === "claw" && this.clawGoal) { this.clawGoal = 0; this.events.clawFixed?.(); }
     if (work === "close") this.putPanelBack();
     if (work === "lock") this.screws.forEach((s, i) => { if (!s.locked) { s.turned = 0; s.locked = true; this.events.screwLocked?.(i); } });
@@ -820,7 +901,7 @@ export class Workshop {
     if (!cable || !this.job) { this.hintAt = null; this.hint.visible = false; return; }
     const target = this.job.cables.find((c) => c.id === cable)!.socket;
     const s = this.sockets.find((x) => x.id === target)!;
-    this.hintAt = s.pos.clone().add(new THREE.Vector3(0, 0, -0.03));
+    this.hintAt = s.pos.clone().add(new THREE.Vector3(0, 0, this.rig.f * 0.03));
     this.hint.visible = true;
   }
 
@@ -836,10 +917,11 @@ export class Workshop {
     return {
       screws: this.screws.map((s) => ({ ...at(world(s.group)), out: s.out, locked: s.locked, head: s.head })),
       plugs: this.plugs.map((p) => ({ id: p.id, ...at(world(p.group)), at: p.at })),
-      sockets: this.sockets.map((s) => ({ id: s.id, ...at(s.pos.clone().add(new THREE.Vector3(0, 0, -0.05))) })),
+      sockets: this.sockets.map((s) => ({ id: s.id, ...at(s.pos.clone().add(new THREE.Vector3(0, 0, f * 0.05))) })),
       doors: this.rig.doors.map((d) => ({ id: d.id, ...at(d.center), facing: d.normal.dot(cam.clone().sub(d.center).normalize()) > 0.35, right: !d.swing })),
       snacks: this.snacks.map((s) => ({ ...at(world(s.group)), done: s.freed })),
       claw: this.rig.id === "claw" ? at(world(this.claw.claw.finger).add(new THREE.Vector3(0, -0.05, 0))) : null,
+      tape: this.tapeJob ? at(this.tapeJob.mid) : null,
       chip: at(world(this.rig.chip)), panel: at(world(this.rig.panel)), board: at(b.center),
       boardA: corner(1, 1), boardB: corner(-1, -1), center: at(new THREE.Vector3(0, 1, 0)),
       fuse: this.fuse ? { blown: at(world(this.fuse.blown)), spare: at(world(this.fuse.spare)), state: this.fuse.state } : null,
@@ -855,7 +937,7 @@ export class Workshop {
     const end = plug.group.position.clone().add(new THREE.Vector3(0, -0.03, 0));
     const mid = plug.anchor.clone().lerp(end, 0.5);
     mid.y = Math.min(plug.anchor.y, end.y) - 0.12;
-    mid.z -= 0.05;
+    mid.z += this.rig.f * 0.05;
     plug.tube.geometry.dispose();
     plug.tube.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([plug.anchor, mid, end]), 24, 0.012, 8, false);
   }
@@ -929,6 +1011,9 @@ export class Workshop {
     this.animateSnacks(dt, t);
     this.animateHammer(dt, t);
     this.clueTick(dt);
+    this.rig.tick?.(t);
+    // The worn cable crackles until it's taped.
+    if (this.tapeJob && this.tapeJob.done < TAPE_WRAPS && Math.floor(t / 0.9) !== Math.floor((t - dt) / 0.9) && this.interior.visible) this.burst(this.tapeJob.mid, "#ffd23f", 6, 0.8);
     if (this.rig.id === "claw") {
       const k = this.claw.claw;
       if (this.clawBend !== this.clawGoal) { this.clawBend = Math.max(this.clawGoal, this.clawBend - dt * 2.5); k.bend(this.clawBend); }
@@ -946,7 +1031,7 @@ export class Workshop {
       if (plug.group.position.distanceTo(plug.target) > 0.0005) { plug.group.position.lerp(plug.target, Math.min(1, dt * 12)); this.updateTube(plug); }
       plug.group.rotation.z = plug.at ? 0 : Math.sin(t * 2 + plug.anchor.x * 9) * 0.12;
     }
-    if (this.hintAt) { this.hint.position.copy(this.hintAt); this.hint.rotation.y = Math.PI; this.hint.scale.setScalar(1 + Math.sin(t * 6) * 0.15); }
+    if (this.hintAt) { this.hint.position.copy(this.hintAt); this.hint.rotation.y = this.rig.f < 0 ? Math.PI : 0; this.hint.scale.setScalar(1 + Math.sin(t * 6) * 0.15); }
     if (this.work === "chip") this.chipMaterial.emissive.setRGB(0.25 + Math.sin(t * 5) * 0.2, 0.18 + Math.sin(t * 5) * 0.14, 0);
     if (this.decor.cat?.visible) (this.decor.cat.userData.tail as THREE.Mesh).rotation.x = Math.sin(t * 2.4) * 0.5;
     if (this.decor.neon?.visible) ((this.decor.neon as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = Math.random() > 0.985 ? 0.4 : 1;
@@ -1070,7 +1155,7 @@ export class Workshop {
         p.y += Math.sin(Math.min(1, f * 1.4) * Math.PI) * 0.12;
         this.flyingCoin.position.copy(p);
         this.flyingCoin.rotation.set(Math.PI / 2, t * 10, 0);
-        this.flyingCoin.visible = f < 0.72;
+        this.flyingCoin.visible = f < 0.72 && this.rig.token === "coin";
         if (f >= 0.72 && q.dropped <= i) { q.dropped = i + 1; this.events.coin?.(); this.screenState.coins = q.dropped; this.rig.drawScreen(this.screenState, t); }
       } else {
         this.flyingCoin.visible = false;
@@ -1110,11 +1195,11 @@ export class Workshop {
     if (f.state !== "blown" && f.blown.visible) {
       f.t += dt;
       f.blown.position.y -= dt * 1.4 * (1 + f.t * 3);
-      f.blown.position.z -= dt * 0.4;
+      f.blown.position.z += this.rig.f * dt * 0.4;
       f.blown.rotation.z += dt * 8;
       if (f.blown.position.y < 0.05) f.blown.visible = false;
     }
-    if (f.state === "in") f.spare.position.lerp(new THREE.Vector3(0.2, 0.93, BOARD_Z - 0.035), Math.min(1, dt * 10));
+    if (f.state === "in") f.spare.position.lerp(this.rig.spots.fuse.holder, Math.min(1, dt * 10));
   }
 
   /** Wrong doors swing open on their joke, wait, and close by themselves. */
@@ -1149,9 +1234,12 @@ export class Workshop {
         // A stuck snack trembles a little: the clue. A hammer tap shakes it hard.
         s.wob = Math.max(0, s.wob - dt * 2.5);
         g.position.copy(s.home);
-        g.rotation.set(s.tilt + Math.sin(t * 34) * 0.14 * s.wob, 0, Math.sin(t * 2.2 + s.slot) * 0.06 + Math.sin(t * 41) * 0.1 * s.wob);
+        if (s.gear) g.rotation.set(0, 0, Math.sin(t * 41) * 0.12 * s.wob + Math.sin(t * 9) * 0.03);
+      else g.rotation.set(s.tilt + Math.sin(t * 34) * 0.14 * s.wob, 0, Math.sin(t * 2.2 + s.slot) * 0.06 + Math.sin(t * 41) * 0.1 * s.wob);
         continue;
       }
+      // A freed gear turns in place; a freed snack falls.
+      if (s.gear) { g.position.copy(s.home); g.rotation.set(0, 0, g.rotation.z - dt * 6); continue; }
       if (s.fall > 2) continue;
       s.fall += dt;
       s.v.y -= 4.5 * dt;
@@ -1197,9 +1285,9 @@ export class Workshop {
       if (s.hits >= s.taps) this.free(s);
     }
     if (result === "hard") {
-      // Too hard: the spiral bends and bits fly. The snack stays stuck.
+      // Too hard: the spiral bends (a gear's teeth chip) and bits fly. It stays stuck.
       s.wob = 1;
-      this.burst(at, "#bfe8ff", 22, 1.6);
+      this.burst(at, s.gear ? "#ffd23f" : "#bfe8ff", 22, 1.6);
       const coil = this.rig.coils[s.shelf]?.[s.slot];
       if (coil) { coil.rotation.z = 0.3; coil.scale.set(1, 0.8, 1); }
     }
@@ -1209,13 +1297,14 @@ export class Workshop {
   /** How hard the hammer will hit: it winds up over 1.4 seconds of holding. */
   private power(t0: number) { return Math.min(1, (performance.now() - t0) / 1400); }
 
-  /** The arcade's clue: sparks out of the back panel and smoke rising behind the cabinet. */
+  /** The clue: sparks out of the top of the panel that hides the fault, and smoke rising behind it. */
   private clueTick(dt: number) {
-    if (!this.clue || this.rig.id !== "arcade") return;
+    if (!this.clue || this.rig.id === "vending" || this.rig.id === "practice") return;
     const before = this.clueT;
     this.clueT += dt;
-    if (Math.floor(this.clueT / 0.5) !== Math.floor(before / 0.5)) this.puff(new THREE.Vector3((Math.random() - 0.5) * 0.3, 1.7, -0.5));
-    if (Math.floor(this.clueT / 1.1) !== Math.floor(before / 1.1)) this.burst(new THREE.Vector3((Math.random() - 0.5) * 0.5, 1.52, -0.43), "#ffd23f", 7, 1.1);
+    const b = this.rig.board, f = this.rig.f, top = b.center.y + b.h / 2, x = b.center.x;
+    if (Math.floor(this.clueT / 0.5) !== Math.floor(before / 0.5)) this.puff(new THREE.Vector3(x + (Math.random() - 0.5) * 0.3, top + 0.2, this.rig.plane + f * 0.15));
+    if (Math.floor(this.clueT / 1.1) !== Math.floor(before / 1.1)) this.burst(new THREE.Vector3(x + (Math.random() - 0.5) * b.w * 0.8, top, this.rig.plane + f * 0.08), "#ffd23f", 7, 1.1);
   }
 
   private removePanel() {
@@ -1320,10 +1409,10 @@ export class Workshop {
     if (this.work === "fuse" && this.fuse) {
       const f = this.fuse;
       if (f.state === "blown" && this.pick(e, [f.blown])) { if (!this.needs("pliers")) return; f.state = "out"; f.t = 0; this.events.fuseOut?.(); return; }
-      if (f.state === "out" && this.pick(e, [f.spare])) { if (!this.needs("pliers")) return; f.state = "in"; this.events.fuseIn?.(); this.burst(new THREE.Vector3(0.2, 0.93, BOARD_Z - 0.06), "#bfe8ff", 10); }
+      if (f.state === "out" && this.pick(e, [f.spare])) { if (!this.needs("pliers")) return; f.state = "in"; this.events.fuseIn?.(); this.burst(this.rig.spots.fuse.holder.clone().addScaledVector(new THREE.Vector3(0, 0, this.rig.f), 0.03), "#bfe8ff", 10); }
       return;
     }
-    if (this.work === "snack") {
+    if (this.work === "snack" || this.work === "jam") {
       if (this.swing) return;
       const hit = this.pick(e, this.snacks.filter((s) => !s.freed).map((s) => s.group));
       if (!hit || !this.needs("hammer")) return;
@@ -1336,6 +1425,11 @@ export class Workshop {
       this.clawGoal = 0;
       this.burst(this.claw.claw.finger.getWorldPosition(new THREE.Vector3()), "#d8dce6", 12);
       this.events.clawFixed?.();
+      return;
+    }
+    if (this.work === "tape" && this.tapeJob && this.tapeJob.done < TAPE_WRAPS) {
+      if (!this.pick(e, [this.tapeJob.group]) || !this.needs("tape")) return;
+      this.wrap();
       return;
     }
     if (this.work === "chip" && this.pick(e, [this.rig.chip]) && this.needs("hand")) this.events.chip?.();
@@ -1364,9 +1458,11 @@ export class Workshop {
       const p = this.pointer(e);
       this.raycaster.setFromCamera(new THREE.Vector2(p.x, p.y), this.camera);
       const hit = new THREE.Vector3();
-      if (this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, -1), BOARD_Z - 0.05), hit)) {
+      const r = this.rig;
+      if (this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, -1), r.plane + r.f * 0.05), hit)) {
         const plug = this.plugs.find((x) => x.id === d.id)!;
-        hit.x = Math.max(-0.3, Math.min(0.3, hit.x)); hit.y = Math.max(0.5, Math.min(1.5, hit.y));
+        const b = r.spots.box;
+        hit.x = Math.max(b.x0, Math.min(b.x1, hit.x)); hit.y = Math.max(b.y0, Math.min(b.y1, hit.y));
         plug.group.position.copy(hit);
         plug.target.copy(hit);
         this.updateTube(plug);
@@ -1404,13 +1500,14 @@ export class Workshop {
     if (d?.kind !== "plug") return;
     const plug = this.plugs.find((x) => x.id === d.id)!;
     const near = this.sockets.map((s) => ({ s, dist: Math.hypot(s.pos.x - plug.group.position.x, s.pos.y - plug.group.position.y) })).sort((a, b) => a.dist - b.dist)[0];
+    const out = new THREE.Vector3(0, 0, this.rig.f * 0.04);
     const taken = near && this.plugs.some((p) => p !== plug && p.at === near.s.id);
     if (near && near.dist < 0.075 && !taken) {
       const cable = this.job!.cables.find((c) => c.id === plug.id)!;
-      if (cable.socket === near.s.id) { this.seat(plug, near.s.id); this.burst(near.s.pos.clone().add(new THREE.Vector3(0, 0, -0.04)), plug.color, 10); }
+      if (cable.socket === near.s.id) { this.seat(plug, near.s.id); this.burst(near.s.pos.clone().add(out), plug.color, 10); }
       else {
         // Wrong socket: a zap, and the plug jumps back out.
-        this.burst(near.s.pos.clone().add(new THREE.Vector3(0, 0, -0.04)), "#fff6a0", 22);
+        this.burst(near.s.pos.clone().add(out), "#fff6a0", 22);
         plug.target.copy(plug.rest);
         this.events.plug?.(plug.id, near.s.id, false);
       }
@@ -1420,7 +1517,7 @@ export class Workshop {
   private seat(plug: Plug, socket: string) {
     const s = this.sockets.find((x) => x.id === socket)!;
     plug.at = socket;
-    plug.target.copy(s.pos).add(new THREE.Vector3(0, 0, -0.03));
+    plug.target.copy(s.pos).add(new THREE.Vector3(0, 0, this.rig.f * 0.03));
     this.events.plug?.(plug.id, socket, true);
   }
 

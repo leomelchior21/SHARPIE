@@ -14,7 +14,7 @@ import { SwitchyardHome } from "./switchyard/SwitchyardHome";
 import { ShadowFeed } from "./ShadowFeed";
 import { AuditReport } from "./AuditReport";
 import { RepairShop } from "./repair/RepairShop";
-import { loadShop } from "./repair/logic";
+import { allMachines, cleared, loadShop } from "./repair/logic";
 import { findStudent, type ClassCode } from "../../data/roster";
 import "./finalproject.css";
 import "./lab.css";
@@ -48,7 +48,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack,classCode=findStu
   // The Repair Shop (only some classes) keeps its coins and tools on this device.
   const repair=repairOpen(classCode,allOpen);
   const repairShop=activity==="overview"&&!preview?loadShop(studentKey):null;
-  const repairDetail=repairShop?`${repairShop.fixed} machines fixed · ${repairShop.coins} coins`:"Arcade and vending machine";
+  const repairDetail=repairShop?`${allMachines.filter(m=>cleared(repairShop,m)).length} of ${allMachines.length} levels cleared · ${repairShop.coins} coins`:"Seven machines to fix";
   const one=backroomStageDone(activeBackroom),two=stageTwoDone(active),three=stageThreeDone(active);
   // Inside the Switchyard, Back returns to its two stations.
   const inLab=["yard","quiz-intro","quiz"].includes(activity);

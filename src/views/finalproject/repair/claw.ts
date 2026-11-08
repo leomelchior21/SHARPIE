@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { door, hole, logicChip, type Rig, type ScreenState } from "./machines";
+import { boardSpots, door, hole, logicChip, workViews, type Rig, type ScreenState } from "./machines";
 import { box, canvasTexture, hitBox, mesh, texturePlane, toon, wrapText } from "./toon";
 
 /*
  * 5. The claw machine: a yellow duck with bunny ears, eggs behind the glass.
- * The fault is behind the front glass: one claw finger is bent, so the claw never grabs.
+ * One claw finger is bent and the claw cable is worn. The way in is the panel on the back of the glass case.
  */
-export const CLAW = { glassHome: new THREE.Vector3(0, 1.2, 0.4), hub: new THREE.Vector3(0.06, 1.3, 0.08) };
+export const CLAW = { backHome: new THREE.Vector3(0, 1.2, -0.405), hub: new THREE.Vector3(0.06, 1.3, 0.08) };
 const round = (w: number, h: number, d: number, r = 0.04) => new RoundedBoxGeometry(w, h, d, 3, r);
 
 /** A speaker grille: a dark plate with slats. */
@@ -28,7 +28,6 @@ export function buildClaw(chipMaterial: THREE.Material): Rig & { claw: { hub: TH
   g.add(mesh(round(0.9, 0.12, 0.86, 0.03), maroon, 0, 0.06, 0, 0.02));
   g.add(mesh(round(0.84, 0.68, 0.8, 0.05), yellow, 0, 0.46, 0, 0.022));
   for (const [x, z] of [[-0.385, 0.365], [0.385, 0.365], [-0.385, -0.365], [0.385, -0.365]]) g.add(mesh(round(0.07, 0.86, 0.07, 0.02), deep, x, 1.2, z, 0.012));
-  g.add(mesh(box(0.78, 0.84, 0.02), toon("#ffe08a"), 0, 1.2, -0.37));
   g.add(mesh(round(0.88, 0.42, 0.84, 0.08), yellow, 0, 1.83, 0, 0.022));
   // The duck's face: eyes with a shine, and an orange beak.
   for (const x of [-0.16, 0.16]) {
@@ -146,25 +145,29 @@ export function buildClaw(chipMaterial: THREE.Material): Rig & { claw: { hub: TH
   baseHole.rotation.y = -Math.PI / 2;
   g.add(basePivot, baseHole);
 
-  // The logic chip lies on the floor of the glass case, front right.
-  const chip = logicChip(chipMaterial, 1);
+  // The logic chip lies on the floor of the glass case, at the back, facing the way in.
+  const chip = logicChip(chipMaterial, -1);
   chip.scale.setScalar(0.7);
-  chip.rotation.x = -0.5;
-  chip.position.set(0.26, 0.86, 0.26);
+  chip.rotation.x = 0.5;
+  chip.position.set(-0.22, 0.86, -0.24);
   g.add(chip);
 
-  // The front glass: four screws, lifted off and leaned against the left side.
-  const panel = new THREE.Group();
+  // The glass: front and sides stay on. The way in is the back panel: four screws, lifted off and leaned on the left.
   const glassMat = new THREE.MeshBasicMaterial({ color: "#cfefff", transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
   const glare = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.4, depthWrite: false });
-  panel.add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.8), glassMat));
-  for (const [x, w] of [[-0.14, 0.07], [0.0, 0.035]]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.6), glare); s.position.set(x, 0.05, 0.002); s.rotation.z = -0.5; panel.add(s); }
-  panel.add(mesh(box(0.76, 0.05, 0.025), deep, 0, 0.415, 0, 0.008), mesh(box(0.76, 0.05, 0.025), deep, 0, -0.415, 0, 0.008), hitBox(0.76, 0.86, 0.06));
-  const home = CLAW.glassHome;
+  const front = new THREE.Group();
+  front.position.set(0, 1.2, 0.4);
+  front.add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.8), glassMat));
+  for (const [x, w] of [[-0.14, 0.07], [0.0, 0.035]]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.6), glare); s.position.set(x, 0.05, 0.002); s.rotation.z = -0.5; front.add(s); }
+  front.add(mesh(box(0.76, 0.05, 0.025), deep, 0, 0.415, 0, 0.008), mesh(box(0.76, 0.05, 0.025), deep, 0, -0.415, 0, 0.008));
+  g.add(front);
+  for (const s of [-1, 1]) { const side = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.8), glassMat); side.rotation.y = Math.PI / 2; side.position.set(s * 0.39, 1.2, 0); g.add(side); }
+  const panel = new THREE.Group();
+  panel.add(mesh(round(0.78, 0.84, 0.025, 0.012), deep, 0, 0, 0, 0.012), hitBox(0.78, 0.86, 0.06));
+  for (let i = 0; i < 4; i++) panel.add(mesh(box(0.4, 0.022, 0.01), toon("#d08e10"), 0, -0.24 + i * 0.16, -0.014));
+  const home = CLAW.backHome;
   panel.position.copy(home);
   g.add(panel);
-  // Side glass, for the look.
-  for (const s of [-1, 1]) { const side = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.8), glassMat); side.rotation.y = Math.PI / 2; side.position.set(s * 0.39, 1.2, 0); g.add(side); }
 
   const drawScreen = (st: ScreenState, time: number) => {
     const c = screen.ctx, w = 256, h = 128;
@@ -184,19 +187,19 @@ export function buildClaw(chipMaterial: THREE.Material): Rig & { claw: { hub: TH
   };
 
   const doors = [
-    door("glass", panel, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1.2, 0.41), null),
+    door("back", panel, new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1.2, -0.42), null),
     door("control", ctrlPivot, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.45, 0.41), (e) => { ctrlPivot.rotation.x = 1.25 * e; }, new THREE.Vector3(0, 0.42, 0.39), new THREE.Vector3(0, 0.42, 0.47)),
     door("base", basePivot, new THREE.Vector3(-1, 0, 0), new THREE.Vector3(-0.43, 0.46, 0), (e) => { basePivot.rotation.y = -1.7 * e; }, new THREE.Vector3(-0.415, 0.44, 0), new THREE.Vector3(-0.48, 0.44, 0)),
   ];
   for (const d of doors) g.add(d.prop);
   return {
-    id: "claw", group: g, f: 1, panel,
+    id: "claw", group: g, f: -1, panel,
     panelPose: (e) => {
-      panel.position.set(home.x - e * 0.78, home.y + Math.sin(e * Math.PI) * 0.22 - e * 0.5, home.z + e * 0.4);
-      panel.rotation.set(0, e * 0.9, e * 0.08);
+      panel.position.set(home.x - e * 0.86, home.y + Math.sin(e * Math.PI) * 0.22 - e * 0.73, home.z - e * 0.3);
+      panel.rotation.set(0, e * 0.9, e * 0.1);
     },
-    screwSpots: [[-0.33, 1.56], [0.33, 1.56], [-0.33, 0.84], [0.33, 0.84]], screwZ: home.z + 0.024,
-    board: { center: new THREE.Vector3(0, 1.2, 0.37), w: 0.7, h: 0.8 },
+    screwSpots: [[-0.33, 1.56], [0.33, 1.56], [-0.33, 0.84], [0.33, 0.84]], screwZ: home.z - 0.019,
+    board: { center: new THREE.Vector3(0, 1.2, -0.3), w: 0.7, h: 0.8 },
     chip, doors, screen, drawScreen,
     // The buttons glow while the machine has power.
     marquee: (on) => { for (const b of buttons) (b.material as THREE.MeshToonMaterial).emissiveIntensity = on ? 1 : 0; },
@@ -204,10 +207,11 @@ export function buildClaw(chipMaterial: THREE.Material): Rig & { claw: { hub: TH
     slot: new THREE.Vector3(0.44, 1.11, 0.05),
     views: (portrait) => ({
       front: { pos: portrait ? [0.4, 1.35, 5.0] : [0.55, 1.3, 4.1], look: [0.32, 1.15, 0] },
-      door: { pos: portrait ? [0.15, 1.25, 3.7] : [0.3, 1.25, 3.0], look: [0, 1.2, 0.4] },
-      inside: { pos: portrait ? [0, 1.22, 3.5] : [0, 1.22, 2.85], look: [0, 1.2, 0.25] },
+      ...workViews(0, 1.2, -0.37, -1, 0.7, 0.8)(portrait),
     }),
     seeThrough: true, coils: [], orbit: { r: 3.6, rp: 4.5, y: 1.55, look: 1.15 },
+    // The worn spot is on the claw cable, between the carriage and the claw.
+    plane: -0.37, spots: boardSpots(0, 1.2, -0.37, -1, 0.7, 0.8, { tape: { a: new THREE.Vector3(CLAW.hub.x, 1.54, CLAW.hub.z), b: new THREE.Vector3(CLAW.hub.x, 1.4, CLAW.hub.z) } }), token: "coin",
     claw: { hub, finger, bend },
   };
 }

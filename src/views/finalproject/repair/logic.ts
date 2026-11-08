@@ -1,90 +1,43 @@
-import { questions } from "../content";
-import type { Progress } from "../progress";
-import { levelCount } from "../switchyard/levels";
-
 /*
  * The Repair Shop: a hands-on game first, with a small C# job on the machine's logic chip.
- * Every student gets the same hands-on work; the tier only changes how the chip is fixed.
- * Students never see the tier's name. The teacher can switch it at any time.
+ * Seven levels, one machine each, a little harder every time. Everyone plays the same levels with the
+ * same help: the clue is said plainly, the tool is named and a finger shows each move.
  * Students only know if / else: every chip is one if with one comparison, with or without an else.
+ * The last level, the Robot, gives only the first line: the student writes the if / else by hand.
  */
-export const tiers = ["guided", "supported", "independent"] as const;
-export type Tier = (typeof tiers)[number];
-export const tierNames: Record<Tier, string> = { guided: "Guided", supported: "Supported", independent: "Independent" };
-/** Reads a tier from a save or an override. The old fourth tier, Architect, plays as Independent. */
-export function tierOf(value: unknown): Tier | null {
-  if (value === "architect") return "independent";
-  return tiers.includes(value as Tier) ? value as Tier : null;
-}
 
-/** Teacher overrides by login: they win over the automatic profile. ("architect" still works and means Independent.) */
-export const tierOverrides: Record<string, string> = {};
-export const overrideFor = (login: string) => tierOf(tierOverrides[login.trim().toLowerCase()]);
+/* ---------- The levels: one machine each. Fixing a level opens the next. ---------- */
 
-export type Evidence = { quizRight: number | null; bosses: number; bossRunsPerPass: number; yardLevels: number };
-
-/** What this device knows about the student: the Switchyard quiz and levels, and the Final Bosses. */
-export function evidenceFrom(p: Progress, bosses: { completedBosses: number[]; attemptsByBoss: Record<string, number> } | null): Evidence {
-  const answered = questions.every((q) => p.answers[q.id] !== undefined);
-  const done = bosses?.completedBosses ?? [];
-  const runs = done.reduce((total, id) => total + Math.max(1, bosses?.attemptsByBoss[id] ?? 1), 0);
-  return {
-    quizRight: answered ? questions.filter((q) => p.answers[q.id] === q.answer).length : null,
-    bosses: done.length,
-    bossRunsPerPass: done.length ? runs / done.length : 0,
-    yardLevels: p.yardShipped.filter((i) => i < levelCount).length,
-  };
-}
-
-/** The starting tier. The game then moves it up or down as the student plays. */
-export function profileTier(e: Evidence): Tier {
-  if (e.quizRight === null) return e.bosses >= 13 && e.bossRunsPerPass <= 2 ? "independent" : e.bosses >= 7 ? "supported" : "guided";
-  if (e.quizRight <= 9) return "guided";
-  if (e.quizRight <= 14) return "supported";
-  return "independent";
-}
-
-/** shift: how far play has moved the student from the starting tier, at most SHIFT either way. */
-export const SHIFT = tiers.length - 1;
-export function shiftTier(tier: Tier, by: number): Tier {
-  return tiers[Math.max(0, Math.min(tiers.length - 1, tiers.indexOf(tier) + by))];
-}
-
-/* ---------- The machines, in unlock order. A new one opens every 3 tickets fixed. ---------- */
-
-/** Every machine that is built. The teacher can bring any of them. */
-export const allMachines = ["arcade", "vending", "claw"] as const;
+export const allMachines = ["arcade", "vending", "jukebox", "scooter", "claw", "coffee", "robot"] as const;
 export type MachineId = (typeof allMachines)[number];
-/**
- * The machines students unlock, in order. The claw machine is number 5 on the roadmap: it joins
- * once the jukebox and the crosswalk light exist. Until then only the teacher can bring it in.
- */
-export const machineOrder: readonly MachineId[] = ["arcade", "vending"];
-export const machineInfo: Record<MachineId, { name: string; model: string; fee: number }> = {
+/** The level order is the machine order. */
+export const machineOrder: readonly MachineId[] = allMachines;
+export const machineInfo: Record<MachineId, { name: string; model: string; fee: number; boss?: boolean }> = {
   arcade: { name: "Arcade", model: "ARCADE-3000", fee: 20 },
   vending: { name: "Vending machine", model: "SNACK-O-MATIC", fee: 25 },
-  claw: { name: "Claw machine", model: "EGG CLAW", fee: 30 },
+  jukebox: { name: "Jukebox", model: "ROCK-O-LA", fee: 30 },
+  scooter: { name: "Electric scooter", model: "ZOOM-E", fee: 35 },
+  claw: { name: "Claw machine", model: "EGG CLAW", fee: 40 },
+  coffee: { name: "Coffee machine", model: "BEAN-O-MATIC", fee: 45 },
+  robot: { name: "Robot", model: "HELPER-7", fee: 60, boss: true },
 };
-/** Every machine the shop will see, in order. Only the built ones (machineOrder) come in for now. */
-export const roadmap: { id: string; name: string; boss?: boolean }[] = [
-  { id: "arcade", name: "Arcade" }, { id: "vending", name: "Vending machine" }, { id: "jukebox", name: "Jukebox" }, { id: "crosswalk", name: "Crosswalk light" },
-  { id: "claw", name: "Claw machine" }, { id: "coffee", name: "Coffee machine" }, { id: "robot", name: "Robot", boss: true },
-];
-export const UNLOCK_EVERY = 3;
-export const unlockedMachines = (fixed: number): MachineId[] => machineOrder.slice(0, Math.min(machineOrder.length, 1 + Math.floor(fixed / UNLOCK_EVERY)));
-/** The machine for the next customer: a machine that has just unlocked comes first, then any unlocked one. */
-export function nextMachine(fixed: number, seed: number): MachineId {
-  const open = unlockedMachines(fixed);
-  if (fixed > 0 && fixed % UNLOCK_EVERY === 0 && open.length === 1 + fixed / UNLOCK_EVERY) return open[open.length - 1];
-  // The second number from the seed: the first barely changes between nearby seeds.
+export const roadmap = allMachines.map((id) => ({ id, name: machineInfo[id].name, boss: !!machineInfo[id].boss }));
+export const levelOf = (m: MachineId) => allMachines.indexOf(m) + 1;
+export const cleared = (shop: Shop, m: MachineId) => (shop.made[m] ?? 0) > 0;
+/** A level is open once the one before it is fixed. The teacher has every level open. */
+export const levelOpen = (shop: Shop, m: MachineId, teacher = false) => teacher || levelOf(m) === 1 || cleared(shop, allMachines[levelOf(m) - 2]);
+/** The next customer: the first open level not fixed yet. With every level fixed, any machine. */
+export function nextMachine(shop: Shop, seed: number): MachineId {
+  const todo = allMachines.find((m) => levelOpen(shop, m) && !cleared(shop, m));
+  if (todo) return todo;
   const next = rng(seed ^ 0x5bd1e995);
   next();
-  return open[Math.floor(next() * open.length)];
+  return allMachines[Math.floor(next() * allMachines.length)];
 }
-/** The machine the ticket just paid unlocked, if any. */
-export function unlockedBy(fixedBefore: number, fixedAfter: number): MachineId | null {
-  const after = unlockedMachines(fixedAfter);
-  return after.length > unlockedMachines(fixedBefore).length ? after[after.length - 1] : null;
+/** The level a paid ticket opened, if any: the first fix of a level opens the next one. */
+export function unlockedBy(before: Shop, machine: MachineId): MachineId | null {
+  if (cleared(before, machine)) return null;
+  return allMachines[levelOf(machine)] ?? null;
 }
 
 /* ---------- The toolbox: eight tools. What a machine doesn't need is a decoy with a joke. ---------- */
@@ -104,11 +57,13 @@ export const toolInfo: Record<ToolKind, { name: string; short: string; joke: str
   tape: { name: "Electrical tape", short: "Tape", joke: "Tape can't fix this. Save it for a worn cable." },
 };
 /** What each hands-on step needs. Screws need the screwdriver that fits their head. */
-export const toolFor = { find: "hand", panel: "hand", dust: "blower", wires: "hand", fuse: "pliers", snack: "hammer", claw: "pliers", chip: "hand", close: "hand" } as const satisfies Record<string, ToolKind>;
+export const toolFor = { find: "hand", panel: "hand", dust: "blower", wires: "hand", fuse: "pliers", snack: "hammer", jam: "hammer", claw: "pliers", tape: "tape", chip: "hand", close: "hand" } as const satisfies Record<string, ToolKind>;
 
 /** The hammer: hold to wind up, let go to hit. Gentle taps work; too hard breaks something. */
 export const HAMMER = { soft: 0.2, hard: 0.62 };
 export const hammerHit = (power: number): "soft" | "good" | "hard" => power < HAMMER.soft ? "soft" : power <= HAMMER.hard ? "good" : "hard";
+/** Taps of tape around a worn cable. */
+export const TAPE_WRAPS = 3;
 
 /* ---------- Doors: only one leads to the fault. The clue is on the machine. ---------- */
 
@@ -119,21 +74,29 @@ export const jokeText: Record<Joke, string> = {
   coin: "A lost coin! Finders keepers: +1 coin. Wrong door, though.",
 };
 export type Door = { id: string; name: string; right: boolean; joke: Joke | null };
+/** The right door comes first. */
 const doorSets: Record<MachineId, { id: string; name: string }[]> = {
   arcade: [{ id: "back", name: "Back panel" }, { id: "coin", name: "Coin door" }],
   vending: [{ id: "glass", name: "Front glass" }, { id: "side", name: "Side hatch" }, { id: "coinbox", name: "Coin box" }],
-  claw: [{ id: "glass", name: "Front glass" }, { id: "control", name: "Control panel" }, { id: "base", name: "Base hatch" }],
+  jukebox: [{ id: "back", name: "Back panel" }, { id: "coinbox", name: "Coin box" }, { id: "side", name: "Side hatch" }],
+  scooter: [{ id: "back", name: "Battery cover" }, { id: "stem", name: "Stem box" }, { id: "lamp", name: "Front lamp" }],
+  claw: [{ id: "back", name: "Back panel" }, { id: "control", name: "Control panel" }, { id: "base", name: "Base hatch" }],
+  coffee: [{ id: "back", name: "Back panel" }, { id: "drawer", name: "Grounds drawer" }, { id: "tank", name: "Water tank" }],
+  robot: [{ id: "back", name: "Back panel" }, { id: "chest", name: "Chest hatch" }, { id: "leg", name: "Leg panel" }],
 };
-const rightDoor: Record<MachineId, string> = { arcade: "back", vending: "glass", claw: "glass" };
-/** The clue in words, for a device without 3D. */
+/** The clue in words: said by the customer, and the only clue on a device without 3D. */
 export const clueText: Record<MachineId, string> = {
   arcade: "Sparks and smoke come out of the back.",
   vending: "A snack is stuck behind the front glass.",
-  claw: "The claw twitches behind the front glass: one finger is bent.",
+  jukebox: "Sparks and smoke come out of the back.",
+  scooter: "Sparks fly out of the battery cover, on the back of the deck.",
+  claw: "One claw finger is bent, and sparks fly out of the back.",
+  coffee: "Smoke comes out of the back.",
+  robot: "Sparks and smoke come out of its back.",
 };
 
-export type Fault = "wires" | "fuse" | "snack" | "claw";
-export type Mess = "dust" | "crumbs" | "fluff";
+export type Fault = "wires" | "fuse" | "snack" | "claw" | "tape" | "jam";
+export type Mess = "dust" | "crumbs" | "fluff" | "mud" | "grounds";
 export type Socket = { id: string; symbol: string };
 /** socket: the socket of its colour. at: where it starts (null: hanging loose). */
 export type Cable = { id: string; color: string; name: string; socket: string; at: string | null };
@@ -142,32 +105,55 @@ export type Snack = { shelf: number; slot: number; taps: number; color: string }
 /** A vending slot's label: shelves A (top) to D, slots 1 to 3. */
 export const slotName = (s: { shelf: number; slot: number }) => `${"DCBA"[s.shelf]}${s.slot + 1}`;
 
+/** Each level: its screws, its mess and its faults. Every level adds a little. */
+type Level = { heads: ScrewHead[]; screws: number; turns: number; mess: Mess; faults: Fault[]; loose: number };
+const levels: Record<MachineId, Level> = {
+  arcade: { heads: ["cross", "flat"], screws: 4, turns: 4, mess: "dust", faults: ["wires"], loose: 1 },
+  vending: { heads: screwHeads, screws: 4, turns: 4, mess: "crumbs", faults: ["snack"], loose: 0 },
+  jukebox: { heads: screwHeads, screws: 4, turns: 5, mess: "dust", faults: ["wires", "fuse"], loose: 2 },
+  scooter: { heads: screwHeads, screws: 4, turns: 5, mess: "mud", faults: ["tape", "wires"], loose: 2 },
+  claw: { heads: screwHeads, screws: 4, turns: 5, mess: "fluff", faults: ["claw", "tape"], loose: 0 },
+  coffee: { heads: screwHeads, screws: 6, turns: 5, mess: "grounds", faults: ["wires", "fuse", "tape"], loose: 2 },
+  robot: { heads: screwHeads, screws: 6, turns: 6, mess: "dust", faults: ["wires", "fuse", "tape", "jam"], loose: 3 },
+};
+
 /* ---------- The logic chip: one if, one comparison ---------- */
 
 export type Op = ">" | "<" | ">=" | "<=" | "==" | "!=";
 export type Cond = { op: Op; n: number };
 export type Predict = { value: number; question: string; options: string[]; answer: number; why: string[] };
+/**
+ * How the chip gets fixed, one step harder each level:
+ * pick a sign → build the condition from pieces → type it → type it and write the else → write it all.
+ */
+export type ChipMode = "pick" | "tokens" | "typed" | "else" | "write";
 export type Chip = {
-  mode: "predict-pick" | "tokens" | "typed";
+  mode: ChipMode;
   variable: string;
-  broken: Cond;
+  /** The condition on the broken chip. null: the program was wiped (the Robot). */
+  broken: Cond | null;
   right: Cond;
   yes: string;
-  /** null: no else, so a false condition prints nothing at all. */
+  /** What the fixed program says when the condition is false. null: no else, so it says nothing. */
   no: string | null;
+  /** false: the broken program has no else (the coffee machine: the student writes it). */
+  brokenElse: boolean;
   /** The values the test bench tries. */
   values: number[];
+  /** The value the customer shows. */
+  demo: number;
   /** What the sticker on the machine says. */
   sticker: string[];
-  /** The rule in plain words: shown on Guided and Supported. */
+  /** The rule in plain words, always shown on the chip. */
   rule: string;
-  /** Guided: the two signs to pick from, and what to aim for. */
+  /** pick: the signs to choose from, and what to aim for. */
   pick: Op[];
   pickHint: string;
-  /** Supported: the code pieces (the right ones and two decoys), and the pieces left after two misses. */
+  /** tokens: the code pieces (the right ones and decoys), and the pieces left after two misses. */
   tray: string[];
   trimmed: string[];
-  predict: Predict;
+  /** The first two levels ask what the broken code prints before fixing it. */
+  predict: Predict | null;
 };
 const compare: Record<Op, (a: number, b: number) => boolean> = { ">": (a, b) => a > b, "<": (a, b) => a < b, ">=": (a, b) => a >= b, "<=": (a, b) => a <= b, "==": (a, b) => a === b, "!=": (a, b) => a !== b };
 export const testOf = (c: Cond) => (v: number) => compare[c.op](v, c.n);
@@ -177,10 +163,9 @@ export type Job = {
   machine: MachineId;
   /** The tutorial's practice box: no customer, no chip, no pay. */
   practice?: boolean;
-  tier: Tier;
-  /** The price on the sticker (arcade), or what a snack costs (vending). */
+  /** What a go costs: coins in, for the coin machines. */
   price: number;
-  /** What the customer shows: the value they try. null: the customer won't show the problem. */
+  /** The value the customer shows. null: the customer can't show the problem (the Robot does nothing). */
   demo: number | null;
   doors: Door[];
   screws: ScrewHead[];
@@ -195,11 +180,12 @@ export type Job = {
   faults: Fault[];
   sockets: Socket[];
   cables: Cable[];
-  /** The arcade's fuse is burnt (true) or fine. */
   fuse: boolean;
   snacks: Snack[];
   /** Vending: the empty slot the customer paid for. */
   empty: { shelf: number; slot: number };
+  /** The Robot: hammer taps to free its stuck gear (0: no gear to free). */
+  jam: number;
   chip: Chip;
 };
 
@@ -207,8 +193,16 @@ export const START = "GAME START!";
 export const MORE = "Insert more coins";
 export const ENJOY = "Enjoy!";
 export const SOLD = "Sold out";
+export const PLAYING = "Now playing";
+export const INSERT = "Insert coin";
+export const TOO_FAST = "Too fast!";
+export const SPEED_OK = "Speed OK";
 export const DROP = "DROP!";
 export const STEER = "Keep steering";
+export const BREWING = "Brewing";
+export const REFILL = "Refill water";
+export const READY = "Ready to work!";
+export const LOW = "Low battery!";
 
 const palette = [
   { id: "red", color: "#ff4d5e", name: "red" },
@@ -224,20 +218,15 @@ export function rng(seed: number) {
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; };
 }
 const shuffle = <T,>(items: readonly T[], next: () => number) => { const out = [...items]; for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; } return out; };
-const chipMode = (tier: Tier): Chip["mode"] => tier === "guided" ? "predict-pick" : tier === "supported" ? "tokens" : "typed";
+const base = (rest: Pick<Chip, "variable" | "right" | "yes" | "no" | "values" | "demo" | "sticker" | "rule">): Omit<Chip, "mode" | "broken"> =>
+  ({ brokenElse: true, pick: [], pickHint: "", tray: [], trimmed: [], predict: null, ...rest });
 
-function arcadeChip(tier: Tier, p: number, next: () => number): Chip {
-  // Guided arcades have no else: the class-wide mistake is "if it's false, nothing prints".
-  const hasElse = tier !== "guided";
+/* Level 1: a missing else. The class-wide mistake: "if it's false, nothing prints". */
+function arcadeChip(p: number, next: () => number): Chip {
   return {
-    mode: chipMode(tier), variable: "coins",
-    broken: { op: ">", n: p }, right: { op: ">=", n: p },
-    yes: START, no: hasElse ? MORE : null,
-    values: [0, p - 1, p, p + 1, 10],
-    sticker: ["1 GAME", `${p} COINS`],
-    rule: `A game costs ${p} coins. With ${p} or more, the game starts.`,
+    ...base({ variable: "coins", right: { op: ">=", n: p }, yes: START, no: null, values: [0, p - 1, p, p + 1, 10], demo: p, sticker: ["1 GAME", `${p} COINS`], rule: `A game costs ${p} coins. With ${p} or more, the game starts.` }),
+    mode: "pick", broken: { op: ">", n: p },
     pick: shuffle([">=", "<"] as Op[], next), pickHint: "Pick the sign so the price itself starts the game",
-    tray: shuffle(["coins", ">=", String(p), ">", "="], next), trimmed: ["coins", ">=", String(p)],
     predict: {
       value: p,
       question: `${p} coins go in. What does the screen show?`,
@@ -252,17 +241,12 @@ function arcadeChip(tier: Tier, p: number, next: () => number): Chip {
     },
   };
 }
-
-function vendingChip(tier: Tier, next: () => number): Chip {
+/* Level 2: >= lets the 0 through. Four signs to choose from. */
+function vendingChip(next: () => number): Chip {
   return {
-    mode: chipMode(tier), variable: "stock",
-    broken: { op: ">=", n: 0 }, right: { op: ">", n: 0 },
-    yes: ENJOY, no: SOLD,
-    values: [0, 1, 2, 5, 9],
-    sticker: ["EMPTY SLOT?", "SOLD OUT!"],
-    rule: "Only sell when there's a snack: stock more than 0. An empty slot (stock 0) says Sold out.",
-    pick: shuffle([">", "<="] as Op[], next), pickHint: "Pick the sign so an empty slot (0) says Sold out",
-    tray: shuffle(["stock", ">", "0", ">=", "="], next), trimmed: ["stock", ">", "0"],
+    ...base({ variable: "stock", right: { op: ">", n: 0 }, yes: ENJOY, no: SOLD, values: [0, 1, 2, 5, 9], demo: 0, sticker: ["EMPTY SLOT?", "SOLD OUT!"], rule: "Only sell when there's a snack: stock more than 0. An empty slot (stock 0) says Sold out." }),
+    mode: "pick", broken: { op: ">=", n: 0 },
+    pick: shuffle([">", ">=", "<", "<="] as Op[], next), pickHint: "Pick the sign so an empty slot (0) says Sold out",
     predict: {
       value: 0,
       question: "The slot is empty: stock is 0. What does the screen show?",
@@ -277,76 +261,98 @@ function vendingChip(tier: Tier, next: () => number): Chip {
     },
   };
 }
-
-function clawChip(tier: Tier, next: () => number): Chip {
+/* Level 3: == only lets one number through. Build the condition from pieces. */
+function jukeboxChip(next: () => number): Chip {
   return {
-    mode: chipMode(tier), variable: "seconds",
-    broken: { op: "<", n: 0 }, right: { op: "<=", n: 0 },
-    yes: DROP, no: STEER,
-    values: [0, 1, 2, 5, 9],
-    sticker: ["TIME'S UP?", "CLAW DROPS!"],
-    rule: "The timer counts down to 0 and stops there. At 0 the claw drops; before that, keep steering.",
-    pick: shuffle(["<=", ">"] as Op[], next), pickHint: "Pick the sign so the claw drops when the timer is 0",
+    ...base({ variable: "credits", right: { op: ">=", n: 1 }, yes: PLAYING, no: INSERT, values: [0, 1, 2, 3, 5], demo: 2, sticker: ["1 SONG", "1 CREDIT"], rule: "A song costs 1 credit. With 1 credit or more, the song plays. With 0 it says Insert coin." }),
+    mode: "tokens", broken: { op: "==", n: 1 },
+    tray: shuffle(["credits", ">=", "1", "==", ">"], next), trimmed: ["credits", ">=", "1"],
+  };
+}
+/* Level 4: the sign points the wrong way, and a decoy number. */
+function scooterChip(next: () => number): Chip {
+  return {
+    ...base({ variable: "speed", right: { op: ">", n: 25 }, yes: TOO_FAST, no: SPEED_OK, values: [0, 20, 25, 26, 30], demo: 30, sticker: ["MAX SPEED", "25 KM/H"], rule: "Over 25 km/h the scooter warns: Too fast! At 25 or less it says Speed OK." }),
+    mode: "tokens", broken: { op: "<", n: 25 },
+    tray: shuffle(["speed", ">", "25", "<", ">=", "20"], next), trimmed: ["speed", ">", "25"],
+  };
+}
+/* Level 5: type the condition. The timer stops at 0 and never goes below it. */
+function clawChip(next: () => number): Chip {
+  return {
+    ...base({ variable: "seconds", right: { op: "<=", n: 0 }, yes: DROP, no: STEER, values: [0, 1, 2, 5, 9], demo: 0, sticker: ["TIME'S UP?", "CLAW DROPS!"], rule: "The timer counts down to 0 and stops there. At 0 the claw drops; before that, keep steering." }),
+    mode: "typed", broken: { op: "<", n: 0 },
     tray: shuffle(["seconds", "<=", "0", "<", "="], next), trimmed: ["seconds", "<=", "0"],
-    predict: {
-      value: 0,
-      question: "The timer reaches 0. What does the screen show?",
-      options: [`“${DROP}”`, `“${STEER}”`, "Nothing at all", "False"],
-      answer: 1,
-      why: [
-        `0 < 0 is false: 0 is not less than itself. So the ${DROP} block is skipped.`,
-        `0 < 0 is false, so the else runs: ${STEER}. The timer stops at 0 and never goes below it, so the claw never drops. That's the bug!`,
-        "There is an else here: one of the two blocks always prints something.",
-        "C# never prints the condition by itself. It runs one of the two blocks.",
-      ],
-    },
+  };
+}
+/* Level 6: type the condition, and write the missing else line. */
+function coffeeChip(next: () => number): Chip {
+  return {
+    ...base({ variable: "water", right: { op: ">=", n: 200 }, yes: BREWING, no: REFILL, values: [0, 150, 199, 200, 500], demo: 0, sticker: ["NEEDS", "200 ML"], rule: "With 200 ml of water or more it brews. With less it must say Refill water: that line is missing, write it." }),
+    mode: "else", broken: { op: "<", n: 200 }, brokenElse: false,
+    tray: shuffle(["water", ">=", "200", "<", ">"], next), trimmed: ["water", ">=", "200"],
+  };
+}
+/* Level 7, the final round: the program was wiped. Only line 1 is left. */
+function robotChip(): Chip {
+  return {
+    ...base({ variable: "battery", right: { op: ">=", n: 20 }, yes: READY, no: LOW, values: [0, 19, 20, 21, 100], demo: 0, sticker: ["BATTERY", "20 OR MORE"], rule: `With battery 20 or more, the robot says “${READY}”. Otherwise it says “${LOW}”. Write the whole if / else.` }),
+    mode: "write", broken: null,
   };
 }
 
+/** Screws for a level: every head on the level shows up, in a shuffled order. */
+function screwsFor(level: Level, next: () => number): ScrewHead[] {
+  const heads = shuffle(level.heads, next);
+  return shuffle(Array.from({ length: level.screws }, (_, i) => heads[i % heads.length]), next);
+}
+
 /**
- * One ticket. Every tier opens the machine the same way; only the chip changes.
- * The faults vary from ticket to ticket, so the same moves never repeat exactly.
- * hide: the customer won't show the problem (Independent, after two clean tickets in a row).
+ * One ticket: a machine and a seed. The faults vary from ticket to ticket inside each level,
+ * so a replayed level never repeats exactly.
  */
-export function makeJob(tier: Tier, seed: number, machine: MachineId = "arcade", hide = false): Job {
+export function makeJob(seed: number, machine: MachineId = "arcade"): Job {
   const next = rng(seed);
-  // Four screws: cross, flat and star, and one of them again.
-  const screws = shuffle([...screwHeads, screwHeads[Math.floor(next() * 3)]], next);
+  const level = levels[machine];
+  const screws = screwsFor(level, next);
   const jokes = shuffle(["gum", "mouse", "coin"] as Joke[], next);
-  const doors: Door[] = doorSets[machine].map((d) => ({ ...d, right: d.id === rightDoor[machine], joke: null }));
+  const doors: Door[] = doorSets[machine].map((d, i) => ({ ...d, right: i === 0, joke: null }));
   doors.filter((d) => !d.right).forEach((d, i) => { d.joke = jokes[i]; });
   const dust = 0.55 + Math.round(next() * 9) * 0.05;
-  const base = { machine, tier, doors, screws, toolbox: [...tools], turns: 5, dust, sockets: [] as Socket[], cables: [] as Cable[], fuse: false, snacks: [] as Snack[], empty: { shelf: 0, slot: 0 } };
-  if (machine === "vending") {
-    const chip = vendingChip(tier, next);
-    // Twelve slots: three on each of four shelves. One or two snacks are stuck, and one slot is empty.
-    const spots = shuffle(Array.from({ length: 12 }, (_, i) => ({ shelf: Math.floor(i / 3), slot: i % 3 })), next);
-    const stuck = 1 + Math.floor(next() * 2);
-    const first = Math.floor(next() * 6);
-    const snacks = spots.slice(0, stuck).map((s, i) => ({ ...s, taps: 2 + Math.floor(next() * 2), color: snackColors[(first + i * 2) % 6] }));
-    return { ...base, price: 2, demo: hide ? null : chip.predict.value, mess: "crumbs", faults: ["snack"], snacks, empty: spots[stuck], chip };
-  }
-  if (machine === "claw") {
-    // The claw machine: fluff and hair to blow away, then the bent claw finger for the pliers.
-    const chip = clawChip(tier, next);
-    return { ...base, price: 2, demo: hide ? null : chip.predict.value, mess: "fluff", faults: ["claw"], chip };
-  }
-  const price = 3 + Math.floor(next() * 3);
+  // Cables: one to three hanging loose, the rest plugged in. Every machine with wires has three.
   const sockets = shuffle(symbols, next).map((symbol, i) => ({ id: `s${i}`, symbol }));
-  const cables: Cable[] = palette.map((c, i) => ({ id: c.id, color: c.color, name: c.name, socket: sockets[i].id, at: sockets[i].id }));
-  // One or two cables have come loose, and the fuse is burnt on most tickets.
-  const loose = shuffle(palette, next).slice(0, 1 + Math.floor(next() * 2)).map((c) => c.id);
+  const cables: Cable[] = level.faults.includes("wires") ? palette.map((c, i) => ({ id: c.id, color: c.color, name: c.name, socket: sockets[i].id, at: sockets[i].id })) : [];
+  const loose = shuffle(palette, next).slice(0, level.loose).map((c) => c.id);
   for (const cable of cables) if (loose.includes(cable.id)) cable.at = null;
-  const fuse = next() < 0.7;
-  return { ...base, price, demo: hide ? null : price, mess: "dust", faults: fuse ? ["wires", "fuse"] : ["wires"], sockets, cables, fuse, chip: arcadeChip(tier, price, next) };
+  const job: Job = {
+    machine, price: 2, demo: 0, doors, screws, toolbox: [...tools], turns: level.turns, mess: level.mess, dust, faults: [...level.faults],
+    sockets: cables.length ? sockets : [], cables, fuse: level.faults.includes("fuse"), snacks: [], empty: { shelf: 0, slot: 0 },
+    jam: level.faults.includes("jam") ? 2 + Math.floor(next() * 2) : 0, chip: null!,
+  };
+  if (machine === "arcade") { const p = 3 + Math.floor(next() * 3); job.price = p; job.chip = arcadeChip(p, next); }
+  if (machine === "vending") {
+    job.chip = vendingChip(next);
+    // Twelve slots: three on each of four shelves. One snack is stuck, and one slot is empty.
+    const spots = shuffle(Array.from({ length: 12 }, (_, i) => ({ shelf: Math.floor(i / 3), slot: i % 3 })), next);
+    const first = Math.floor(next() * 6);
+    job.snacks = spots.slice(0, 1).map((s) => ({ ...s, taps: 2 + Math.floor(next() * 2), color: snackColors[first] }));
+    job.empty = spots[1];
+  }
+  if (machine === "jukebox") { job.price = 2; job.chip = jukeboxChip(next); }
+  if (machine === "scooter") job.chip = scooterChip(next);
+  if (machine === "claw") job.chip = clawChip(next);
+  if (machine === "coffee") job.chip = coffeeChip(next);
+  if (machine === "robot") job.chip = robotChip();
+  job.demo = machine === "robot" ? null : job.chip.demo;
+  return job;
 }
 
 /** The practice box in the tutorial: two screws (cross and flat), a back panel and a dusty board. */
 export function practiceJob(): Job {
-  const job = makeJob("guided", 7, "arcade");
+  const job = makeJob(7, "arcade");
   return {
     ...job, practice: true, demo: null, screws: ["cross", "flat"], toolbox: ["hand", "cross", "flat", "blower"], turns: 3,
-    doors: [{ id: "back", name: "Back panel", right: true, joke: null }], mess: "dust", dust: 0.7, faults: [], sockets: [], cables: [], fuse: false, snacks: [],
+    doors: [{ id: "back", name: "Back panel", right: true, joke: null }], mess: "dust", dust: 0.7, faults: [], sockets: [], cables: [], fuse: false, snacks: [], jam: 0,
     chip: { ...job.chip, sticker: ["PRACTICE", "BOX"] },
   };
 }
@@ -433,33 +439,188 @@ export function parseCondition(source: string, variable = "coins"): Parsed {
   }
 }
 
-/** What the machine prints for a value. "" means nothing at all. */
+/* ---------- Running a chip: the broken one, the fixed one, and the student's ---------- */
+
+/** A program, run for one value: what it prints ("" means nothing at all). */
+export type Run = (value: number) => string;
+export const rightRun = (job: Job): Run => { const t = testOf(job.chip.right); return (v) => t(v) ? job.chip.yes : job.chip.no ?? ""; };
+export const brokenRun = (job: Job): Run => {
+  const { broken, yes, no, brokenElse } = job.chip;
+  if (!broken) return () => "";
+  const t = testOf(broken);
+  return (v) => t(v) ? yes : brokenElse ? no ?? "" : "";
+};
+/** The chip with the student's condition, and their else line when they wrote one. */
+export const runWith = (job: Job, test: (value: number) => boolean, elseText?: string): Run =>
+  (v) => test(v) ? job.chip.yes : elseText ?? job.chip.no ?? "";
+/** What the machine prints for a value with this condition. */
 export function printed(job: Job, test: (value: number) => boolean, value: number): string {
-  return test(value) ? job.chip.yes : job.chip.no ?? "";
+  return runWith(job, test)(value);
 }
-export const brokenTest = (job: Job) => testOf(job.chip.broken);
 export const rightTest = (job: Job) => testOf(job.chip.right);
 export const benchValues = (job: Job) => job.chip.values;
 
 export type BenchRow = { value: number; expected: string; got: string; ok: boolean };
-export function bench(job: Job, test: (value: number) => boolean): BenchRow[] {
+export function bench(job: Job, run: Run): BenchRow[] {
+  const right = rightRun(job);
   return benchValues(job).map((value) => {
-    const expected = printed(job, rightTest(job), value), got = printed(job, test, value);
+    const expected = right(value), got = run(value);
     return { value, expected, got, ok: expected === got };
   });
 }
 
-/** The C# on the chip, with the condition the student is working on. value: a known value, or ? for any. */
-export function chipCode(job: Job, condition = condText(job.chip, job.chip.broken), value?: number): string[] {
-  const { variable, yes, no } = job.chip;
+/** The C# on the chip. condition: the one shown on line 2. value: a known value, or ? for any. */
+export function chipCode(job: Job, condition = job.chip.broken ? condText(job.chip, job.chip.broken) : "", value?: number): string[] {
+  const { variable, yes, no, brokenElse, broken } = job.chip;
+  const first = `int ${variable} = ${value ?? "?"};`;
+  if (!broken) return [first];
   return [
-    `int ${variable} = ${value ?? "?"};`,
+    first,
     `if (${condition})`,
     "{",
     `    Console.WriteLine("${yes}");`,
     "}",
-    ...(no !== null ? ["else", "{", `    Console.WriteLine("${no}");`, "}"] : []),
+    ...(no !== null && brokenElse ? ["else", "{", `    Console.WriteLine("${no}");`, "}"] : []),
   ];
+}
+/** The program the student is aiming for: the answer key, shown to the teacher and used by the tests. */
+export function answerCode(job: Job): string[] {
+  const { variable, yes, no, right } = job.chip;
+  return [`if (${variable} ${right.op} ${right.n})`, "{", `    Console.WriteLine("${yes}");`, "}", ...(no !== null ? ["else", "{", `    Console.WriteLine("${no}");`, "}"] : [])];
+}
+
+/** One Console.WriteLine line, typed by the student: the text it prints, or what's wrong with it. */
+export type ParsedLine = { ok: true; text: string } | { ok: false; error: string };
+export function parseWriteLine(source: string): ParsedLine {
+  const s = source.trim();
+  if (!s) return { ok: false, error: "The line is empty. Write Console.WriteLine(\"…\"); with the text inside the quotes." };
+  const m = /^([A-Za-z_][\w]*)\s*\.\s*([A-Za-z_]\w*)\s*\(([\s\S]*)\)\s*(;?)$/.exec(s);
+  if (!m) {
+    if (/^[A-Za-z_]\w*\s*\.\s*[A-Za-z_]\w*\s*\([\s\S]*$/.test(s) && !s.includes(")")) return { ok: false, error: "A ( is missing its )." };
+    return { ok: false, error: "C# can't read this line. It should look like Console.WriteLine(\"text\");" };
+  }
+  const [, obj, method, arg, semi] = m;
+  if (obj !== "Console") return { ok: false, error: obj.toLowerCase() === "console" ? "C# cares about capitals: it's Console, with a capital C." : `C# doesn't know “${obj}”. It's Console.WriteLine.` };
+  if (method !== "WriteLine") return { ok: false, error: method.toLowerCase() === "writeline" ? "C# cares about capitals: it's WriteLine, with a capital W and L." : `It's Console.WriteLine, not Console.${method}.` };
+  const a = arg.trim();
+  const q = /^"([^"]*)"$/.exec(a);
+  if (!q) return { ok: false, error: a.startsWith("\"") || a.endsWith("\"") ? "A quote is missing: the text goes between two \" marks." : "Text goes inside quotes, like \"Hello\"." };
+  if (!semi) return { ok: false, error: "The line needs a ; at the end." };
+  return { ok: true, text: q[1] };
+}
+
+/**
+ * The final round: a whole if / else written by hand, after the line `int variable = ?;`.
+ * if (condition) { Console.WriteLine("…"); } else { Console.WriteLine("…"); }, braces optional, else optional.
+ */
+export type ParsedProgram = { ok: true; run: Run } | { ok: false; error: string };
+export function parseProgram(source: string, variable: string): ParsedProgram {
+  const src = source.replace(/\r/g, "");
+  let at = 0;
+  const fail = (error: string): never => { throw new Error(error); };
+  const space = () => { while (at < src.length && /\s/.test(src[at])) at++; };
+  const word = () => { space(); const m = /^[A-Za-z_]\w*/.exec(src.slice(at)); return m ? m[0] : ""; };
+  /** The text from here to the bracket that closes the one we're at, brackets inside included. */
+  const inside = (open: string, close: string, missing: string) => {
+    space();
+    if (src[at] !== open) fail(missing);
+    let depth = 0, start = at + 1, quoted = false;
+    for (; at < src.length; at++) {
+      const c = src[at];
+      if (c === "\"") quoted = !quoted;
+      if (quoted) continue;
+      if (c === open) depth++;
+      if (c === close && --depth === 0) { const body = src.slice(start, at); at++; return body; }
+    }
+    return fail(`A ${open} is missing its ${close}.`);
+  };
+  /** Statements: Console.WriteLine lines, or another if. Returns what runs for a value. */
+  const statement = (): Run => {
+    const w = word();
+    if (w === "if") return ifStatement();
+    if (w === "If" || w === "IF") fail("C# cares about capitals: it's if, all lower case.");
+    if (w === "else") fail("This else has no if before it. An else always comes right after the if's block.");
+    if (w === "int") fail(`Line 1 is already written for you: start with if.`);
+    space();
+    const end = src.indexOf(";", at), brace = src.indexOf("}", at);
+    const stop = end < 0 ? (brace < 0 ? src.length : brace) : brace >= 0 && brace < end ? brace : end + 1;
+    const line = parseWriteLine(src.slice(at, stop));
+    if (!line.ok) fail(line.error);
+    at = stop;
+    const text = (line as { text: string }).text;
+    return () => text;
+  };
+  const block = (): Run => {
+    space();
+    if (src[at] === "{") {
+      const body = inside("{", "}", "");
+      const inner = parseProgramBody(body, variable);
+      return inner;
+    }
+    return statement();
+  };
+  const ifStatement = (): Run => {
+    at += 2;
+    space();
+    if (src[at] !== "(") fail("After if comes the condition in brackets: if (…)");
+    const cond = inside("(", ")", "");
+    const parsed = parseCondition(cond, variable);
+    if (!parsed.ok) fail(parsed.error);
+    const test = (parsed as { test: (v: number) => boolean }).test;
+    const then = block();
+    const save = at;
+    if (word() === "else") {
+      at += 4;
+      const other = block();
+      return (v) => test(v) ? then(v) : other(v);
+    }
+    at = save;
+    return (v) => test(v) ? then(v) : "";
+  };
+  try {
+    space();
+    if (at >= src.length) return { ok: false, error: "The chip is empty. Start with if (…)" };
+    if (word() !== "if") {
+      const w = word();
+      if (w === "If" || w === "IF") return { ok: false, error: "C# cares about capitals: it's if, all lower case." };
+      if (w === "int") return { ok: false, error: "Line 1 is already written for you: start with if." };
+      return { ok: false, error: "The program starts with if (…)" };
+    }
+    const run = ifStatement();
+    space();
+    if (at < src.length) {
+      if (src[at] === "}") return { ok: false, error: "There's a } with no { before it." };
+      if (word() === "else") return { ok: false, error: "This else has no if before it. An else always comes right after the if's block." };
+      return { ok: false, error: `“${src.slice(at).trim().slice(0, 12)}” is left over at the end.` };
+    }
+    return { ok: true, run };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+/** The inside of a { } block: one or more statements; the last thing printed wins. */
+function parseProgramBody(body: string, variable: string): Run {
+  const trimmed = body.trim();
+  if (!trimmed) return () => "";
+  // Split into statements at the top level: each WriteLine ends with ;, an if runs to its block's end.
+  const runs: Run[] = [];
+  let rest = trimmed;
+  while (rest.trim()) {
+    rest = rest.trim();
+    if (/^if\b/.test(rest)) {
+      const parsed = parseProgram(rest, variable);
+      if (!parsed.ok) throw new Error(parsed.error);
+      runs.push(parsed.run);
+      break;
+    }
+    const end = rest.indexOf(";");
+    const line = parseWriteLine(end < 0 ? rest : rest.slice(0, end + 1));
+    if (!line.ok) throw new Error(line.error);
+    const text = line.text;
+    runs.push(() => text);
+    rest = end < 0 ? "" : rest.slice(end + 1);
+  }
+  return (v) => runs.map((r) => r(v)).filter(Boolean).pop() ?? "";
 }
 
 /* ---------- The shop: coins, a catalog of upgrades and the save on this device ---------- */
@@ -493,14 +654,16 @@ export type Equipped = { bench: string; floor: string; light: string };
 const defaults: Equipped = { bench: "bench-wood", floor: "floor-checker", light: "light-warm" };
 export type Look = Equipped & { decor: string[] };
 
-/** made: tickets fixed on each machine. tutorial: the practice box is done. */
-export type Shop = { coins: number; fixed: number; owned: string[]; equipped: Equipped; clean: number; rough: number; shift: number; streak: number; made: Partial<Record<MachineId, number>>; tutorial: boolean };
-export const freshShop = (): Shop => ({ coins: 0, fixed: 0, owned: Object.values(defaults), equipped: { ...defaults }, clean: 0, rough: 0, shift: 0, streak: 0, made: {}, tutorial: false });
+
+/** made: tickets fixed on each machine (a level is cleared from its first fix). tutorial: the practice box is done. */
+export type Shop = { coins: number; fixed: number; owned: string[]; equipped: Equipped; made: Partial<Record<MachineId, number>>; tutorial: boolean };
+export const freshShop = (): Shop => ({ coins: 0, fixed: 0, owned: Object.values(defaults), equipped: { ...defaults }, made: {}, tutorial: false });
 /** Tools used to be for sale. A save that bought one gets its coins back: everyone uses the same hand tools now. */
 const retired: Record<string, number> = { drill: 40, turbo: 35 };
 export const shopKey = (login: string) => `sharpie.repair.v1.${encodeURIComponent(login.trim().toLowerCase())}`;
 const int = (v: unknown, min: number, max: number, fallback = 0) => typeof v === "number" && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v))) : fallback;
 
+/** Old saves still load: the difficulty fields they carry (clean, rough, shift, streak) are simply dropped. */
 export function sanitizeShop(raw: unknown): Shop {
   const s = freshShop();
   if (!raw || typeof raw !== "object") return s;
@@ -514,8 +677,6 @@ export function sanitizeShop(raw: unknown): Shop {
     const want = r.equipped?.[cat];
     if (typeof want === "string" && s.owned.includes(want) && itemById(want)?.cat === cat) s.equipped[cat] = want;
   }
-  // Saves from when there were four tiers can hold a shift of 3: it is clamped to the three tiers now.
-  s.clean = int(r.clean, 0, 2); s.rough = int(r.rough, 0, 2); s.shift = int(r.shift, -SHIFT, SHIFT); s.streak = int(r.streak, 0, 999);
   for (const m of allMachines) { const n = int(r.made?.[m], 0, 9999); if (n) s.made[m] = n; }
   s.tutorial = r.tutorial === true;
   return s;
@@ -557,19 +718,7 @@ export function payout(slips: Slips, job: Job) {
   return { base, tips, tip, total: base + tip };
 }
 
-/**
- * Two clean tickets in a row bring harder machines; two rough ones bring more help.
- * This works on top of the starting tier and never shows the student a label.
- * streak counts clean Independent tickets in a row: from two on, customers stop showing the problem.
- */
-export function afterTicket(shop: Shop, slips: Slips, earned: number, tier: Tier, machine: MachineId): Shop {
-  const misses = slips.door + slips.wires + slips.chip + slips.tools;
-  const clean = misses === 0 && slips.help === 0;
-  const rough = misses >= 4 || slips.help >= 2;
-  let next: Shop = { ...shop, coins: shop.coins + earned, fixed: shop.fixed + 1, made: { ...shop.made, [machine]: (shop.made[machine] ?? 0) + 1 }, clean: clean ? shop.clean + 1 : 0, rough: rough ? shop.rough + 1 : 0, streak: tier === "independent" && clean ? shop.streak + 1 : 0 };
-  if (next.clean >= 2) next = { ...next, shift: Math.min(SHIFT, next.shift + 1), clean: 0 };
-  if (next.rough >= 2) next = { ...next, shift: Math.max(-SHIFT, next.shift - 1), rough: 0 };
-  return next;
+/** A paid ticket: the coins, one more repair, and the machine counted (its level is cleared). */
+export function afterTicket(shop: Shop, earned: number, machine: MachineId): Shop {
+  return { ...shop, coins: shop.coins + earned, fixed: shop.fixed + 1, made: { ...shop.made, [machine]: (shop.made[machine] ?? 0) + 1 } };
 }
-/** Independent, after two clean tickets in a row: the customer won't show the problem. */
-export const hidesProblem = (shop: Shop, tier: Tier) => tier === "independent" && shop.streak >= 2;
