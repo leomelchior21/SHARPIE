@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Brand } from "../components/Brand";
 import { findStudent, normalizeLogin } from "../data/roster";
 import { supabase } from "../lib/supabase";
-import { TEACHER_LOGIN, loginToEmail } from "../lib/supabaseConfig";
+import { TEACHER_LOGIN, TEACHER_NAME, loginToEmail } from "../lib/supabaseConfig";
 
 type LoginGateProps = {
   onAuthenticated: (session: { login: string; name: string; isTeacher: boolean }) => void;
@@ -67,7 +67,7 @@ export function LoginGate({ onAuthenticated, onGuest }: LoginGateProps) {
       return;
     }
 
-    onAuthenticated({ login, name: "Professor", isTeacher: true });
+    onAuthenticated({ login, name: TEACHER_NAME, isTeacher: true });
   };
 
   return (

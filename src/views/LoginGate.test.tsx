@@ -73,7 +73,7 @@ describe("classroom login gate", () => {
     fireEvent.click(screen.getByRole("button", { name: /ENTER/ }));
 
     await waitFor(() =>
-      expect(onAuthenticated).toHaveBeenCalledWith({ login: "leleomaker", name: "Professor", isTeacher: true }),
+      expect(onAuthenticated).toHaveBeenCalledWith({ login: "leleomaker", name: "Leo", isTeacher: true }),
     );
     expect(auth.signInWithPassword).toHaveBeenCalledWith({
       email: "leleomaker@prof.sharpie.app",

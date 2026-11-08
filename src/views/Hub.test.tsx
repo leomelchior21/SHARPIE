@@ -9,7 +9,7 @@ function renderHub(overrides: { isTeacher?: boolean } = {}) {
   const signOut = vi.fn();
   render(
     <Hub
-      name={overrides.isTeacher ? "Professor" : "Ana"}
+      name={overrides.isTeacher ? "Leo" : "Ana"}
       isTeacher={overrides.isTeacher}
       onOpenTeacher={() => undefined}
       onSignOut={signOut}

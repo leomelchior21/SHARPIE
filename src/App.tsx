@@ -6,7 +6,7 @@ import type { BossProgressState } from "./lib/bossProgress";
 import { queueBossProgressSync } from "./lib/bossSync";
 import { session } from "./lib/session";
 import { supabase } from "./lib/supabase";
-import { TEACHER_LOGIN, isSupabaseConfigured } from "./lib/supabaseConfig";
+import { TEACHER_LOGIN, TEACHER_NAME, isSupabaseConfigured } from "./lib/supabaseConfig";
 import type { Screen } from "./types";
 import { BrandHomeContext } from "./components/Brand";
 import { Hub } from "./views/Hub";
@@ -167,10 +167,10 @@ export default function App() {
         enterStudent();
         return;
       }
-      activeStudent.set({ login: TEACHER_LOGIN, name: "Professor", isTeacher: true });
-      session.setName("Professor");
+      activeStudent.set({ login: TEACHER_LOGIN, name: TEACHER_NAME, isTeacher: true });
+      session.setName(TEACHER_NAME);
       setLogin(TEACHER_LOGIN);
-      setName("Professor");
+      setName(TEACHER_NAME);
       setAuthState("teacher");
       const restored = screenFromPath();
       setScreen(restored === "hub" ? "teacher" : restored);

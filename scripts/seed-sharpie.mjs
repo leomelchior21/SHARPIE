@@ -99,7 +99,7 @@ for (const [index, student] of roster.entries()) {
 
 const teacherStatus = await createAccount(`${TEACHER_LOGIN}@${TEACHER_DOMAIN}`, TEACHER_LOGIN, {
   login: TEACHER_LOGIN,
-  display_name: "Professor",
+  display_name: "Leo",
   role: "teacher",
 });
 console.log(`teacher leleomaker: ${teacherStatus}`);

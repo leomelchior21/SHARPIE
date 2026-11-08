@@ -8,6 +8,8 @@ export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE
 export const STUDENT_EMAIL_DOMAIN = "alunos.sharpie.app";
 export const TEACHER_EMAIL_DOMAIN = "prof.sharpie.app";
 export const TEACHER_LOGIN = "leleomaker";
+/** What the site calls the teacher. */
+export const TEACHER_NAME = "Leo";
 
 export function loginToEmail(login: string) {
   return `${login}@${login === TEACHER_LOGIN ? TEACHER_EMAIL_DOMAIN : STUDENT_EMAIL_DOMAIN}`;
