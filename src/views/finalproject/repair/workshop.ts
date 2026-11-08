@@ -10,7 +10,7 @@ import { box, canvasTexture, drawSticker, hitArea, hitMaterial, labelPlane, mesh
  */
 export type View = "front" | "orbit" | "door" | "inside" | "tour";
 /** The tutorial's tour of the shop. */
-export type TourSpot = "wide" | "machine" | "door" | "bench" | "box";
+export type TourSpot = "wide" | "machine" | "bench" | "box";
 export type Work = "find" | "screws" | "panel" | "dust" | "wires" | "fuse" | "snack" | "claw" | "chip" | "close" | "lock" | null;
 export type { ScreenMode };
 export type Mood = "idle" | "angry" | "happy";
@@ -149,7 +149,6 @@ export class Workshop {
   private drop = 1;
   private looked = false;
   /** The front door: hidden when the camera walks round behind it. */
-  private doorway = new THREE.Group();
   private claw: ReturnType<typeof buildClaw>;
   /** The claw's bent finger: 1 bent, 0 straight. And the claw dropping for joy at power on. */
   private clawBend = 1;
@@ -307,32 +306,6 @@ export class Workshop {
       g.add(bench, ...legs, edge, edge2, strip, strip2, pliers, hammerHead, hammer, shelf, ...boxes);
       this.scene.add(g);
     };
-    // A doormat where the customers come in.
-    const mat = labelPlane(0.9, 0.55, (c, w, h) => {
-      c.fillStyle = "#7c52c7"; c.fillRect(0, 0, w, h);
-      c.strokeStyle = "#ffd23f"; c.lineWidth = 10; c.strokeRect(14, 14, w - 28, h - 28);
-      c.fillStyle = "#ffd23f"; c.font = `900 ${h * 0.24}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("WELCOME", w / 2, h / 2);
-    }, 400);
-    mat.rotation.x = -Math.PI / 2;
-    mat.rotation.z = Math.PI / 2;
-    mat.position.set(2.45, 0.006, 0.55);
-    this.scene.add(mat);
-    // The front door the customers walk through, propped open.
-    const frame = toon("#7c52c7"), doorway = this.doorway;
-    doorway.add(mesh(box(0.1, 2.2, 0.1), frame, 0, 1.1, -0.05, 0.02), mesh(box(0.1, 2.2, 0.1), frame, 0, 1.1, 1.05, 0.02), mesh(box(0.14, 0.14, 1.24), frame, 0, 2.25, 0.5, 0.02));
-    const glassDoor = new THREE.Group();
-    glassDoor.position.set(0, 0, 1.0);
-    glassDoor.rotation.y = -1.2;
-    glassDoor.add(mesh(box(0.05, 2.1, 0.06), toon("#ffd23f"), 0, 1.05, -0.03, 0.01), mesh(box(0.05, 2.1, 0.06), toon("#ffd23f"), 0, 1.05, -0.95, 0.01), mesh(box(0.05, 0.08, 0.98), toon("#ffd23f"), 0, 2.08, -0.49, 0.01), mesh(box(0.05, 0.08, 0.98), toon("#ffd23f"), 0, 0.04, -0.49, 0.01));
-    const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.95), new THREE.MeshBasicMaterial({ color: "#cfefff", transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
-    pane.rotation.y = Math.PI / 2; pane.position.set(0, 1.05, -0.49);
-    glassDoor.add(pane);
-    const openSign = labelPlane(0.5, 0.22, (c, w, h) => { c.fillStyle = "#22b07d"; c.fillRect(0, 0, w, h); c.strokeStyle = "#1d1d1f"; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10); c.fillStyle = "#fff"; c.font = `900 ${h * 0.55}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("OPEN", w / 2, h / 2 + 2); }, 256);
-    openSign.rotation.y = -Math.PI / 2; openSign.position.set(-0.03, 1.5, -0.49);
-    glassDoor.add(openSign);
-    doorway.add(glassDoor);
-    doorway.position.set(2.75, 0, 0);
-    this.scene.add(doorway);
     pegboard(this.walls.front, -1.7, false);
     pegboard(this.walls.back, 1.95, true);
     this.walls.back.visible = false;
@@ -771,7 +744,6 @@ export class Workshop {
     const spots: Record<TourSpot, { cam: Spot; tag: [number, number, number] | null; ring: boolean }> = {
       wide: { cam: { pos: [0.4, 1.7, 4.4 * back], look: [0, 0.9, 0] }, tag: null, ring: false },
       machine: { cam: { pos: [1.2, 2.3, 3.4 * back], look: [0, -0.35, 0] }, tag: [0, 0.35, 0], ring: true },
-      door: { cam: { pos: [-0.9, 1.55, 0.9 + (back - 1) * 1.5], look: [2.75, 1.05, 0.5] }, tag: [2.75, 1.75, 0.5], ring: false },
       bench: { cam: { pos: [0.9, 1.6, 1.7 * back], look: [-0.3, 0.95, -1.6] }, tag: [0, 1.15, -1.38], ring: false },
       box: { cam: this.rig.views(portrait).front, tag: null, ring: false },
     };
@@ -814,7 +786,6 @@ export class Workshop {
   private updateWalls() {
     this.walls.front.visible = this.camera.position.z > -1.4;
     this.walls.back.visible = this.camera.position.z < 1.4;
-    this.doorway.visible = this.camera.position.x < 2.3;
   }
 
   setScreen(mode: ScreenMode, text = "", coins = 0, note = "") {
@@ -1027,22 +998,25 @@ export class Workshop {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const visible = this.view === "front" && p.z < 1 && this.customer.visible;
     this.bubble.style.opacity = visible ? "1" : "0";
-    const hx = (p.x * 0.5 + 0.5) * w;
+    const x = (p.x * 0.5 + 0.5) * w, y = (-p.y * 0.5 + 0.5) * h;
     if (w > h) {
-      // Landscape: the bubble sits in the top right corner, clear of the machine; its tail points at the customer.
-      this.bubble.dataset.dock = "1";
-      this.bubble.style.transform = "";
-      const say = this.bubble.firstElementChild as HTMLElement | null;
-      if (say) {
-        const box = say.getBoundingClientRect(), host = this.host.getBoundingClientRect();
-        say.style.setProperty("--tail", `${Math.round(Math.max(26, Math.min(box.width - 26, hx - (box.left - host.left))))}px`);
+      // Landscape: the bubble floats beside the face, on the side away from the machine, its tail at the mouth.
+      const face = this.parts.head.getWorldPosition(new THREE.Vector3());
+      const c = face.clone().project(this.camera), edge = face.clone().add(new THREE.Vector3(0.24, 0, 0)).project(this.camera);
+      const fy = (-c.y * 0.5 + 0.5) * h, ex = (edge.x * 0.5 + 0.5) * w;
+      // A narrow gap still works: the words wrap onto more lines.
+      const room = w - 14 - (ex + 14);
+      if (room >= 150) {
+        this.bubble.dataset.side = "beside";
+        // Kept below the coins and the menu, and above the toolbox.
+        this.bubble.style.transform = `translate(${Math.round(ex + 14)}px, ${Math.round(Math.max(150, Math.min(h - 170, fy)))}px)`;
+        this.bubble.style.setProperty("--room", `${Math.round(room)}px`);
+        return;
       }
-      return;
     }
-    delete this.bubble.dataset.dock;
     // Near the right edge the bubble opens to the left.
     this.bubble.dataset.side = (p.x * 0.5 + 0.5) > 0.6 ? "left" : "right";
-    this.bubble.style.transform = `translate(${Math.round((p.x * 0.5 + 0.5) * w)}px, ${Math.round((-p.y * 0.5 + 0.5) * h)}px)`;
+    this.bubble.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
   private animateCustomer(dt: number, t: number) {

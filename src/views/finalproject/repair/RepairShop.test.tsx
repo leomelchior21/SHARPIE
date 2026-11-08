@@ -89,13 +89,13 @@ describe("Repair Shop", () => {
     expect(screen.queryByRole("button", { name: /Skip the warm-up/ })).toBeNull();
     click(/OPEN UP/);
     const tour: string[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       tour.push(document.querySelector(".rp-coach h2")?.textContent ?? "");
-      if (i === 3) expect(screen.getByRole("button", { name: /coins\. Open the shop/ })).toHaveClass("is-spot");
-      if (i === 4) expect(screen.getByRole("button", { name: "Your machines" })).toHaveClass("is-spot");
-      click(i === 5 ? /LET'S DO IT/ : /NEXT/);
+      if (i === 2) expect(screen.getByRole("button", { name: /coins\. Open the shop/ })).toHaveClass("is-spot");
+      if (i === 3) expect(screen.getByRole("button", { name: "Your machines" })).toHaveClass("is-spot");
+      click(i === 4 ? /LET'S DO IT/ : /NEXT/);
     }
-    expect(tour).toEqual(["Machines stand here", "Customers come in here", "Your workbench", "Your coins", "Your machines", "Warm-up time!"]);
+    expect(tour).toEqual(["Machines stand here", "Your workbench", "Your coins", "Your machines", "Warm-up time!"]);
     // The practice box: the same moves as every machine, with only four tools.
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("Practice box");
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowCloseLock");
@@ -191,15 +191,29 @@ describe("Repair Shop", () => {
     click("Your machines");
     const menu = within(screen.getByRole("region", { name: "Your machines" }));
     const rows = menu.getAllByRole("listitem").map((li) => li.textContent);
-    expect(rows).toHaveLength(8);
-    expect(rows[0]).toMatch(/1\. Arcade.*Fixed 1 time/);
-    expect(rows[1]).toMatch(/2\. Vending machine.*Unlocks after 2 more repairs/);
-    expect(rows[2]).toMatch(/3\. Jukebox.*Coming soon/);
-    expect(rows[6]).toMatch(/7\. RobotBOSS.*Coming soon/);
-    expect(rows[7]).toMatch(/Maker Family certificate.*After the Robot/);
+    expect(rows).toHaveLength(9);
+    expect(rows[0]).toMatch(/Practice box.*Warm up any time/);
+    expect(rows[1]).toMatch(/1\. Arcade.*Fixed 1 time/);
+    expect(rows[2]).toMatch(/2\. Vending machine.*Unlocks after 2 more repairs/);
+    expect(rows[3]).toMatch(/3\. Jukebox.*Coming soon/);
+    expect(rows[7]).toMatch(/7\. RobotBOSS.*Coming soon/);
+    expect(rows[8]).toMatch(/Maker Family certificate.*After the Robot/);
     // Only the teacher can open the certificate before the end.
     expect(menu.queryByRole("button", { name: /Preview the certificate/ })).toBeNull();
-    fireEvent.click(menu.getByRole("button", { name: "Close" }));
+    // Practice any time: straight to the practice box, no tour, no coins.
+    fireEvent.click(menu.getByRole("button", { name: /PRACTICE/ }));
+    await tick(1000);
+    expect(document.querySelector(".rp-ticket")).toHaveTextContent("ANY TIMEWarm-up · Practice box");
+    expect(document.querySelector(".rp-coach h2")).toHaveTextContent("Warm-up time!");
+    expect(document.querySelector(".rp-dots")).toBeNull();
+    click(/LET'S DO IT/);
+    click("Back panel");
+    await openUp([/Unscrew the panel · 0\/2/, /Pull the panel off/, /Blow the dust away/, /Put the panel back/, /Lock the screws · 0\/2/]);
+    const ready = within(screen.getByRole("region", { name: "Ready" }));
+    fireEvent.click(ready.getByRole("button", { name: /BACK TO WORK/ }));
+    await tick(10);
+    expect(saved(nineB)).toMatchObject({ fixed: 1, coins: coins - 25 });
+    expect(screen.getByRole("button", { name: /SHOW ME|TAKE THE JOB/ })).toBeInTheDocument();
 
     click("BACK");
     expect(screen.getByRole("button", { name: new RegExp(`Repair Shop\\. 1 machines fixed · ${coins - 25} coins`) })).toBeInTheDocument();

@@ -29,8 +29,7 @@ const seedNow = () => Math.floor(Math.random() * 1e9);
 type TourStep = { spot: TourSpot; title: string; text: string; tag?: string; highlight?: "coins" | "menu" };
 const tourSteps: TourStep[] = [
   { spot: "machine", title: "Machines stand here", text: "Customers bring their broken machines to this spot. You fix them right here.", tag: "MACHINE SPOT" },
-  { spot: "door", title: "Customers come in here", text: "They walk in, show you what's wrong… and pay you when it works again.", tag: "CUSTOMERS" },
-  { spot: "bench", title: "Your workbench", text: "It's a bit old. Coins buy a better bench, a new floor, lights and decorations.", tag: "WORKBENCH" },
+  { spot: "bench", title: "Your workbench", text: "Customers come in, show you what's wrong and pay you when it works again. This bench is a bit old. Coins buy a better bench, a new floor, lights and decorations.", tag: "WORKBENCH" },
   { spot: "wide", title: "Your coins", text: "Every repair pays. Tap your coins any time to open the shop.", highlight: "coins" },
   { spot: "wide", title: "Your machines", text: "Tap the list to see the machines you've fixed and the ones still to come.", highlight: "menu" },
   { spot: "box", title: "Warm-up time!", text: "A practice box! Open it, clean it and close it again: every repair starts like this." },
@@ -62,10 +61,14 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const { seed, tier, machine, hide } = ticket;
   // The first visit starts with the tutorial: a tour of the shop and a practice box. The teacher can replay it from the menu.
   const [tutorial, setTutorial] = useState(() => !shop.tutorial && !teacher);
+  // Practice from the menu: straight to the practice box, no shutter and no tour.
+  const [practiceOnly, setPracticeOnly] = useState(false);
+  // Bumped on every replay, so a new practice starts even from the middle of one.
+  const [practiceRun, setPracticeRun] = useState(0);
   const [tourAt, setTourAt] = useState(-1);
   const [landed, setLanded] = useState(false);
   const [looked, setLooked] = useState(false);
-  const job = useMemo(() => tutorial ? practiceJob() : makeJob(tier, seed, machine, hide), [tutorial, tier, seed, machine, hide]);
+  const job = useMemo(() => tutorial ? practiceJob() : makeJob(tier, seed, machine, hide), [tutorial, practiceRun, tier, seed, machine, hide]);
   const practice = !!job.practice;
   const who = customers[seed % customers.length];
   const [levelNote, setLevelNote] = useState("");
@@ -215,7 +218,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     setPlugged(Object.fromEntries(job.cables.map((c) => [c.id, c.at])));
     if (job.practice) {
       // The tutorial: the shop is still shut. The tour starts when the shutter goes up.
-      setPhase("tour"); setTourAt(-1); setLanded(!w); setSay("");
+      setPhase("tour"); setTourAt(practiceOnly ? tourSteps.length - 1 : -1); setLanded(!w); setSay("");
       if (!w) return;
       w.setJob(job);
       w.setWork(null);
@@ -338,10 +341,12 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const finishTutorial = () => {
     setShop({ ...shop, tutorial: true });
     setTutorial(false);
+    setPracticeOnly(false);
     setOpen(null);
     setTicket(ticketFor(tierNow, shop.fixed));
   };
-  const replayTutorial = () => { setOpen(null); scene.current?.leave(); setSay(""); setTutorial(true); };
+  /** Back to the practice box any time (only: no tour), or the whole warm-up from the shutter. */
+  const replayTutorial = (only: boolean) => { setOpen(null); scene.current?.leave(); setSay(""); setPracticeOnly(only); setPracticeRun((n) => n + 1); setTutorial(true); };
   const nextTour = () => {
     sfx.tick();
     if (tourAt < tourSteps.length - 1) { setTourAt(tourAt + 1); return; }
@@ -390,7 +395,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
   const mission = missionFor(phase, job, { screwsOut, screwsLocked, dust, wired, fuseState, demoState, who, named, need: needTool, gl, freed, tool });
   const step = phase === "tour" && tourAt >= 0 ? tourSteps[tourAt] : null;
   const showSteps = phase !== "paid" && phase !== "tour" && phase !== "ready";
-  const ticketTag = <div className="rp-ticket" aria-live="polite"><Wrench size={16} /><span>{practice ? <><small>BEFORE WE OPEN</small><b>Warm-up · Practice box</b></> : <><small>TICKET #{phase === "paid" ? shop.fixed : shop.fixed + 1}</small><b>{who} · {machineInfo[job.machine].model}</b></>}</span></div>;
+  const ticketTag = <div className="rp-ticket" aria-live="polite"><Wrench size={16} /><span>{practice ? <><small>{practiceOnly ? "ANY TIME" : "BEFORE WE OPEN"}</small><b>Warm-up · Practice box</b></> : <><small>TICKET #{phase === "paid" ? shop.fixed : shop.fixed + 1}</small><b>{who} · {machineInfo[job.machine].model}</b></>}</span></div>;
 
   return <div className={`rp rp-phase-${phase}`}>
     <div className="rp-stage" ref={host} aria-hidden={gl ? "true" : undefined}>
@@ -456,7 +461,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
     {open === "chip" && <div className="rp-modal"><ChipBench job={job} onSlip={() => slip("chip")} onHelp={() => setSlips((s) => ({ ...s, help: s.help + 1 }))} onClose={() => setOpen(null)} onDone={chipFixed} /></div>}
     {open === "shop" && <div className="rp-modal"><Catalog shop={shop} onAction={shopAction} onClose={() => setOpen(null)} /></div>}
 
-    {open === "menu" && <div className="rp-modal"><MachineMenu shop={shop} teacher={teacher} onClose={() => setOpen(null)} onTutorial={replayTutorial} onCertificate={() => setOpen("cert")} /></div>}
+    {open === "menu" && <div className="rp-modal"><MachineMenu shop={shop} teacher={teacher} onClose={() => setOpen(null)} onPractice={() => replayTutorial(true)} onTutorial={() => replayTutorial(false)} onCertificate={() => setOpen("cert")} /></div>}
     {open === "cert" && <Certificate name={name} login={studentKey} onClose={() => setOpen(null)} />}
 
     {/* The tutorial: the shutter goes up, a tour of the shop, then the practice box. */}
@@ -474,7 +479,7 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
       </section>}
     </div>}
     {step && <section className="rp-card rp-coach" aria-live="polite" key={tourAt}>
-      <ol className="rp-dots" aria-label={`Step ${tourAt + 1} of ${tourSteps.length}`}>{tourSteps.map((_, i) => <li key={i} className={i < tourAt ? "is-done" : i === tourAt ? "is-now" : ""} />)}</ol>
+      {!practiceOnly && <ol className="rp-dots" aria-label={`Step ${tourAt + 1} of ${tourSteps.length}`}>{tourSteps.map((_, i) => <li key={i} className={i < tourAt ? "is-done" : i === tourAt ? "is-now" : ""} />)}</ol>}
       <h2>{step.title}</h2>
       <p>{step.text}</p>
       <div className="rp-actions">
@@ -490,8 +495,8 @@ export function RepairShop({ name, studentKey, progress, teacher, preview, heade
         <li><b>〰</b> Sweep with the blower</li>
         <li><b>↔</b> Drag to look around</li>
       </ul>
-      <p>Your first customer is at the door…</p>
-      <div className="rp-actions"><button className="rp-go" autoFocus onClick={finishTutorial}><Store size={18} /> OPEN THE SHOP</button></div>
+      <p>{practiceOnly ? "Warmed up! A customer is waiting…" : "Your first customer is at the door…"}</p>
+      <div className="rp-actions"><button className="rp-go" autoFocus onClick={finishTutorial}><Store size={18} /> {practiceOnly ? "BACK TO WORK" : "OPEN THE SHOP"}</button></div>
     </section></div>}
   </div>;
 }
@@ -650,14 +655,21 @@ function Catalog({ shop, onAction, onClose }: { shop: Shop; onAction: (id: strin
 /* ---------- The menu: the machines fixed so far and the ones to come ---------- */
 
 const machineIcons: Record<string, typeof Wrench> = { arcade: Gamepad, vending: Candy, jukebox: Music, crosswalk: Lamp, claw: Hand, coffee: Coffee, robot: Bot };
-function MachineMenu({ shop, teacher, onClose, onTutorial, onCertificate }: { shop: Shop; teacher: boolean; onClose: () => void; onTutorial: () => void; onCertificate: () => void }) {
+function MachineMenu({ shop, teacher, onClose, onPractice, onTutorial, onCertificate }: { shop: Shop; teacher: boolean; onClose: () => void; onPractice: () => void; onTutorial: () => void; onCertificate: () => void }) {
   const built = machineOrder as readonly string[];
   // The first machine not unlocked yet, among the ones already built.
   const nextIndex = roadmap.findIndex((m, i) => built.includes(m.id) && shop.fixed < i * UNLOCK_EVERY);
   return <section className="rp-card rp-machines" aria-label="Your machines">
     <header><h2><ListChecks size={22} /> Your machines</h2><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></header>
     <p className="rp-machines-sum"><b>{shop.fixed}</b> {shop.fixed === 1 ? "repair" : "repairs"} so far · a new machine every {UNLOCK_EVERY} repairs</p>
-    <ol>{roadmap.map((m, i) => {
+    <ol>
+      {/* The practice box, before every machine: open any time, no customer and no coins. */}
+      <li className="is-practice">
+        <span className="rp-machine-icon"><PackageOpen size={22} /></span>
+        <span className="rp-machine-text"><b>Practice box</b><small>Warm up any time: no customer, no coins</small></span>
+        <button className="rp-go rp-practice" onClick={onPractice}><Play size={14} /> PRACTICE</button>
+      </li>
+      {roadmap.map((m, i) => {
       const Icon = machineIcons[m.id] ?? Wrench;
       const isBuilt = built.includes(m.id), open = isBuilt && shop.fixed >= i * UNLOCK_EVERY;
       const made = shop.made[m.id as MachineId] ?? 0;
@@ -681,7 +693,7 @@ function MachineMenu({ shop, teacher, onClose, onTutorial, onCertificate }: { sh
     </ol>
     <div className="rp-actions">
       {teacher && <button className="rp-tool" onClick={onCertificate}><Award size={16} /> Preview the certificate</button>}
-      <button className="rp-tool" onClick={onTutorial}><RotateCcw size={16} /> Play the warm-up again</button>
+      <button className="rp-tool" onClick={onTutorial}><RotateCcw size={16} /> Replay the shop tour</button>
     </div>
   </section>;
 }
