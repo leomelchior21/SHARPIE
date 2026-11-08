@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Award, Bandage, Bike, Bot, Candy, Check, CircleDot, Coffee, Cog, Coins, Cpu, DoorOpen, Eye, Gamepad, Hammer, Hand, Lamp, ListChecks, Lock, Music, PackageOpen, PartyPopper, Play, Pointer, Power, RotateCcw, Scissors, ShoppingCart, SkipForward, Sparkles, Store, Wind, Wrench, X, Zap, Grid3x3, Armchair, Cable } from "lucide-react";
+import { ArrowRight, Award, Bandage, Bike, Bot, Candy, Check, CircleDot, Coffee, Cog, Coins, Cpu, DoorOpen, Eye, FolderOpen, Gamepad, Hammer, Hand, Lamp, ListChecks, Lock, Music, PackageOpen, PartyPopper, Play, Pointer, Power, RotateCcw, Scissors, ShoppingCart, Sparkles, Store, Wind, Wrench, X, Zap, Grid3x3, Armchair, Cable } from "lucide-react";
 import type { Progress } from "../progress";
 import { LabCode } from "../LabParts";
 import { Cs } from "../switchyard/Cs";
@@ -59,11 +59,12 @@ function powerSteps(job: Job): { value: number; note: string }[] {
 export function RepairShop({ name, studentKey, progress: _progress, teacher, preview, headerSlot = null }: { name: string; studentKey: string; progress: Progress; teacher: boolean; preview: boolean; headerSlot?: HTMLElement | null }) {
   const [shop, setShopState] = useState<Shop>(() => preview ? freshShop() : loadShop(studentKey));
   const setShop = useCallback((next: Shop) => { setShopState(next); if (!preview) saveShop(studentKey, next); }, [preview, studentKey]);
-  const [teacherMachine, setTeacherMachine] = useState<MachineId | "auto">("auto");
   const ticketFor = (machine?: MachineId, from = shop): Ticket => {
     const seed = seedNow();
-    return { seed, machine: machine ?? (teacher && teacherMachine !== "auto" ? teacherMachine : nextMachine(from, seed)) };
+    return { seed, machine: machine ?? nextMachine(from, seed) };
   };
+  // The start screen, like a game's: the logo and a START button, every time the shop opens.
+  const [started, setStarted] = useState(false);
   const [ticket, setTicket] = useState<Ticket>(() => ticketFor());
   const { seed, machine } = ticket;
   // The first visit starts with the tutorial: a tour of the shop and a practice box. The menu replays it.
@@ -214,6 +215,8 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     if (job.practice) {
       // The tutorial: the shop is still shut. The tour starts when the shutter goes up.
       setPhase("tour"); setTourAt(practiceOnly ? tourSteps.length - 1 : -1); setLanded(!w); setSay("");
+      // A replay from the menu (the shop is already started): the shutter rolls up by itself.
+      if (started && !practiceOnly) window.setTimeout(() => { sfx.whoosh(); setTourAt(0); }, 700);
       if (!w) return;
       w.setJob(job);
       w.setWork(null);
@@ -363,6 +366,13 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     setPhase("find");
   };
   const openShutter = () => { sfx.whoosh(); setTourAt(0); };
+  /** START: the first visit rolls the shutter up; after that the customer walks in. */
+  const start = () => {
+    sfx.good();
+    setStarted(true);
+    if (phase === "tour" && tourAt < 0) { openShutter(); return; }
+    setRun((n) => n + 1);
+  };
   const nextCustomer = () => { scene.current?.leave(); setSay(""); window.setTimeout(() => setTicket(ticketFor()), scene.current ? 900 : 0); };
 
   // The teacher (and a device without 3D) can finish any step with one tap.
@@ -424,7 +434,6 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     <div className="rp-top">
       {!headerSlot && ticketTag}
       <span className="rp-spacer" />
-      {teacher && <TeacherBar machine={teacherMachine} onMachine={(m) => { setTeacherMachine(m); playLevel(m === "auto" ? nextMachine(shop, seedNow()) : m); }} onSkip={skip} canSkip={phase !== "paid" && !open} />}
       <button ref={coinBtn} className={`rp-coins ${step?.highlight === "coins" ? "is-spot" : ""} ${rain ? "is-bump" : ""}`} aria-label={`${shop.coins} coins. Open the shop`} onClick={() => setOpen("shop")}><Coins size={18} /> {shownCoins} <ShoppingCart size={16} /></button>
       <button className={`rp-menu ${step?.highlight === "menu" ? "is-spot" : ""}`} aria-label="Your levels" onClick={() => setOpen("menu")}><ListChecks size={22} /></button>
     </div>
@@ -449,7 +458,7 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
       {phase === "arrive" && job.demo !== null && demoState !== "seen" && <button className="rp-go" disabled={demoState === "running"} onClick={watch}><Play size={18} fill="currentColor" /> {demoState === "running" ? "WATCHING…" : "SHOW ME"}</button>}
       {phase === "arrive" && (job.demo === null || demoState === "seen") && <button className="rp-go" onClick={takeJob}><Wrench size={18} /> TAKE THE JOB</button>}
       {phase === "power" && <button className="rp-go is-power" onClick={powerOn}><Zap size={18} /> POWER ON</button>}
-      {!gl && !teacher && handsOn.includes(phase) && phase !== "chip" && phase !== "find" && <button className="rp-go" onClick={skip}>DO IT <ArrowRight size={18} /></button>}
+      {!gl && handsOn.includes(phase) && phase !== "chip" && phase !== "find" && <button className="rp-go" onClick={skip}>DO IT <ArrowRight size={18} /></button>}
       {!gl && phase === "chip" && <button className="rp-go" onClick={() => setOpen("chip")}><Cpu size={18} /> OPEN THE CHIP</button>}
     </div>
 
@@ -486,16 +495,8 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     {phase === "tour" && <div className={`rp-shutter ${tourAt >= 0 ? "is-up" : ""}`} aria-hidden={tourAt >= 0 ? "true" : undefined}>
       <div className="rp-slats" />
       <span className="rp-sign">{tourAt >= 0 ? "OPEN" : "CLOSED"}</span>
-      {tourAt < 0 && <section className="rp-card rp-welcome" aria-label="Welcome to the repair shop">
-        <span className="rp-stamp">GOOD MORNING!</span>
-        <h2>Your repair shop, {name.split(" ")[0]}</h2>
-        <p>Customers bring broken machines. You open them up, fix them… and get paid. Let's get the shop ready!</p>
-        <div className="rp-actions">
-          {shop.fixed > 0 && <button className="rp-tool" onClick={finishTutorial}>Skip the warm-up</button>}
-          <button className="rp-go" autoFocus onClick={openShutter}><Sparkles size={18} /> OPEN UP!</button>
-        </div>
-      </section>}
     </div>}
+    {!started && <TitleScreen name={name} shop={shop} first={tutorial && !practiceOnly} onStart={start} />}
     {step && <section className="rp-card rp-coach" aria-live="polite" key={tourAt}>
       {!practiceOnly && <ol className="rp-dots" aria-label={`Step ${tourAt + 1} of ${tourSteps.length}`}>{tourSteps.map((_, i) => <li key={i} className={i < tourAt ? "is-done" : i === tourAt ? "is-now" : ""} />)}</ol>}
       <h2>{step.title}</h2>
@@ -581,14 +582,20 @@ function GestureHint({ phase, pts, job, dust, fuseState }: { phase: Phase; pts: 
   return <div className="rp-gestures" aria-hidden="true">{hint}</div>;
 }
 
-function TeacherBar({ machine, onMachine, onSkip, canSkip }: { machine: MachineId | "auto"; onMachine: (m: MachineId | "auto") => void; onSkip: () => void; canSkip: boolean }) {
-  return <div className="rp-teacher" role="group" aria-label="Teacher">
-    <small>TEACHER</small>
-    <select aria-label="Teacher: machine" value={machine} onChange={(e) => onMachine(e.target.value as MachineId | "auto")}>
-      <option value="auto">Next level</option>
-      {allMachines.map((m) => <option key={m} value={m}>{levelOf(m)}. {machineInfo[m].name}</option>)}
-    </select>
-    <button className="rp-skip" disabled={!canSkip} onClick={onSkip} aria-label="Skip this step"><SkipForward size={15} /> SKIP</button>
+/* ---------- The start screen ---------- */
+
+/** The logo, a line about the game, where the student is up to, and START. */
+function TitleScreen({ name, shop, first, onStart }: { name: string; shop: Shop; first: boolean; onStart: () => void }) {
+  const done = allMachines.filter((m) => cleared(shop, m)).length;
+  return <div className="rp-title" role="region" aria-label="Repair Shop start">
+    <div className="rp-title-rays" aria-hidden="true" />
+    <div className="rp-logo" aria-label="Repair Shop">
+      <span className="rp-logo-gear" aria-hidden="true"><Cog size={74} strokeWidth={2.2} /><Wrench className="rp-logo-wrench" size={46} strokeWidth={2.6} /></span>
+      <span className="rp-logo-words"><b>REPAIR</b><b>SHOP</b></span>
+      <span className="rp-logo-tag">FIX IT · CODE IT · GET PAID</span>
+    </div>
+    <p className="rp-title-who">{first ? `Welcome, ${name.split(" ")[0]}! Your shop opens today.` : done === allMachines.length ? `All ${done} levels cleared, ${name.split(" ")[0]}! Play any level again.` : `Level ${Math.min(allMachines.length, done + 1)} of ${allMachines.length} · ${shop.coins} coins`}</p>
+    <button className="rp-start" autoFocus onClick={onStart}><Play size={24} fill="currentColor" /> START</button>
   </div>;
 }
 
@@ -681,16 +688,15 @@ function LevelMenu({ shop, teacher, current, onClose, onPlay, onPractice, onTuto
     <header><h2><ListChecks size={22} /> Your levels</h2><button className="rp-x" aria-label="Close" onClick={onClose}><X size={18} /></button></header>
     <p className="rp-machines-sum"><b>{done}</b> of {roadmap.length} levels cleared · fix a machine to open the next one</p>
     <ol>
-      {/* The warm-up comes first: the practice box any time, or the whole tour again. */}
-      <li className="is-practice">
-        <span className="rp-machine-icon"><PackageOpen size={22} /></span>
-        <span className="rp-machine-text"><b>Practice box</b><small>Warm up any time: no customer, no coins</small></span>
-        <button className="rp-go rp-row-go" onClick={onPractice}><Play size={14} /> PRACTICE</button>
-      </li>
-      <li className="is-practice">
-        <span className="rp-machine-icon"><Sparkles size={22} /></span>
-        <span className="rp-machine-text"><b>Replay the warm-up</b><small>The shop tour, then the practice box</small></span>
-        <button className="rp-go rp-row-go" onClick={onTutorial}><RotateCcw size={14} /> REPLAY</button>
+      {/* The warm-up folder comes first: the shop tour, then the practice box. No customer, no coins. */}
+      <li className="is-practice rp-folder">
+        <span className="rp-machine-icon"><FolderOpen size={22} /></span>
+        <span className="rp-machine-text"><b>Warm-up</b><small>No customer, no coins: any time you like</small>
+          <span className="rp-folder-items">
+            <button className="rp-tool" aria-label="Replay the shop tour" onClick={onTutorial}><b>1</b> Shop tour <Sparkles size={14} /></button>
+            <button className="rp-tool" aria-label="Practice box" onClick={onPractice}><b>2</b> Practice box <PackageOpen size={14} /></button>
+          </span>
+        </span>
       </li>
       {roadmap.map((m) => {
         const Icon = machineIcons[m.id];

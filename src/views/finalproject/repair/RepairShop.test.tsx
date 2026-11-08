@@ -23,6 +23,24 @@ const mount = (login: string, isTeacher = false) => render(<FinalProject name="A
 const doIt = async (ms = 800) => { click(/DO IT/); await tick(ms); };
 const toolbox = () => within(screen.getByRole("radiogroup", { name: "Toolbox" })).getAllByRole("radio").map((b) => b.getAttribute("aria-label"));
 
+/** The start screen: the logo and START. */
+const begin = () => click("START");
+/** A level from the menu (the teacher has them all). */
+async function play(n: number) {
+  click("Your levels");
+  fireEvent.click(within(screen.getByRole("region", { name: "Your levels" })).getByRole("button", { name: new RegExp(`(Play|Restart) level ${n}`) }));
+  await tick(10);
+}
+/** Without 3D: the right door is the first door button, every other step has DO IT. Stops at a step matching until. */
+async function stepTo(until: RegExp, seen: string[] = []) {
+  for (let i = 0; i < 16 && !until.test(title()); i++) {
+    seen.push(title());
+    if (title() === "Find the right door") fireEvent.click(within(document.querySelector(".rp-belt") as HTMLElement).getAllByRole("button")[0]);
+    else click(/DO IT/);
+    await tick(800);
+  }
+  return seen;
+}
 /** From the screws to the chip on a device without 3D: one tap per step. */
 async function openUp(steps: RegExp[]) {
   for (const step of steps) { expect(title()).toMatch(step); await doIt(); }
@@ -84,10 +102,12 @@ describe("Repair Shop", () => {
   it("the first visit starts with the tutorial: the shutter, a tour of the shop, then the practice box", async () => {
     mount(nineB);
     click(/Repair Shop.*Open stage/);
-    expect(screen.getByRole("region", { name: "Welcome to the repair shop" })).toHaveTextContent("Your repair shop, Ada");
-    // Nobody skips the very first warm-up.
-    expect(screen.queryByRole("button", { name: /Skip the warm-up/ })).toBeNull();
-    click(/OPEN UP/);
+    // A start screen like a game's: the logo, a welcome and START.
+    const title0 = within(screen.getByRole("region", { name: "Repair Shop start" }));
+    expect(title0.getByLabelText("Repair Shop")).toHaveTextContent("REPAIRSHOP");
+    expect(title0.getByText("Welcome, Ada! Your shop opens today.")).toBeInTheDocument();
+    begin();
+    expect(screen.queryByRole("region", { name: "Repair Shop start" })).toBeNull();
     const tour: string[] = [];
     for (let i = 0; i < 5; i++) {
       tour.push(document.querySelector(".rp-coach h2")?.textContent ?? "");
@@ -120,6 +140,8 @@ describe("Repair Shop", () => {
     localStorage.setItem(shopKey(nineB), JSON.stringify({ tutorial: true }));
     mount(nineB);
     click(/Repair Shop.*Open stage/);
+    expect(screen.getByText("Level 1 of 7 · 0 coins")).toBeInTheDocument();
+    begin();
     expect(screen.queryByRole("group", { name: /Teacher/ })).toBeNull();
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("ARCADE-3000");
 
@@ -192,15 +214,14 @@ describe("Repair Shop", () => {
     click("Your levels");
     let menu = within(screen.getByRole("region", { name: "Your levels" }));
     const rows = menu.getAllByRole("listitem").map((li) => li.textContent);
-    expect(rows).toHaveLength(10);
-    expect(rows[0]).toMatch(/Practice box.*Warm up any time/);
-    expect(rows[1]).toMatch(/Replay the warm-up.*shop tour/);
-    expect(rows[2]).toMatch(/Level 1 · Arcade.*Cleared · fixed 1 time/);
-    expect(rows[3]).toMatch(/Level 2 · Vending machine.*On your bench now/);
-    expect(rows[4]).toMatch(/Level 3 · Jukebox.*Clear level 2 to open it/);
-    expect(rows[5]).toMatch(/Level 4 · Electric scooter/);
-    expect(rows[8]).toMatch(/Level 7 · RobotBOSS/);
-    expect(rows[9]).toMatch(/Maker Family certificate.*Beat the Robot/);
+    expect(rows).toHaveLength(9);
+    expect(rows[0]).toMatch(/Warm-up.*1 Shop tour.*2 Practice box/);
+    expect(rows[1]).toMatch(/Level 1 · Arcade.*Cleared · fixed 1 time/);
+    expect(rows[2]).toMatch(/Level 2 · Vending machine.*On your bench now/);
+    expect(rows[3]).toMatch(/Level 3 · Jukebox.*Clear level 2 to open it/);
+    expect(rows[4]).toMatch(/Level 4 · Electric scooter/);
+    expect(rows[7]).toMatch(/Level 7 · RobotBOSS/);
+    expect(rows[8]).toMatch(/Maker Family certificate.*Beat the Robot/);
     // Locked levels have no button, and only the teacher can preview the certificate.
     expect(menu.queryByRole("button", { name: "Play level 3" })).toBeNull();
     expect(menu.queryByRole("button", { name: /Preview the certificate/ })).toBeNull();
@@ -219,7 +240,7 @@ describe("Repair Shop", () => {
     // Practice any time: straight to the practice box, no tour, no coins.
     click("Your levels");
     menu = within(screen.getByRole("region", { name: "Your levels" }));
-    fireEvent.click(menu.getByRole("button", { name: /PRACTICE/ }));
+    fireEvent.click(menu.getByRole("button", { name: "Practice box" }));
     await tick(1000);
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("ANY TIMEWarm-up · Practice box");
     expect(document.querySelector(".rp-dots")).toBeNull();
@@ -238,6 +259,7 @@ describe("Repair Shop", () => {
     localStorage.setItem(shopKey(nineC), JSON.stringify({ tutorial: true, made: { arcade: 1 } }));
     localStorage.setItem(storageKey(nineC), JSON.stringify({ version: 1, activity: "repair" }));
     mount(nineC);
+    begin();
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("SNACK-O-MATIC");
     click(/SHOW ME/);
     expect(screen.getByText(/is EMPTY! I paid 2 coins and it says “Enjoy!”.*stuck behind the glass/)).toBeInTheDocument();
@@ -269,20 +291,23 @@ describe("Repair Shop", () => {
   it("the teacher has every level, a skip for each step, and levels 3 and 4 build the condition from pieces", async () => {
     localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
     mount("leleomaker", true);
-    const bar = within(screen.getByRole("group", { name: "Teacher" }));
-    expect(bar.getAllByRole("button").map((b) => b.textContent?.trim())).toEqual(["SKIP"]);
-    const pickMachine = bar.getByRole("combobox", { name: "Teacher: machine" });
-    expect([...pickMachine.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["Next level", "1. Arcade", "2. Vending machine", "3. Jukebox", "4. Electric scooter", "5. Claw machine", "6. Coffee machine", "7. Robot"]);
-    const skip = () => fireEvent.click(bar.getByRole("button", { name: "Skip this step" }));
+    begin();
+    // No teacher bar: every level is open in the menu.
+    expect(screen.queryByRole("group", { name: /Teacher/ })).toBeNull();
+    click("Your levels");
+    const menu = within(screen.getByRole("region", { name: "Your levels" }));
+    expect(menu.getAllByRole("button", { name: /Play level/ })).toHaveLength(6);
+    expect(menu.getByRole("button", { name: "Restart level 1" })).toBeInTheDocument();
+    fireEvent.click(menu.getByRole("button", { name: "Close" }));
 
-    fireEvent.change(pickMachine, { target: { value: "jukebox" } });
-    await tick(10);
+    await play(3);
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("LEVEL 3 OF 7");
     click(/SHOW ME/);
     expect(screen.getByText(/2 credits and it says “Insert coin”/)).toBeInTheDocument();
     click(/TAKE THE JOB/);
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowWiresFuseChipCloseLockPower");
-    for (const step of [/Find the right door/, /Unscrew the panel · 0\/4/, /Pull the panel off/, /Blow the dust away/, /Plug in the cables · 1\/3/, /Swap the burnt fuse/, /Reprogram the logic chip/]) { expect(title()).toMatch(step); skip(); await tick(800); }
+    expect(await stepTo(/Reprogram/)).toEqual(["Find the right door", "Unscrew the panel · 0/4", "Pull the panel off", "Blow the dust away", "Plug in the cables · 1/3", "Swap the burnt fuse"]);
+    click(/OPEN THE CHIP/);
     let chip = within(screen.getByRole("region", { name: "Logic chip" }));
     expect(chip.getAllByRole("button").filter((b) => b.closest(".sy-bank")).map((b) => b.textContent).sort()).toEqual(["1", "==", ">", ">=", "credits"].sort());
     for (const piece of ["credits", ">=", "1"]) fireEvent.click(chip.getByRole("button", { name: piece }));
@@ -292,14 +317,14 @@ describe("Repair Shop", () => {
     expect(title()).toMatch(/Put the panel back/);
 
     // Level 4: the scooter's tape, and fewer pieces after two misses.
-    fireEvent.change(pickMachine, { target: { value: "scooter" } });
-    await tick(10);
+    await play(4);
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("ZOOM-E");
     click(/SHOW ME/);
     expect(screen.getByText(/30 km\/h and it says “Speed OK”/)).toBeInTheDocument();
     click(/TAKE THE JOB/);
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowTapeWiresChipCloseLockPower");
-    for (const step of [/Find the right door/, /Unscrew/, /Pull the panel off/, /Blow the mud away/, /Tape the worn cable · 0\/3/, /Plug in the cables/, /Reprogram/]) { expect(title()).toMatch(step); skip(); await tick(800); }
+    expect((await stepTo(/Reprogram/)).slice(3)).toEqual(["Blow the mud away", "Tape the worn cable · 0/3", "Plug in the cables · 1/3"]);
+    click(/OPEN THE CHIP/);
     chip = within(screen.getByRole("region", { name: "Logic chip" }));
     for (let i = 0; i < 2; i++) {
       for (const piece of ["speed", "<", "25"]) fireEvent.click(chip.getByRole("button", { name: piece }));
@@ -314,17 +339,16 @@ describe("Repair Shop", () => {
   it("level 5: the claw machine opens at the back, and the condition is typed", async () => {
     localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
     mount("leleomaker", true);
-    const bar = within(screen.getByRole("group", { name: "Teacher" }));
-    fireEvent.change(bar.getByRole("combobox", { name: "Teacher: machine" }), { target: { value: "claw" } });
-    await tick(10);
+    begin();
+    await play(5);
     click(/SHOW ME/);
     expect(screen.getByText(/The timer hit 0 and it says “Keep steering”\?! The claw never drops! And one claw finger looks bent!/)).toBeInTheDocument();
     click(/TAKE THE JOB/);
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowClawTapeChipCloseLockPower");
     expect(within(document.querySelector(".rp-belt") as HTMLElement).getAllByRole("button").map((b) => b.textContent?.trim())).toEqual(["Back panel", "Control panel", "Base hatch"]);
     click("Back panel");
-    const skip = () => fireEvent.click(bar.getByRole("button", { name: "Skip this step" }));
-    for (const step of [/Unscrew the panel · 0\/4/, /Pull the panel off/, /Blow the fluff away/, /Fix the bent claw finger/, /Tape the worn cable/, /Reprogram/]) { expect(title()).toMatch(step); skip(); await tick(800); }
+    expect(await stepTo(/Reprogram/)).toEqual(["Unscrew the panel · 0/4", "Pull the panel off", "Blow the fluff away", "Fix the bent claw finger", "Tape the worn cable · 0/3"]);
+    click(/OPEN THE CHIP/);
     const chip = within(screen.getByRole("region", { name: "Logic chip" }));
     expect(document.querySelector(".rp-chipbench .sy-editor .sy-row")).toHaveTextContent("int seconds = ?;");
     fireEvent.change(chip.getByRole("textbox", { name: "Condition" }), { target: { value: "seconds = 0" } });
@@ -345,17 +369,14 @@ describe("Repair Shop", () => {
   it("level 6: the coffee machine's else line is missing, and the student writes it", async () => {
     localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
     mount("leleomaker", true);
-    const bar = within(screen.getByRole("group", { name: "Teacher" }));
-    fireEvent.change(bar.getByRole("combobox", { name: "Teacher: machine" }), { target: { value: "coffee" } });
-    await tick(10);
+    begin();
+    await play(6);
     click(/SHOW ME/);
     expect(screen.getByText(/The tank is EMPTY and it says “Brewing”/)).toBeInTheDocument();
     click(/TAKE THE JOB/);
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowWiresFuseTapeChipCloseLockPower");
-    const skip = () => fireEvent.click(bar.getByRole("button", { name: "Skip this step" }));
-    for (let i = 0; i < 12 && !/Reprogram/.test(title()); i++) { skip(); await tick(800); }
-    expect(title()).toMatch(/Unscrew the panel · 0\/6|Reprogram/);
-    skip();
+    expect((await stepTo(/Reprogram/))[1]).toBe("Unscrew the panel · 0/6");
+    click(/OPEN THE CHIP/);
     const chip = within(screen.getByRole("region", { name: "Logic chip" }));
     fireEvent.change(chip.getByRole("textbox", { name: "Condition" }), { target: { value: "water >= 200" } });
     fireEvent.change(chip.getByRole("textbox", { name: "Else line" }), { target: { value: 'console.WriteLine("Refill water");' } });
@@ -374,21 +395,18 @@ describe("Repair Shop", () => {
   it("level 7, the final round: only line 1, the student writes the if / else, and beating the Robot opens the certificate", async () => {
     localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
     mount("leleomaker", true);
-    const bar = within(screen.getByRole("group", { name: "Teacher" }));
-    fireEvent.change(bar.getByRole("combobox", { name: "Teacher: machine" }), { target: { value: "robot" } });
-    await tick(10);
+    begin();
+    await play(7);
     expect(document.querySelector(".rp-ticket")).toHaveTextContent("LEVEL 7 OF 7 · BOSS");
     // The Robot can't show anything: its program is gone.
     expect(screen.queryByRole("button", { name: /SHOW ME/ })).toBeNull();
     expect(screen.getByText(/program got wiped/)).toBeInTheDocument();
     click(/TAKE THE JOB/);
     expect(document.querySelector(".rp-steps")?.textContent).toBe("DoorScrewsOpenBlowWiresFuseTapeGearChipCloseLockPower");
-    const skip = () => fireEvent.click(bar.getByRole("button", { name: "Skip this step" }));
-    for (let i = 0; i < 14 && !/Reprogram/.test(title()); i++) {
-      if (/Free the stuck gear/.test(title())) expect(document.querySelector(".rp-mission p")).toHaveTextContent(/Use the hammer/);
-      skip(); await tick(800);
-    }
-    skip();
+    await stepTo(/Free the stuck gear/);
+    expect(document.querySelector(".rp-mission p")).toHaveTextContent(/Use the hammer/);
+    await stepTo(/Reprogram/);
+    click(/OPEN THE CHIP/);
     const chip = within(screen.getByRole("region", { name: "Logic chip" }));
     expect(chip.getByText(/Only line 1 is left/)).toBeInTheDocument();
     expect([...document.querySelectorAll(".rp-chipbench .sy-row")].map((r) => r.textContent)).toEqual(["1int battery = ?;"]);
@@ -411,7 +429,7 @@ describe("Repair Shop", () => {
     await tick(1200);
     expect(chip.getByRole("status")).toHaveTextContent("All 5 tests pass!");
     await tick(2000);
-    const paid = await closeUp(6, async () => { skip(); await tick(10); });
+    const paid = await closeUp(6);
     expect(paid.getByText("BOSS BEATEN!")).toBeInTheDocument();
     expect(paid.getByText(/Your Maker certificate is ready/)).toBeInTheDocument();
     fireEvent.click(paid.getByRole("button", { name: /OPEN YOUR CERTIFICATE/ }));
@@ -422,6 +440,8 @@ describe("Repair Shop", () => {
     localStorage.setItem(shopKey(nineD), JSON.stringify({ tutorial: true, made: { arcade: 1, vending: 1, jukebox: 1, scooter: 1, claw: 1, coffee: 1, robot: 1 } }));
     localStorage.setItem(storageKey(nineD), JSON.stringify({ version: 1, activity: "repair" }));
     mount(nineD);
+    expect(screen.getByText("All 7 levels cleared, Ada! Play any level again.")).toBeInTheDocument();
+    begin();
     click("Your levels");
     const menu = within(screen.getByRole("region", { name: "Your levels" }));
     expect(document.querySelector(".rp-machines-sum")).toHaveTextContent("7 of 7 levels cleared");
@@ -433,6 +453,7 @@ describe("Repair Shop", () => {
   it("the Maker Family certificate: the teacher previews it, unties the ribbon, and sees the student's Maker name", async () => {
     localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
     mount("leleomaker", true);
+    begin();
     click("Your levels");
     click(/Preview the certificate/);
     const cert = within(screen.getByRole("dialog", { name: "Your Maker certificate" }));
