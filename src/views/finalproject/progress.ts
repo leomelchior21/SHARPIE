@@ -1,3 +1,4 @@
+import { freshShop, loadShop, repairSummary } from "./repair/logic";
 import { questions } from "./content";
 import { adoptLegacyBackroom } from "./backroomStore";
 import { blasterCount, levelCount, levels, mysteryCount, mysteryEnd } from "./switchyard/levels";
@@ -103,8 +104,9 @@ export function saveProgress(student:string,p:Progress):boolean {
   try {localStorage.setItem(storageKey(student),JSON.stringify(p));return true;} catch{return false;}
 }
 export const xp = (p:Progress) => Object.values(p.awards).reduce((a,b)=>a+b,0);
-// What the teacher dashboard sees: quiz answers, Switchyard levels and stars, and the audit fields.
-export const syncSummary = (p:Progress): FinalProjectSyncState => ({
+// What the teacher dashboard sees: quiz answers, Switchyard levels and stars, the Repair Shop levels, and the audit fields.
+// login: whose Repair Shop save to read (it lives on the device, apart from this save).
+export const syncSummary = (p:Progress, login?:string): FinalProjectSyncState => ({
   xp:xp(p),
   quizAnswered:questions.filter(q=>p.answers[q.id]!==undefined).length,
   quizRight:questions.filter(q=>p.answers[q.id]===q.answer).length,
@@ -113,7 +115,7 @@ export const syncSummary = (p:Progress): FinalProjectSyncState => ({
   levels:p.yardShipped.filter(i=>i<levelCount).map(i=>i+1), stars:p.yardStars.slice(0,levelCount).reduce((a,b)=>a+b,0),
   mystery:p.yardShipped.filter(i=>i>=levelCount&&i<mysteryEnd).length,
   blaster:p.yardShipped.filter(i=>i>=mysteryEnd).length,
-  policies:p.repaired.length, reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
+  policies:p.repaired.length, ...repairSummary(login?loadShop(login):freshShop()), reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
 });
 /** Every quiz question answered, right or wrong: the Switchyard game opens. */
 export const quizDone = (p:Progress) => questions.every(q=>p.answers[q.id]!==undefined);

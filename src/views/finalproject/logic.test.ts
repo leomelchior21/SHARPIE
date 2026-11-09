@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { missions, questions } from "./content";
 import { compare, conditionResult } from "./logic";
 import { substitute, traceProgram } from "./labStories";
-import { parseFinalProjectSync } from "../../lib/finalProjectSync";
+import { parseFinalProjectSync, repairNames } from "../../lib/finalProjectSync";
 import { applyGrant, award, canOpen, freshProgress, loadProgress, megaCat, quizDone, sanitizeProgress, saveProgress, stageTwoDone, storageKey, superMaker, syncSummary, xp } from "./progress";
 import { blasterCount, levelCount, levels, mysteryCount } from "./switchyard/levels";
 const allAnswered=Object.fromEntries(questions.map(q=>[q.id,q.answer]));
@@ -87,6 +87,13 @@ describe("Final project profile persistence and milestones",()=>{
     expect(parseFinalProjectSync({built:[1,2,3],flows:3})).toMatchObject({levels:[],stars:0});
     expect(summary).not.toHaveProperty("tapes");
     expect(parseFinalProjectSync(null)).toBeNull();
+    // The Repair Shop lives in its own save on the device: its levels cleared and repairs travel with the summary.
+    expect(summary).toMatchObject({repairLevels:[],repairFixed:0});
+    localStorage.setItem("sharpie.repair.v1.ana",JSON.stringify({fixed:4,made:{arcade:2,vending:1,jukebox:1}}));
+    expect(syncSummary(p,"ana")).toMatchObject({repairLevels:[1,2,3],repairFixed:4});
+    expect(parseFinalProjectSync({repairLevels:[9,2,2,"x"],repairFixed:-3})).toMatchObject({repairLevels:[2,7],repairFixed:0});
+    localStorage.removeItem("sharpie.repair.v1.ana");
+    expect(repairNames([1,7])).toBe("1 Arcade, 7 Robot");
   });
   it("never awards duplicate XP on replays",()=>{
     const p=award(award(freshProgress(),"quiz:q1",10),"quiz:q1",10);expect(xp(p)).toBe(10);

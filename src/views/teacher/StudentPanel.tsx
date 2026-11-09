@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
-import { FINAL_BLASTER, FINAL_LEVELS, FINAL_MYSTERY, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
+import { FINAL_BLASTER, FINAL_LEVELS, FINAL_MYSTERY, FINAL_QUESTIONS, FINAL_REPAIR, repairNames } from "../../lib/finalProjectSync";
+import { repairClasses } from "../finalproject/progress";
 import { BOSS_TOTAL, RUSH_ROUNDS, formatWhen, isActiveNow, percent, relativeTime } from "./progress";
 import type { ModuleKey, StudentProgress } from "./progress";
 import { ModuleBar, ProgressRing, stateOf } from "./visuals";
@@ -94,12 +95,14 @@ export function StudentPanel({ progress, now, onClose }: StudentPanelProps) {
             <>
               <Step label="01 · QUIZ" share={final.parts[0]} value={`${record.quizRight} right · ${record.quizAnswered} / ${FINAL_QUESTIONS} answered`} />
               <Step label="02 · SWITCHYARD" share={final.parts[1]} value={`${record.levels.length} / ${FINAL_LEVELS} levels · ${record.stars}★`} />
+              {(repairClasses.includes(student.classCode) || record.repairFixed > 0) && <Step label="03 · REPAIR SHOP" share={record.repairLevels.length / FINAL_REPAIR} value={`${record.repairLevels.length} / ${FINAL_REPAIR} levels · ${record.repairFixed} ${record.repairFixed === 1 ? "repair" : "repairs"}`} />}
               {record.quizMissed.length > 0 && (
                 <p className="tdb-note">
                   Quiz to review: <b>{record.quizMissed.map((n) => `Q${n}`).join(" · ")}</b>
                 </p>
               )}
               {record.levels.length > 0 && record.levels.length < FINAL_LEVELS && <p className="tdb-note">Switchyard levels shipped: {record.levels.join(", ")}</p>}
+              {record.repairLevels.length > 0 && <p className="tdb-note">{record.repairLevels.length === FINAL_REPAIR ? <b>🏅 Maker certificate: all {FINAL_REPAIR} Repair Shop levels cleared, Robot boss beaten</b> : <>Repair Shop levels cleared: <b>{repairNames(record.repairLevels)}</b></>}</p>}
               {record.mystery > 0 && <p className="tdb-note">{record.mystery === FINAL_MYSTERY ? <b>★ Super Maker Master: all {FINAL_MYSTERY} Mystery line levels shipped</b> : <>Mystery line (bonus): <b>{record.mystery} / {FINAL_MYSTERY}</b></>}</p>}
               {record.blaster > 0 && <p className="tdb-note">{record.blaster === FINAL_BLASTER ? <b>🐱 MEGA CAT BRIAN badge: all {FINAL_BLASTER} Super Mega Blaster Plus Advanced levels shipped</b> : <>Super Mega Blaster Plus Advanced (bonus): <b>{record.blaster} / {FINAL_BLASTER}</b></>}</p>}
               {record.reflection.trim() && (

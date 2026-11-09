@@ -439,3 +439,37 @@
 .rp-folder-items .rp-tool b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ok); color: #fff; font: 800 12px var(--mono); }
 /* The start screen covers the shop: the shutter's sign waits behind it. */
 .rp:has(.rp-title) .rp-sign { opacity: 0; }
+
+/* ---------- Round 8: every screen size ---------- */
+/* Long repairs (11 or 12 steps) get a slimmer ruler: smaller dots, no labels, so it never reaches the mission card. */
+.rp-ruler.is-long { gap: 3px; padding: 6px 4px; }
+.rp-ruler.is-long li { width: 40px; }
+.rp-ruler.is-long li > span { width: 24px; height: 24px; }
+.fp-shell .rp .rp-ruler.is-long small { display: none; }
+/* Short landscape screens (phones on their side): the steps go back into the mission card. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .rp-ruler { display: none; }
+  .rp-mission .rp-steps { display: flex; }
+  .rp .rp-mission { padding: 9px 12px; }
+  .fp-shell .rp .rp-mission h2 { font-size: 17px; }
+  .fp-shell .rp .rp-mission p { font-size: 12.5px; }
+}
+/* The start screen shrinks to fit a short screen. */
+@media (max-height: 600px) {
+  .rp-title { gap: 10px; padding: 10px; }
+  .rp-logo-gear { width: 70px; height: 70px; margin-bottom: -16px; border-width: 3px; }
+  .rp-logo-gear > svg:first-child { width: 46px; height: 46px; }
+  .rp-logo-gear .rp-logo-wrench { width: 28px; height: 28px; }
+  .rp-logo-words b { font-size: min(12vw, 16vh); -webkit-text-stroke-width: 3px; text-shadow: 5px 5px 0 #ff5fa2; }
+  .rp-logo-words b + b { text-shadow: 5px 5px 0 var(--gold, #ffd23f); }
+  .rp-logo-tag { margin-top: 8px; padding: 4px 12px; }
+  .fp-shell .rp button.rp-start { min-height: 50px; padding: 8px 30px; font-size: 22px; }
+}
+/* Narrow phones: the header ticket keeps only the level, and the chip's sticker sits above its rule. */
+@media (max-width: 640px) {
+  .fp-header-slot .rp-ticket { padding: 4px 9px; gap: 6px; }
+  .fp-header-slot .rp-ticket b { display: none; }
+  .fp-shell .fp-header-slot .rp-ticket small { font-size: 10px; }
+  .rp-chip-top { flex-direction: column; align-items: stretch; }
+  .rp-chip-top .rp-sticker { align-self: flex-start; }
+}

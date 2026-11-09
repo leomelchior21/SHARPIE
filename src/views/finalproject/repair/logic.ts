@@ -718,6 +718,9 @@ export function payout(slips: Slips, job: Job) {
   return { base, tips, tip, total: base + tip };
 }
 
+/** What the teacher dashboard gets from the Repair Shop: the levels cleared (from 1) and the repairs paid. */
+export const repairSummary = (shop: Shop) => ({ repairLevels: allMachines.flatMap((m, i) => cleared(shop, m) ? [i + 1] : []), repairFixed: shop.fixed });
+
 /** A paid ticket: the coins, one more repair, and the machine counted (its level is cleared). */
 export function afterTicket(shop: Shop, earned: number, machine: MachineId): Shop {
   return { ...shop, coins: shop.coins + earned, fixed: shop.fixed + 1, made: { ...shop.made, [machine]: (shop.made[machine] ?? 0) + 1 } };

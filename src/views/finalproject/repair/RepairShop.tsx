@@ -6,12 +6,13 @@ import { LabCode } from "../LabParts";
 import { Cs } from "../switchyard/Cs";
 import {
   HAMMER, TAPE_WRAPS, afterTicket, allMachines, bench, brokenRun, buy, catalog, categories, chipCode, cleared, clueText, equip, freshShop, itemById, jokeText, levelOf, levelOpen, loadShop, lookOf,
-  machineInfo, makeJob, nextMachine, owns, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, rightRun, roadmap, runWith, saveShop, slotName, toolFor, toolInfo, unlockedBy,
+  machineInfo, makeJob, nextMachine, owns, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, repairSummary, rightRun, roadmap, runWith, saveShop, slotName, toolFor, toolInfo, unlockedBy,
   type BenchRow, type Category, type Job, type MachineId, type Run, type ScrewHead, type Shop, type Slips, type ToolKind,
 } from "./logic";
 import { Workshop, headColors, webglAvailable, type Points, type TourSpot, type View, type Work } from "./workshop";
 import { sfx } from "./sound";
 import { Certificate } from "./Certificate";
+import { mergeRepair, restoreRepair } from "./remote";
 import "./repair.css";
 
 /** tour and ready: the tutorial before the first customer (the tour of the shop, and the end of the practice box). */
@@ -56,9 +57,17 @@ function powerSteps(job: Job): { value: number; note: string }[] {
 }
 
 /** headerSlot: the middle of the Final Project header, where the ticket goes so the screen keeps its room. */
-export function RepairShop({ name, studentKey, progress: _progress, teacher, preview, headerSlot = null }: { name: string; studentKey: string; progress: Progress; teacher: boolean; preview: boolean; headerSlot?: HTMLElement | null }) {
+/** onShopChange: the save changed (a level paid, a coin spent), so the teacher dashboard summary can go again. */
+export function RepairShop({ name, studentKey, progress: _progress, teacher, preview, headerSlot = null, onShopChange }: { name: string; studentKey: string; progress: Progress; teacher: boolean; preview: boolean; headerSlot?: HTMLElement | null; onShopChange?: () => void }) {
   const [shop, setShopState] = useState<Shop>(() => preview ? freshShop() : loadShop(studentKey));
-  const setShop = useCallback((next: Shop) => { setShopState(next); if (!preview) saveShop(studentKey, next); }, [preview, studentKey]);
+  const setShop = useCallback((next: Shop) => { setShopState(next); if (!preview) { saveShop(studentKey, next); onShopChange?.(); } }, [preview, studentKey, onShopChange]);
+  // Levels cleared on another tablet (from the dashboard copy) join this one's.
+  useEffect(() => {
+    if (teacher || preview) return;
+    let live = true;
+    void restoreRepair(studentKey).then((back) => { if (live && back) setShopState((now) => mergeRepair(now, repairSummary(back).repairLevels, back.fixed)); });
+    return () => { live = false; };
+  }, [teacher, preview, studentKey]);
   const ticketFor = (machine?: MachineId, from = shop): Ticket => {
     const seed = seedNow();
     return { seed, machine: machine ?? nextMachine(from, seed) };
@@ -99,7 +108,8 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
   const [toast, setToast] = useState<{ text: string; tone: "good" | "bad" } | null>(null);
   const [open, setOpen] = useState<"chip" | "shop" | "menu" | "cert" | null>(null);
   const [paid, setPaid] = useState<ReturnType<typeof payout> | null>(null);
-  const [gl] = useState(webglAvailable);
+  // No WebGL2, or the 3D scene fails to start: the shop runs with big buttons instead.
+  const [gl, setGl] = useState(webglAvailable);
   const [pts, setPts] = useState<Points | null>(null);
   // The coins on the counter: they count up while the pay flies in.
   const [shownCoins, setShownCoins] = useState(shop.coins);
@@ -142,7 +152,7 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
   useEffect(() => {
     if (!gl || !host.current) return;
     let w: Workshop;
-    try { w = new Workshop(host.current); } catch { return; }
+    try { w = new Workshop(host.current); } catch { setGl(false); return; }
     scene.current = w;
     w.bubble = bubble.current;
     w.tag = tag.current;
@@ -439,7 +449,7 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     </div>
 
     {/* Landscape: the steps run down a thin ruler on the left, clear of the machine. Portrait keeps them in the card. */}
-    {showSteps && <ol className="rp-ruler" aria-label="Repair steps">{order.map((s) => { const Icon = stepIcons[s]; const st = stepState(s, phase, order); return <li key={s} className={st}><span>{st === "is-done" ? <Check size={15} strokeWidth={3} /> : <Icon size={15} strokeWidth={2.4} />}</span><small>{stepLabel[s]}</small></li>; })}</ol>}
+    {showSteps && <ol className={`rp-ruler ${order.length > 10 ? "is-long" : ""}`} aria-label="Repair steps">{order.map((s) => { const Icon = stepIcons[s]; const st = stepState(s, phase, order); return <li key={s} className={st}><span>{st === "is-done" ? <Check size={15} strokeWidth={3} /> : <Icon size={15} strokeWidth={2.4} />}</span><small>{stepLabel[s]}</small></li>; })}</ol>}
 
     {showSteps && <section className="rp-mission" aria-live="polite">
       <ol className="rp-steps" aria-label="Repair steps">{order.map((s) => <li key={s} className={stepState(s, phase, order)}>{stepLabel[s]}</li>)}</ol>

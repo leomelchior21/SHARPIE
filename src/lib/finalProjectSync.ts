@@ -5,6 +5,8 @@ import { canSyncProgress, saveProgress } from "./progressStore";
 // without a dedicated table. Backrooms Run is not part of it: the game keeps its
 // progress on the device only. Live Flow and the Code Builder were retired for the
 // Switchyard, so `flows` and `built` from older summaries are ignored.
+// The Repair Shop keeps its full save on the device too; only the levels cleared and
+// the number of repairs travel, so the teacher can see how far each student got.
 export type FinalProjectSyncState = {
   xp: number;
   quizAnswered: number;
@@ -18,6 +20,9 @@ export type FinalProjectSyncState = {
   /** Super Mega Blaster Plus Advanced levels shipped (0 to 3); all three earns the MEGA CAT BRIAN badge. */
   blaster: number;
   policies: number;
+  /** Repair Shop levels cleared, numbered from 1 (1 Arcade … 7 Robot), and repairs paid in all. */
+  repairLevels: number[];
+  repairFixed: number;
   reportDone: boolean;
   reflection: string;
   updatedAt: string | null;
@@ -29,6 +34,11 @@ export const FINAL_STARS = FINAL_LEVELS * 3;
 export const FINAL_POLICIES = 4;
 export const FINAL_MYSTERY = 3;
 export const FINAL_BLASTER = 3;
+/** The Repair Shop's seven levels, in order. The Robot is the boss; clearing it earns the Maker certificate. */
+export const REPAIR_LEVELS = ["Arcade", "Vending machine", "Jukebox", "Electric scooter", "Claw machine", "Coffee machine", "Robot"];
+export const FINAL_REPAIR = REPAIR_LEVELS.length;
+/** "1 Arcade, 2 Vending machine…": the levels a student cleared, by name. */
+export const repairNames = (levels: number[]) => levels.map((n) => `${n} ${REPAIR_LEVELS[n - 1] ?? ""}`.trim()).join(", ");
 
 function count(value: unknown, max: number): number {
   const numeric = Number(value);
@@ -52,6 +62,8 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
     mystery: count(raw.mystery, FINAL_MYSTERY),
     blaster: count(raw.blaster, FINAL_BLASTER),
     policies: count(raw.policies, FINAL_POLICIES),
+    repairLevels: numbers(raw.repairLevels, FINAL_REPAIR),
+    repairFixed: count(raw.repairFixed, 99_999),
     reportDone: raw.reportDone === true,
     reflection: typeof raw.reflection === "string" ? raw.reflection.slice(0, 600) : "",
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,

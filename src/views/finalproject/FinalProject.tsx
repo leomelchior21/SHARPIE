@@ -14,6 +14,7 @@ import { SwitchyardHome } from "./switchyard/SwitchyardHome";
 import { ShadowFeed } from "./ShadowFeed";
 import { AuditReport } from "./AuditReport";
 import { RepairShop } from "./repair/RepairShop";
+import { restoreRepair } from "./repair/remote";
 import { allMachines, cleared, loadShop } from "./repair/logic";
 import { findStudent, type ClassCode } from "../../data/roster";
 import "./finalproject.css";
@@ -36,10 +37,13 @@ export function FinalProject({name,studentKey,isTeacher,onBack,classCode=findStu
   const active=preview?previewProgress:p;
   const update=useCallback((change:(p:Progress)=>Progress)=>{
     if(preview){setPreviewProgress(change);return;}
-    setP(previous=>{const next=change(previous);const saved=saveProgress(studentKey,next);setWarning(saved?"":"This browser cannot save progress right now. Keep this tab open; you can still export your report.");if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(next));return next;});
+    setP(previous=>{const next=change(previous);const saved=saveProgress(studentKey,next);setWarning(saved?"":"This browser cannot save progress right now. Keep this tab open; you can still export your report.");if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(next,studentKey));return next;});
   },[preview,studentKey,isTeacher]);
   // Saves from before the dashboard sync reach the teacher on the next visit.
-  useEffect(()=>{if(!isTeacher)queueFinalProjectSync(studentKey,()=>syncSummary(loaded.progress));},[isTeacher,studentKey,loaded]);
+  // Repair Shop levels cleared on another tablet come back first, so the dashboard copy never goes down.
+  useEffect(()=>{if(isTeacher)return;void restoreRepair(studentKey).finally(()=>queueFinalProjectSync(studentKey,()=>syncSummary(loadProgress(studentKey).progress,studentKey)));},[isTeacher,studentKey]);
+  // A Repair Shop level paid (or a coin spent): the dashboard summary goes again, read fresh from this device's saves.
+  const repairChanged=useCallback(()=>{if(!isTeacher&&!preview)queueFinalProjectSync(studentKey,()=>syncSummary(loadProgress(studentKey).progress,studentKey));},[isTeacher,preview,studentKey]);
   // Teachers always have the quiz and every Switchyard level open, preview or not.
   const allOpen=preview||isTeacher;
   // A save left inside a stage this student cannot open (e.g. the Repair Shop in 9A) falls back to the stage list.
@@ -91,7 +95,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack,classCode=findStu
     {activity==="quiz-intro"&&<QuizIntro progress={active} onStart={()=>go("quiz")} onPick={allOpen?index=>update(p=>({...p,quizIndex:index,activity:"quiz"})):undefined}/>}
     {activity==="yard"&&<Switchyard progress={active} update={update} allOpen={allOpen} headerSlot={headerSlot} onHub={()=>go("lab")}/>}
     {activity==="quiz"&&<Quiz progress={active} update={update} allOpen={allOpen} onYard={()=>go("yard")}/>}
-    {activity==="repair"&&<RepairShop name={name} studentKey={studentKey} progress={active} teacher={allOpen} preview={preview} headerSlot={headerSlot}/>}
+    {activity==="repair"&&<RepairShop name={name} studentKey={studentKey} progress={active} teacher={allOpen} preview={preview} headerSlot={headerSlot} onShopChange={repairChanged}/>}
     {activity==="shadow"&&<ShadowFeed progress={active} update={update}/>}
     {activity==="report"&&<AuditReport name={name} progress={active} update={update}/>}
     </div></section>;

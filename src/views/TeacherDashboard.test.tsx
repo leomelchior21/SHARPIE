@@ -154,7 +154,7 @@ describe("Teacher dashboard", () => {
         attempts: {},
         finalProject: {
           xp: 640, quizAnswered: 20, quizRight: 17, quizMissed: [4, 13, 16],
-          levels: [1, 2, 3, 4], stars: 10, mystery: 2, blaster: 0, policies: 2, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
+          levels: [1, 2, 3, 4], stars: 10, mystery: 2, blaster: 0, policies: 2, repairLevels: [], repairFixed: 0, reportDone: false, reflection: "A rule can be followed and still be unfair.", updatedAt: "2026-10-24T10:00:00Z",
         },
       },
     ]);
@@ -172,6 +172,27 @@ describe("Teacher dashboard", () => {
     expect(screen.queryByText(/SHADOW FEED|LIVE FLOW/)).not.toBeInTheDocument();
     expect(screen.getByText("Q4 · Q13 · Q16")).toBeInTheDocument();
     expect(screen.getByText("A rule can be followed and still be unfair.")).toBeInTheDocument();
+    // 9A has no Repair Shop: no row for it.
+    expect(screen.queryByText("03 · REPAIR SHOP")).not.toBeInTheDocument();
+  });
+
+  it("records the Repair Shop levels each student cleared", async () => {
+    vi.mocked(fetchClassProgress).mockResolvedValueOnce([
+      {
+        student: { login: "grace", name: "Grace Hopper", classCode: "9B", group: "Branco" },
+        completedBosses: [], xp: 0, updatedAt: "2026-11-08T10:00:00Z", codes: {}, attempts: {},
+        finalProject: {
+          xp: 0, quizAnswered: 20, quizRight: 15, quizMissed: [], levels: [], stars: 0, mystery: 0, blaster: 0, policies: 0,
+          repairLevels: [1, 2, 3], repairFixed: 5, reportDone: false, reflection: "", updatedAt: "2026-11-08T10:00:00Z",
+        },
+      },
+    ]);
+    render(<TeacherDashboard onOpenModules={() => undefined} onSignOut={() => undefined} />);
+    await waitFor(() => expect(screen.getByText("Grace Hopper")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Grace Hopper"));
+    expect(screen.getByText("03 · REPAIR SHOP")).toBeInTheDocument();
+    expect(screen.getByText("3 / 7 levels · 5 repairs")).toBeInTheDocument();
+    expect(screen.getByText("1 Arcade, 2 Vending machine, 3 Jukebox")).toBeInTheDocument();
   });
 
   it("filters by class from the class cards", async () => {

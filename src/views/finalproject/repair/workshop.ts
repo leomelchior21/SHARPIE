@@ -1600,7 +1600,8 @@ export class Workshop {
 export function webglAvailable(): boolean {
   try {
     const canvas = document.createElement("canvas");
-    return !!(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+    // three.js draws with WebGL2 only: an old WebGL1-only tablet gets the button version.
+    return !!canvas.getContext("webgl2");
   } catch { return false; }
 }
 

@@ -5,7 +5,7 @@ import { TARGET_PUZZLES, WARMUP_TOTAL } from "../../data/basicOperations";
 import { finalBosses } from "../../data/finalBosses";
 import { CLASS_CODES } from "../../data/roster";
 import type { ClassCode } from "../../data/roster";
-import { FINAL_LEVELS, FINAL_QUESTIONS } from "../../lib/finalProjectSync";
+import { FINAL_LEVELS, FINAL_QUESTIONS, FINAL_REPAIR, repairNames } from "../../lib/finalProjectSync";
 import { BOSS_TOTAL, MODULES, RUSH_ROUNDS, formatWhen, summarizeClass } from "./progress";
 import type { ClassSummary, ModuleKey, StudentProgress } from "./progress";
 
@@ -462,6 +462,7 @@ function studentPage(doc: jsPDF, item: StudentProgress) {
   const notes: string[] = [];
   if (record?.quizMissed.length) notes.push(`Quiz to review: ${record.quizMissed.map((n) => `Q${n}`).join(", ")}`);
   if (record && record.levels.length > 0 && record.levels.length < FINAL_LEVELS) notes.push(`Switchyard levels shipped: ${record.levels.join(", ")}`);
+  if (record && (record.repairLevels.length > 0 || record.repairFixed > 0)) notes.push(`Repair Shop: ${record.repairLevels.length}/${FINAL_REPAIR} levels cleared${record.repairLevels.length ? ` (${repairNames(record.repairLevels)})` : ""} · ${record.repairFixed} repairs${record.repairLevels.length === FINAL_REPAIR ? " · Maker certificate earned" : ""}`);
   const inProgress = finalBosses.filter((boss) => !bosses.passed.includes(boss.id) && (bosses.attempts[String(boss.id)] ?? 0) > 0);
   if (inProgress.length) notes.push(`Bosses tried but not passed: ${inProgress.map((boss) => `${boss.id} ${boss.title}`).join(", ")}`);
   if (notes.length) {
