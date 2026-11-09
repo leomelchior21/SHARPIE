@@ -6,7 +6,7 @@ import { LabCode } from "../LabParts";
 import { Cs } from "../switchyard/Cs";
 import {
   HAMMER, TAPE_WRAPS, afterTicket, allMachines, bench, brokenRun, buy, catalog, categories, chipCode, cleared, clueText, equip, freshShop, itemById, jokeText, levelOf, levelOpen, loadShop, lookOf,
-  machineInfo, makeJob, nextMachine, owns, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, repairSummary, rightRun, roadmap, runWith, saveShop, slotName, toolFor, toolInfo, unlockedBy,
+  machineInfo, makeJob, nextMachine, owns, parseCondition, parseProgram, parseWriteLine, payout, tidyTyped, practiceJob, repairSummary, rightRun, roadmap, runWith, saveShop, slotName, toolFor, toolInfo, unlockedBy,
   type BenchRow, type Category, type Job, type MachineId, type Run, type ScrewHead, type Shop, type Slips, type ToolKind,
 } from "./logic";
 import { Workshop, headColors, webglAvailable, type Points, type TourSpot, type View, type Work } from "./workshop";
@@ -745,6 +745,27 @@ const loose = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
 const codeKeys = ["{", "}", "(", ")", "\"", ";", "<", ">", "=", "⇥"];
 
 /**
+ * A typed line of code: a see-through input over a coloured copy of the same text.
+ * Both use one font at one weight, and the copy scrolls with the input, so the caret stays on its letter.
+ */
+function TypedLine({ value, onChange, onEnter, label, placeholder, autoFocus, line }: { value: string; onChange: (text: string) => void; onEnter: () => void; label: string; placeholder: string; autoFocus?: boolean; line?: boolean }) {
+  const copy = useRef<HTMLElement>(null);
+  const follow = (el: HTMLInputElement) => requestAnimationFrame(() => { if (copy.current) copy.current.scrollLeft = el.scrollLeft; });
+  return <span className={`rp-typed ${line ? "is-line" : ""}`}>
+    <code ref={copy} className="rp-typed-hl" aria-hidden="true"><Cs code={`${value} `} /></code>
+    <input value={value} autoFocus={autoFocus} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label={label} placeholder={placeholder}
+      onChange={(e) => {
+        const el = e.target, tidy = tidyTyped(value, el.value, el.selectionStart ?? el.value.length);
+        onChange(tidy.text);
+        if (tidy.text !== el.value) requestAnimationFrame(() => el.setSelectionRange(tidy.caret, tidy.caret));
+        follow(el);
+      }} onScroll={(e) => follow(e.currentTarget)} onSelect={(e) => follow(e.currentTarget)}
+      onKeyDown={(e) => { if (e.key === "Enter") onEnter(); }} />
+  </span>;
+}
+
+
+/**
  * One chip, five ways to fix it, a step harder each level:
  * pick the sign (after predicting), build the condition from pieces, type it, type it and write the else line,
  * and in the final round write the whole if / else after line 1.
@@ -868,8 +889,7 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
         : <span className="sy-slot is-target rp-piece-empty">tap the pieces below</span>}
       <code className="sy-code-text"><Cs code=")" /></code></>
     : <><code className="sy-code-text"><Cs code="if (" /></code>
-      <span className="rp-typed"><code className="rp-typed-hl" aria-hidden="true"><Cs code={typed || " "} /></code>
-        <input value={typed} autoFocus spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Condition" placeholder="type the condition" onChange={(e) => { setTyped(e.target.value); setRows(null); }} onKeyDown={(e) => { if (e.key === "Enter" && ready) runBench(); }} /></span>
+      <TypedLine value={typed} autoFocus label="Condition" placeholder="type the condition" onChange={(t) => { setTyped(t); setRows(null); }} onEnter={() => { if (ready) runBench(); }} />
       <code className="sy-code-text"><Cs code=")" /></code></>;
   const code = chipCode(job);
   const elseRows = chip.mode === "else" ? ["else", "{", "@else", "}"] : [];
@@ -877,14 +897,26 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
     ? <div className="sy rp-sy"><div className="sy-editor">
         <div className="sy-row"><span className="sy-ln">1</span><code className="sy-code-text"><Cs code={code[0]} /></code></div>
       </div>
-        <textarea ref={area} className="rp-write" value={written} rows={9} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Your program" placeholder="Line 2 onwards: write the if / else here…" onChange={(e) => { setWritten(e.target.value); setRows(null); }} />
+        <textarea ref={area} className="rp-write" value={written} rows={9} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Your program" placeholder="Line 2 onwards: write the if / else here…" onChange={(e) => {
+            const el = e.target, tidy = tidyTyped(written, el.value, el.selectionStart ?? el.value.length);
+            setWritten(tidy.text); setRows(null);
+            if (tidy.text !== el.value) requestAnimationFrame(() => el.setSelectionRange(tidy.caret, tidy.caret));
+          }}
+          onKeyDown={(e) => {
+            // Tab indents instead of leaving the box; a new line starts at the same indent as the one above.
+            if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); insert("⇥"); }
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              const el = e.currentTarget, before = written.slice(0, el.selectionStart);
+              const indent = /[^\n]*$/.exec(before)![0].match(/^[ \t]*/)![0];
+              if (indent) { e.preventDefault(); insert(`\n${indent}`); }
+            }
+          }} />
         <div className="rp-keys" aria-label="Code symbols">{codeKeys.map((k) => <button key={k} type="button" aria-label={k === "⇥" ? "Indent" : `Type ${k}`} onClick={() => insert(k)}><code>{k}</code></button>)}</div>
       </div>
     : <div className="sy rp-sy"><div className="sy-editor">{[...code, ...elseRows].map((line, i) => {
       const indent = line.startsWith("    ") || line === "@else";
       const content = i === 1 ? line2
-        : line === "@else" ? <span className="rp-typed is-line"><code className="rp-typed-hl" aria-hidden="true"><Cs code={elseLine || " "} /></code>
-            <input value={elseLine} spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="Else line" placeholder="write the missing line" onChange={(e) => { setElseLine(e.target.value); setRows(null); }} onKeyDown={(e) => { if (e.key === "Enter" && ready) runBench(); }} /></span>
+        : line === "@else" ? <TypedLine line value={elseLine} label="Else line" placeholder="write the missing line" onChange={(t) => { setElseLine(t); setRows(null); }} onEnter={() => { if (ready) runBench(); }} />
         : <code className={`sy-code-text ${/^[{}]$/.test(line.trim()) ? "is-brace" : ""}`}><Cs code={line.trim()} /></code>;
       return <div key={i} className={`sy-row ${i === 1 || line === "@else" ? "is-now" : ""}`}><span className="sy-ln">{i + 1}</span>{indent ? <div className="sy-indent">{content}</div> : content}</div>;
     })}</div>

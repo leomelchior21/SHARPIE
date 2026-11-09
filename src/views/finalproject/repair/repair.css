@@ -230,8 +230,11 @@
 .fp-shell .rp .rp-sy .sy-bank button { flex: 0 0 auto; min-width: 56px; min-height: 48px; justify-content: center; font-size: 17px; }
 
 /* Typing: the input sits over a coloured copy of what you type, in the shared C# palette. */
-.rp-typed { position: relative; display: inline-grid; flex: 1; min-width: 120px; margin: 0 4px; }
-.rp-typed > * { grid-area: 1 / 1; min-height: 2em; padding: 3px 10px; border: 2px solid var(--code-line, #2c3a60); border-radius: 8px; font: inherit; white-space: pre; letter-spacing: 0; }
+.rp-typed { position: relative; display: inline-grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-width: 120px; margin: 0 4px; }
+/* The input and its coloured copy must match letter for letter, or the caret drifts off its place:
+   one monospace font at one weight, no ligatures or kerning, and the copy never grows past the box. */
+.fp-shell .rp .rp-typed > * { grid-area: 1 / 1; box-sizing: border-box; width: 100%; min-width: 0; min-height: 2em; margin: 0; padding: 3px 10px; border: 2px solid var(--code-line, #2c3a60); border-radius: 8px; font: 600 15px/1.5 var(--mono); font-variant-ligatures: none; font-kerning: none; text-indent: 0; white-space: pre; letter-spacing: 0; }
+.fp-shell .rp .rp-typed-hl * { font: inherit; letter-spacing: 0; }
 .rp-typed-hl { background: #070c1c; color: var(--code-ink, #dbe6ff); overflow: hidden; }
 .fp-shell .rp .rp-typed input { width: 100%; background: transparent; color: transparent; caret-color: var(--yellow, #ffd23f); outline: none; }
 .fp-shell .rp .rp-typed input::placeholder { color: #55648a; }

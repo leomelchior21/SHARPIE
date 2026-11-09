@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BREWING, DROP, ENJOY, INSERT, LOW, PLAYING, READY, REFILL, SOLD, SPEED_OK, START, STEER, TOO_FAST,
   afterTicket, allMachines, answerCode, bench, brokenRun, buy, catalog, categories, chipCode, cleared, equip, freshShop, hammerHit, levelOf, levelOpen, lookOf,
-  makeJob, nextMachine, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, rightRun, roadmap, runWith, sanitizeShop, testOf, toolInfo, tools, unlockedBy,
+  makeJob, nextMachine, parseCondition, parseProgram, parseWriteLine, payout, practiceJob, tidyTyped, rightRun, roadmap, runWith, sanitizeShop, testOf, toolInfo, tools, unlockedBy,
   type MachineId, type Shop, type Slips,
 } from "./logic";
 
@@ -194,6 +194,25 @@ describe("Reading a hand-written line and program", () => {
     expect(passes('if (battery >= 20) { Console.WriteLine("Ready to work!"); }')).toBe(false);
     expect(passes('if (battery > 20) { Console.WriteLine("Ready to work!"); } else { Console.WriteLine("Low battery!"); }')).toBe(false);
     expect(passes('if (battery >= 20) { Console.WriteLine("ready to work"); } else { Console.WriteLine("Low battery!"); }')).toBe(false);
+  });
+
+  it("takes any spacing before Console.WriteLine: none, spaces, a tab, or all on the brace's line", () => {
+    const ready = 'Console.WriteLine("Ready to work!");', low = 'Console.WriteLine("Low battery!");';
+    for (const pad of ["", " ", "  ", "    ", "\t", "\t  ", "\u00a0\u00a0"]) {
+      expect(passes(`if (battery >= 20)\n{\n${pad}${ready}\n}\nelse\n{\n${pad}${low}\n}`)).toBe(true);
+      expect(passes(`if (battery >= 20)\n${pad}${ready}\nelse\n${pad}${low}`)).toBe(true);
+    }
+    expect(passes(`if (battery >= 20){${ready}}else{${low}}`)).toBe(true);
+    expect(passes(`if (battery >= 20) {\n    ${ready}\n} else {\n    ${low}\n}`)).toBe(true);
+  });
+
+  it("undoes the tablet keyboard: a double space stays two spaces, curly quotes go straight", () => {
+    // The keyboard swapped the space before the caret for ". ".
+    expect(tidyTyped("{\n ", "{\n. ", 4)).toEqual({ text: "{\n  ", caret: 4 });
+    expect(tidyTyped("if (a) ", "if (a). ", 8).text).toBe("if (a)  ");
+    // A real full stop is kept.
+    expect(tidyTyped("Console", "Console.", 8).text).toBe("Console.");
+    expect(tidyTyped('Console.WriteLine(', "Console.WriteLine(“Hi”);", 24).text).toBe('Console.WriteLine("Hi");');
   });
 
   it("explains the usual mistakes in plain words", () => {

@@ -510,6 +510,20 @@ export function parseWriteLine(source: string): ParsedLine {
 }
 
 /**
+ * Tablet keyboards turn a double space into ". " and quotes into curly ones. In code both get in the way,
+ * so a ". " that just replaced a space goes back to two spaces, and curly quotes become straight ones.
+ * before: the text until now, after: the text with the new key, caret: where the cursor is in after.
+ */
+export function tidyTyped(before: string, after: string, caret: number): { text: string; caret: number } {
+  let text = after;
+  if (after.length === before.length + 1 && caret >= 2 && after.slice(caret - 2, caret) === ". " && before.slice(caret - 2, caret - 1) === " "
+    && after.slice(0, caret - 2) === before.slice(0, caret - 2) && after.slice(caret) === before.slice(caret - 1)) {
+    text = `${after.slice(0, caret - 2)}  ${after.slice(caret)}`;
+  }
+  return { text: text.replace(/[“”„″]/g, "\"").replace(/[‘’]/g, "'").replace(/ /g, " "), caret };
+}
+
+/**
  * The final round: a whole if / else written by hand, after the line `int variable = ?;`.
  * if (condition) { Console.WriteLine("…"); } else { Console.WriteLine("…"); }, braces optional, else optional.
  */
