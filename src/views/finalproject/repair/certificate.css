@@ -81,3 +81,8 @@
   .mk-open { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .mk *, .mk *::before, .mk *::after { animation: none !important; transition: none !important; } .mk-sign path { stroke-dashoffset: 0; } }
+/* The photo picker: off screen, not display:none, so every tablet opens it. */
+.mk-file { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); border: 0; opacity: 0; pointer-events: none; }
+.mk-photo.is-loading img { opacity: .35; }
+.mk-photo.is-loading span { position: absolute; inset: 0; justify-content: center; }
+.fp-shell .mk .mk-note { max-width: 560px; margin: 0; padding: 10px 16px; border: 3px solid #1d1d1f; border-radius: 12px; background: #fff3c4; box-shadow: 3px 3px 0 #1d1d1f; color: #1d1d1f; font: 700 15px/1.4 "Space Grotesk", system-ui, sans-serif; text-align: center; }

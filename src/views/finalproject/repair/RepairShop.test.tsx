@@ -467,4 +467,47 @@ describe("Repair Shop", () => {
     expect(cert.getAllByRole("button", { name: /Add your photo/ })).toHaveLength(2);
     expect(cert.getByRole("button", { name: /Download/ })).toBeInTheDocument();
   });
+
+  /** The teacher's certificate preview, untied. */
+  async function openCertificate() {
+    localStorage.setItem(storageKey("leleomaker"), JSON.stringify({ version: 1, activity: "repair" }));
+    mount("leleomaker", true);
+    begin();
+    click("Your levels");
+    click(/Preview the certificate/);
+    const cert = within(screen.getByRole("dialog", { name: "Your Maker certificate" }));
+    fireEvent.click(cert.getByRole("button", { name: "Untie the ribbon" }));
+    await tick(1600);
+    return cert;
+  }
+  const choosePhoto = (name: string, type: string) => {
+    const input = document.querySelector(".mk-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], name, { type })] } });
+  };
+
+  it("a student's photo goes on the certificate and stays on the device", async () => {
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 800, height: 600, close: vi.fn() })));
+    const ctx = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ fillRect: vi.fn(), drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    const url = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,AAAA");
+    try {
+      const cert = await openCertificate();
+      choosePhoto("me.jpg", "image/jpeg");
+      await tick(10);
+      expect(cert.getAllByRole("button", { name: /Change (your )?photo/ })).toHaveLength(2);
+      expect(localStorage.getItem("sharpie.certificate.photo.leleomaker")).toBe("data:image/jpeg;base64,AAAA");
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally { ctx.mockRestore(); url.mockRestore(); vi.unstubAllGlobals(); }
+  });
+
+  it("a photo that will not open says why, instead of failing in silence", async () => {
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 800, height: 600, close: vi.fn() })));
+    const ctx = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    try {
+      const cert = await openCertificate();
+      choosePhoto("IMG_0001.HEIC", "image/heic");
+      await tick(10);
+      expect(screen.getByRole("alert")).toHaveTextContent(/HEIC/);
+      expect(cert.getAllByRole("button", { name: /Add your photo/ })).toHaveLength(2);
+    } finally { ctx.mockRestore(); vi.unstubAllGlobals(); }
+  });
 });

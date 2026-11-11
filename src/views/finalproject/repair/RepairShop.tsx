@@ -160,6 +160,14 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     return () => { w.dispose(); scene.current = null; };
   }, [gl]);
 
+  // The certificate covers the bay: stop drawing it. On an iPad a running 3D scene can make Safari reload the page
+  // when the camera opens, and the student's photo is lost.
+  useEffect(() => {
+    const w = scene.current;
+    if (!w) return;
+    w.paused = open === "cert";
+  }, [open]);
+
   // Events from the bay.
   useEffect(() => {
     const w = scene.current;

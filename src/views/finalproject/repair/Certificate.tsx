@@ -28,28 +28,68 @@ const photoKey = (login: string) => `sharpie.certificate.photo.${encodeURICompon
 const today = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 export const makerName = (name: string) => `${(name.trim().split(/\s+/)[0] || "Student").replace(/^./, (c) => c.toUpperCase())} Maker`;
 
-/** A photo, made small enough to keep on the device. */
-function shrink(file: File): Promise<string> {
+type Picture = { source: CanvasImageSource; width: number; height: number; done: () => void };
+
+/** Opens a picture through an <img>, from an object URL or (some tablets refuse those) a data URL. */
+function viaImg(src: string, done: () => void): Promise<Picture> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      const side = 480, s = Math.min(img.width, img.height);
-      const c = document.createElement("canvas");
-      c.width = c.height = side;
-      c.getContext("2d")!.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, side, side);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/jpeg", 0.85));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("not a picture")); };
-    img.src = url;
+    img.onload = () => resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight, done });
+    img.onerror = () => { done(); reject(new Error("not a picture")); };
+    img.src = src;
   });
+}
+const asDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result));
+  r.onerror = () => reject(r.error);
+  r.readAsDataURL(file);
+});
+
+/** Opens the picked file, trying each way a browser can read a photo before giving up. */
+async function openPicture(file: File): Promise<Picture> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+      return { source: bmp, width: bmp.width, height: bmp.height, done: () => bmp.close() };
+    } catch { /* try the next way */ }
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    return await viaImg(url, () => URL.revokeObjectURL(url));
+  } catch { /* try the next way */ }
+  return viaImg(await asDataUrl(file), () => {});
+}
+
+/** A square crop of the photo, made small enough to keep on the device. */
+function square(pic: Picture, side: number, quality: number): string {
+  const s = Math.min(pic.width, pic.height);
+  const c = document.createElement("canvas");
+  c.width = c.height = side;
+  const g = c.getContext("2d");
+  if (!g || !s) throw new Error("no canvas");
+  g.fillStyle = "#efe2c2"; g.fillRect(0, 0, side, side);
+  g.drawImage(pic.source, (pic.width - s) / 2, (pic.height - s) / 2, s, s, 0, 0, side, side);
+  const data = c.toDataURL("image/jpeg", quality);
+  if (!data.startsWith("data:image/")) throw new Error("no picture");
+  return data;
+}
+
+const isHeic = (f: File) => /hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name);
+
+/** Why a photo did not go in, said so a student knows what to try next. */
+function whyNot(f: File) {
+  if (isHeic(f)) return "This photo is in iPhone HEIC format and this device can't open it. Take a new photo with the camera, or use a JPG or PNG.";
+  if (f.type && !f.type.startsWith("image/")) return "That file isn't a photo. Pick a JPG or PNG picture.";
+  return "That photo didn't open. Try another one, or take a new photo with the camera.";
 }
 
 export function Certificate({ name, login, onClose }: { name: string; login: string; onClose: () => void }) {
   const [stage, setStage] = useState<"tied" | "untying" | "open">("tied");
   const [photo, setPhoto] = useState<string | null>(() => { try { return localStorage.getItem(photoKey(login)); } catch { return null; } });
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const maker = makerName(name);
   const date = useRef(today()).current;
@@ -62,13 +102,28 @@ export function Certificate({ name, login, onClose }: { name: string; login: str
   };
   const pick = async (f: File | undefined) => {
     if (!f) return;
+    setLoading(true); setNote(null);
+    let pic: Picture | null = null;
     try {
-      const data = await shrink(f);
+      pic = await openPicture(f);
+      const data = square(pic, 480, 0.85);
       setPhoto(data);
       sfx.good();
-      try { localStorage.setItem(photoKey(login), data); } catch { /* still shows for this visit */ }
-    } catch { sfx.wrong(); }
+      // Kept on this device. If the space is full, a smaller copy is tried before giving up.
+      try { localStorage.setItem(photoKey(login), data); } catch {
+        try { localStorage.setItem(photoKey(login), square(pic, 300, 0.7)); } catch {
+          setNote("Your photo is on the certificate. Download it now: this tablet has no room to keep the photo for next time.");
+        }
+      }
+    } catch {
+      sfx.wrong();
+      setNote(whyNot(f));
+    } finally {
+      pic?.done();
+      setLoading(false);
+    }
   };
+  const choose = () => { if (!loading) file.current?.click(); };
   const download = async () => {
     setBusy(true);
     try {
@@ -78,6 +133,9 @@ export function Certificate({ name, login, onClose }: { name: string; login: str
       a.download = `Welcome-to-the-Family-${maker.replace(/\s+/g, "-")}.png`;
       document.body.appendChild(a); a.click(); a.remove();
       sfx.cash();
+    } catch {
+      sfx.wrong();
+      setNote("The download didn't work. Try again, or take a screenshot of the certificate.");
     } finally { setBusy(false); }
   };
   useEffect(() => { sfx.power(); }, []);
@@ -108,10 +166,12 @@ export function Certificate({ name, login, onClose }: { name: string; login: str
           <h1>Certificate of Maker Mastery</h1>
         </header>
         <div className="mk-body">
-          <button className={`mk-photo ${photo ? "has-photo" : ""}`} onClick={() => file.current?.click()} aria-label={photo ? "Change your photo" : "Add your photo"}>
-            {photo ? <img src={photo} alt="" /> : <span><Camera size={30} /><b>Add your photo</b></span>}
+          <button className={`mk-photo ${photo ? "has-photo" : ""} ${loading ? "is-loading" : ""}`} onClick={choose} aria-label={photo ? "Change your photo" : "Add your photo"} aria-busy={loading}>
+            {photo && <img src={photo} alt="" />}
+            {(!photo || loading) && <span><Camera size={30} /><b>{loading ? "Loading…" : "Add your photo"}</b></span>}
           </button>
-          <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+          {/* Off screen rather than display:none: some tablets won't open the photo picker for a hidden input. */}
+          <input ref={file} className="mk-file" type="file" accept="image/*" tabIndex={-1} aria-hidden="true" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void pick(f); }} />
           <div className="mk-words">
             <p className="mk-welcome">Welcome to the Family,</p>
             <p className="mk-name">{maker}!</p>
@@ -129,9 +189,10 @@ export function Certificate({ name, login, onClose }: { name: string; login: str
         </footer>
       </article>
       <div className="mk-actions">
-        <button className="mk-btn" onClick={() => file.current?.click()}><Camera size={18} /> {photo ? "Change photo" : "Add your photo"}</button>
-        <button className="mk-btn is-gold" disabled={busy} onClick={download}><Download size={18} /> {busy ? "Making it…" : "Download"}</button>
+        <button className="mk-btn" disabled={loading} onClick={choose}><Camera size={18} /> {loading ? "Loading photo…" : photo ? "Change photo" : "Add your photo"}</button>
+        <button className="mk-btn is-gold" disabled={busy || loading} onClick={download}><Download size={18} /> {busy ? "Making it…" : "Download"}</button>
       </div>
+      {note && <p className="mk-note" role="alert">{note}</p>}
     </div>}
   </div>;
 }
@@ -158,10 +219,10 @@ export async function drawCertificate({ maker, photo, date }: { maker: string; p
   // Photo in a gold ring.
   const px = 420, py = 720, pr = 210;
   g.save(); g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.closePath();
-  if (photo) {
-    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = photo; });
-    g.clip(); g.drawImage(img, px - pr, py - pr, pr * 2, pr * 2);
-  } else { g.fillStyle = "#efe2c2"; g.fill(); }
+  g.fillStyle = "#efe2c2"; g.fill();
+  // A photo that will not draw leaves the empty ring; the certificate still downloads.
+  const img = photo ? await new Promise<HTMLImageElement | null>((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = photo; }) : null;
+  if (img) { g.clip(); g.drawImage(img, px - pr, py - pr, pr * 2, pr * 2); }
   g.restore();
   g.strokeStyle = gold; g.lineWidth = 18; g.beginPath(); g.arc(px, py, pr + 9, 0, Math.PI * 2); g.stroke();
   // The words.

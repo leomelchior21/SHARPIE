@@ -224,6 +224,11 @@ export class Workshop {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
+  /** Stops drawing while something covers the whole bay (the certificate), so a tablet has memory left to open the camera. */
+  set paused(on: boolean) {
+    this.renderer.setAnimationLoop(on ? null : () => this.frame());
+  }
+
   dispose() {
     this.renderer.setAnimationLoop(null);
     this.observer.disconnect();
