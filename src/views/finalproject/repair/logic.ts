@@ -669,9 +669,14 @@ const defaults: Equipped = { bench: "bench-wood", floor: "floor-checker", light:
 export type Look = Equipped & { decor: string[] };
 
 
-/** made: tickets fixed on each machine (a level is cleared from its first fix). tutorial: the practice box is done. */
-export type Shop = { coins: number; fixed: number; owned: string[]; equipped: Equipped; made: Partial<Record<MachineId, number>>; tutorial: boolean };
-export const freshShop = (): Shop => ({ coins: 0, fixed: 0, owned: Object.values(defaults), equipped: { ...defaults }, made: {}, tutorial: false });
+/**
+ * made: tickets fixed on each machine (a level is cleared from its first fix). tutorial: the practice box is done.
+ * finalCode: the if / else last hand-written for the Robot that passed every test (the final round), for the teacher's report.
+ */
+export type Shop = { coins: number; fixed: number; owned: string[]; equipped: Equipped; made: Partial<Record<MachineId, number>>; tutorial: boolean; finalCode: string };
+export const freshShop = (): Shop => ({ coins: 0, fixed: 0, owned: Object.values(defaults), equipped: { ...defaults }, made: {}, tutorial: false, finalCode: "" });
+/** The longest final-round program kept. */
+const FINAL_CODE_MAX = 2000;
 /** Tools used to be for sale. A save that bought one gets its coins back: everyone uses the same hand tools now. */
 const retired: Record<string, number> = { drill: 40, turbo: 35 };
 export const shopKey = (login: string) => `sharpie.repair.v1.${encodeURIComponent(login.trim().toLowerCase())}`;
@@ -693,6 +698,7 @@ export function sanitizeShop(raw: unknown): Shop {
   }
   for (const m of allMachines) { const n = int(r.made?.[m], 0, 9999); if (n) s.made[m] = n; }
   s.tutorial = r.tutorial === true;
+  s.finalCode = typeof r.finalCode === "string" ? r.finalCode.replace(/\r/g, "").slice(0, FINAL_CODE_MAX) : "";
   return s;
 }
 export const lookOf = (shop: Shop): Look => ({ ...shop.equipped, decor: shop.owned.filter((id) => itemById(id)?.cat === "decor") });
@@ -732,10 +738,11 @@ export function payout(slips: Slips, job: Job) {
   return { base, tips, tip, total: base + tip };
 }
 
-/** What the teacher dashboard gets from the Repair Shop: the levels cleared (from 1) and the repairs paid. */
-export const repairSummary = (shop: Shop) => ({ repairLevels: allMachines.flatMap((m, i) => cleared(shop, m) ? [i + 1] : []), repairFixed: shop.fixed });
+/** What the teacher dashboard gets from the Repair Shop: the levels cleared (from 1), the repairs paid and the final round's code. */
+export const repairSummary = (shop: Shop) => ({ repairLevels: allMachines.flatMap((m, i) => cleared(shop, m) ? [i + 1] : []), repairFixed: shop.fixed, repairCode: shop.finalCode });
 
-/** A paid ticket: the coins, one more repair, and the machine counted (its level is cleared). */
-export function afterTicket(shop: Shop, earned: number, machine: MachineId): Shop {
-  return { ...shop, coins: shop.coins + earned, fixed: shop.fixed + 1, made: { ...shop.made, [machine]: (shop.made[machine] ?? 0) + 1 } };
+/** A paid ticket: the coins, one more repair, and the machine counted (its level is cleared). code: a hand-written final round that passed. */
+export function afterTicket(shop: Shop, earned: number, machine: MachineId, code?: string): Shop {
+  const finalCode = code?.trim() ? code.replace(/\r/g, "").trim().slice(0, FINAL_CODE_MAX) : shop.finalCode;
+  return { ...shop, coins: shop.coins + earned, fixed: shop.fixed + 1, made: { ...shop.made, [machine]: (shop.made[machine] ?? 0) + 1 }, finalCode };
 }

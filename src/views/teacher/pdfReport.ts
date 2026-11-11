@@ -6,12 +6,14 @@ import { finalBosses } from "../../data/finalBosses";
 import { CLASS_CODES } from "../../data/roster";
 import type { ClassCode } from "../../data/roster";
 import { FINAL_LEVELS, FINAL_QUESTIONS, FINAL_REPAIR, repairNames } from "../../lib/finalProjectSync";
+import { repairClasses } from "../finalproject/progress";
+import { levelCount, levels as yardLevels, mysteryEnd } from "../finalproject/switchyard/levels";
 import { BOSS_TOTAL, MODULES, RUSH_ROUNDS, formatWhen, summarizeClass } from "./progress";
 import type { ClassSummary, ModuleKey, StudentProgress } from "./progress";
 
 // Landscape A4 class report: an overview of every class, one page per class
 // with all its students, then a page per student who has started, with their
-// submitted Final Bosses code.
+// submitted Final Bosses code, their Switchyard programs and the Repair Shop final round.
 
 type RGB = [number, number, number];
 
@@ -36,6 +38,23 @@ const MODULE_RGB: Record<ModuleKey, RGB> = { mathler: [57, 117, 255], bosses: [2
 const MODULE_SOFT: Record<ModuleKey, RGB> = { mathler: [232, 239, 255], bosses: [253, 232, 236], final: [224, 246, 236] };
 
 const MAX_CODE_LINES = 60;
+/** The Repair Shop is part of the Final Project; it has its own colour so it reads apart from the Switchyard. */
+const REPAIR: RGB = [13, 128, 150];
+
+/** The Repair Shop is open to some classes only; a student outside them shows it only if they played it. */
+function inRepair(item: StudentProgress) {
+  const record = item.final.record;
+  return repairClasses.includes(item.student.classCode) || !!record?.repairFixed || !!record?.repairLevels.length;
+}
+const repairCleared = (item: StudentProgress) => item.final.record?.repairLevels.length ?? 0;
+const repairShare = (item: StudentProgress) => repairCleared(item) / FINAL_REPAIR;
+/** Repair Shop average and students who cleared all seven levels, over the students who have it. null: nobody has it. */
+function repairStats(students: StudentProgress[]) {
+  const pool = students.filter(inRepair);
+  if (!pool.length) return null;
+  return { share: pool.reduce((total, item) => total + repairShare(item), 0) / pool.length, done: pool.filter((item) => repairCleared(item) === FINAL_REPAIR).length };
+}
+const repairClassList = repairClasses.join(", ");
 
 /** The built-in PDF fonts only cover Latin-1, so anything else is swapped for a close match. */
 export function latin(text: string): string {
@@ -127,13 +146,15 @@ function overviewPage(doc: jsPDF, students: StudentProgress[], generated: string
   const all = summarizeClass("ALL", students, 0);
   const classes = CLASS_CODES.map((code) => summarizeClass(code, students.filter((item) => item.student.classCode === code), 0));
   band(doc, "Class progress report", `All classes · ${generated}`, { label: "OVERALL", value: pct(all.overall) });
+  const allRepair = repairStats(all.students);
 
   const tiles = [
     { label: "STUDENTS", value: String(all.students.length), note: `${CLASS_CODES.length} classes` },
     { label: "STARTED", value: String(all.started), note: `${pct(all.students.length ? all.started / all.students.length : 0)} of the year` },
     { label: "MATHLER · 3/3 STEPS", value: String(all.mathlerComplete), note: `class average ${pct(all.mathler)}`, color: MODULE_RGB.mathler },
     { label: "FINAL BOSSES · 15/15", value: String(all.bossesComplete), note: `class average ${pct(all.bosses)}`, color: MODULE_RGB.bosses },
-    { label: "FINAL PROJECT · 3/3", value: String(all.finalComplete), note: `class average ${pct(all.final)}`, color: MODULE_RGB.final },
+    { label: "SWITCHYARD · DONE", value: String(all.finalComplete), note: `project avg ${pct(all.final)}`, color: MODULE_RGB.final },
+    { label: "REPAIR SHOP · 7/7", value: allRepair ? String(allRepair.done) : "-", note: allRepair ? `average ${pct(allRepair.share)}` : repairClassList, color: REPAIR },
     { label: "AVERAGE OVERALL", value: pct(all.overall), note: "three modules together" },
   ];
   const gap = 4;
@@ -156,52 +177,62 @@ function overviewPage(doc: jsPDF, students: StudentProgress[], generated: string
   });
 
   sectionTitle(doc, "PROGRESS BY CLASS", 61);
-  const body: RowInput[] = [...classes, all].map((summary) => [
+  const summaries = [...classes, all];
+  const repairs = summaries.map((summary) => repairStats(summary.students));
+  const body: RowInput[] = summaries.map((summary, index) => [
     summary.code === "ALL" ? "All classes" : summary.code,
     String(summary.students.length),
     `${summary.started} (${pct(summary.students.length ? summary.started / summary.students.length : 0)})`,
     pct(summary.mathler),
     pct(summary.bosses),
     pct(summary.final),
+    repairs[index] ? pct(repairs[index]!.share) : "-",
     pct(summary.overall),
     `${summary.mathlerComplete}`,
     `${summary.bossesComplete}`,
     `${summary.finalComplete}`,
+    repairs[index] ? `${repairs[index]!.done}` : "-",
   ]);
-  const barColumns: Record<number, ModuleKey | "overall"> = { 3: "mathler", 4: "bosses", 5: "final", 6: "overall" };
-  const summaries = [...classes, all];
+  const barColumns: Record<number, ModuleKey | "repair" | "overall"> = { 3: "mathler", 4: "bosses", 5: "final", 6: "repair", 7: "overall" };
   autoTable(doc, {
     startY: 64,
     margin: { left: MARGIN, right: MARGIN },
-    head: [["Class", "Students", "Started", "Mathler", "Final Bosses", "Final Project", "Overall", "Mathler done", "Bosses 15/15", "Project done"]],
+    head: [["Class", "Students", "Started", "Mathler", "Final Bosses", "Final Project", "Repair Shop", "Overall", "Mathler 3/3", "Bosses 15/15", "Yard done", "Repair 7/7"]],
     body,
     theme: "plain",
     styles: { font: "helvetica", fontSize: 8.5, textColor: INK, cellPadding: { top: 3, bottom: 3, left: 3, right: 3 }, valign: "middle", lineColor: LINE, lineWidth: { bottom: 0.2 } },
     headStyles: { fontSize: 7, fontStyle: "bold", textColor: SOFT, fillColor: WASH },
     columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 30 },
-      1: { cellWidth: 20, halign: "center" },
-      2: { cellWidth: 26, halign: "center" },
-      3: { cellWidth: 38, halign: "right" },
-      4: { cellWidth: 38, halign: "right" },
-      5: { cellWidth: 38, halign: "right" },
-      6: { cellWidth: 38, halign: "right", fontStyle: "bold" },
+      0: { fontStyle: "bold", cellWidth: 25 },
+      1: { cellWidth: 17, halign: "center" },
+      2: { cellWidth: 23, halign: "center" },
+      3: { cellWidth: 29, halign: "right" },
+      4: { cellWidth: 29, halign: "right" },
+      5: { cellWidth: 29, halign: "right" },
+      6: { cellWidth: 29, halign: "right" },
+      7: { cellWidth: 29, halign: "right", fontStyle: "bold" },
+      8: { cellWidth: 17, halign: "center", cellPadding: { top: 3, bottom: 3, left: 1.5, right: 1.5 } },
+      9: { cellWidth: 17, halign: "center", cellPadding: { top: 3, bottom: 3, left: 1.5, right: 1.5 } },
+      10: { cellWidth: 16.5, halign: "center", cellPadding: { top: 3, bottom: 3, left: 1.5, right: 1.5 } },
+      11: { cellWidth: 16.5, halign: "center", cellPadding: { top: 3, bottom: 3, left: 1.5, right: 1.5 } },
     },
     didParseCell: (data: CellHookData) => {
       if (data.section === "body" && data.row.index === summaries.length - 1) {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fillColor = WASH;
       }
-      if (data.section === "head" && barColumns[data.column.index] && barColumns[data.column.index] !== "overall") {
-        data.cell.styles.textColor = MODULE_RGB[barColumns[data.column.index] as ModuleKey];
-      }
+      const key = barColumns[data.column.index];
+      if (data.section === "head" && key && key !== "overall") data.cell.styles.textColor = key === "repair" ? REPAIR : MODULE_RGB[key];
+      if (data.section === "head" && data.column.index === 11) data.cell.styles.textColor = REPAIR;
     },
     didDrawCell: (data: CellHookData) => {
       const key = barColumns[data.column.index];
       if (data.section !== "body" || !key) return;
       const summary = summaries[data.row.index];
-      const share = key === "overall" ? summary.overall : moduleShare(summary, key);
-      bar(doc, data.cell.x + 3, data.cell.y + data.cell.height / 2 - 1.2, data.cell.width - 17, 2.4, share, key === "overall" ? INK : MODULE_RGB[key]);
+      const repair = repairs[data.row.index];
+      if (key === "repair" && !repair) return;
+      const share = key === "overall" ? summary.overall : key === "repair" ? repair!.share : moduleShare(summary, key);
+      bar(doc, data.cell.x + 3, data.cell.y + data.cell.height / 2 - 1.2, data.cell.width - 17, 2.4, share, key === "overall" ? INK : key === "repair" ? REPAIR : MODULE_RGB[key]);
     },
   });
 
@@ -247,20 +278,20 @@ function overviewPage(doc: jsPDF, students: StudentProgress[], generated: string
     lx += doc.getTextWidth(bucket.label) + 12;
   }
 
-  y = Math.max(y + 12, 178);
+  // The box grows with its text and sits just above the footer.
+  setText(doc, 7.2, SOFT);
+  const howTo = doc.splitTextToSize(
+    `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of the Switchyard quiz (questions answered) and the Switchyard game (levels shipped). Repair Shop (${repairClassList} only) = levels cleared out of ${FINAL_REPAIR}, shown on its own and not counted in the percentages. Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their Final Bosses code, their Switchyard programs and the Repair Shop final round they hand-wrote.`,
+    CONTENT_W - 8,
+  );
+  const boxH = 9.5 + howTo.length * 3.1;
+  y = Math.max(y + 8, PAGE_H - 11 - boxH);
   doc.setFillColor(...WASH);
-  doc.roundedRect(MARGIN, y, CONTENT_W, 18, 2, 2, "F");
+  doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 2, 2, "F");
   setText(doc, 6.6, SOFT, "bold");
   doc.text("HOW TO READ THIS REPORT", MARGIN + 4, y + 5.5, { charSpace: 0.3 });
   setText(doc, 7.2, SOFT);
-  doc.text(
-    doc.splitTextToSize(
-      `Mathler = average of its 3 steps (Translate with Rush, Warm up, Mathler game). Final Bosses = bosses passed out of ${BOSS_TOTAL}. Final Project = average of the Switchyard quiz (questions answered) and the Switchyard game (levels shipped). Overall = the three modules together. Green means complete, amber means in progress. Each class page lists every student; a page per student who has started follows, with their submitted code.`,
-      CONTENT_W - 8,
-    ),
-    MARGIN + 4,
-    y + 10,
-  );
+  doc.text(howTo, MARGIN + 4, y + 10);
 }
 
 /* Class page */
@@ -274,6 +305,7 @@ function stepText(item: StudentProgress) {
     game: mathler.game && mathler.parts[2] > 0 ? `TA ${mathler.game.time_attack_best} · SV ${mathler.game.best_streak}` : "-",
     quiz: record ? `${record.quizAnswered}/${FINAL_QUESTIONS} · ${record.quizRight} right` : "-",
     yard: record ? `${record.levels.length}/${FINAL_LEVELS} · ${record.stars} stars` : "-",
+    repair: record && inRepair(item) ? `${record.repairLevels.length}/${FINAL_REPAIR}` : "-",
   };
 }
 
@@ -300,17 +332,17 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
   );
   const shares = students.map((item) => [
     item.mathler.parts[0], item.mathler.parts[1], item.mathler.parts[2], item.mathler.share,
-    item.bosses.share, item.final.parts[0], item.final.parts[1], item.final.share, item.overall,
+    item.bosses.share, item.final.parts[0], item.final.parts[1], inRepair(item) ? repairShare(item) : 0, item.final.share, item.overall,
   ]);
   // Column index -> position in the shares row above.
-  const shareColumn: Record<number, number> = { 2: 0, 3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8 };
-  const barColumn: Record<number, RGB> = { 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 9: MODULE_RGB.final, 10: INK };
-  const moduleHead: Record<number, RGB> = { 2: MODULE_RGB.mathler, 3: MODULE_RGB.mathler, 4: MODULE_RGB.mathler, 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 7: MODULE_RGB.final, 8: MODULE_RGB.final, 9: MODULE_RGB.final };
+  const shareColumn: Record<number, number> = { 2: 0, 3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8, 11: 9 };
+  const barColumn: Record<number, RGB> = { 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 10: MODULE_RGB.final, 11: INK };
+  const moduleHead: Record<number, RGB> = { 2: MODULE_RGB.mathler, 3: MODULE_RGB.mathler, 4: MODULE_RGB.mathler, 5: MODULE_RGB.mathler, 6: MODULE_RGB.bosses, 7: MODULE_RGB.final, 8: MODULE_RGB.final, 9: REPAIR, 10: MODULE_RGB.final };
 
   autoTable(doc, {
     startY: 38,
     margin: { left: MARGIN, right: MARGIN, top: 18, bottom: 12 },
-    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Quiz", "Switchyard", "Final project", "Overall", "Last active"]],
+    head: [["Student", "Group", "Translate", "Warm up", "Game", "Mathler", "Bosses", "Quiz", "Switchyard", "Repair", "Final project", "Overall", "Last active"]],
     body: students.map((item) => {
       const text = stepText(item);
       return [
@@ -323,6 +355,7 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
         `${item.bosses.passed.length}/${BOSS_TOTAL}`,
         text.quiz,
         text.yard,
+        text.repair,
         pct(item.final.share),
         pct(item.overall),
         item.lastActive ? formatWhen(item.lastActive) : "never",
@@ -332,18 +365,19 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
     styles: { font: "helvetica", fontSize: 7, textColor: INK, cellPadding: { top: 1.25, bottom: 1.25, left: 1.6, right: 1.6 }, valign: "middle", overflow: "ellipsize", lineColor: LINE, lineWidth: { bottom: 0.15 } },
     headStyles: { fontSize: 6.2, fontStyle: "bold", textColor: SOFT, fillColor: WASH, overflow: "linebreak" },
     columnStyles: {
-      0: { cellWidth: 48, fontStyle: "bold" },
+      0: { cellWidth: 43, fontStyle: "bold" },
       1: { cellWidth: 15 },
       2: { cellWidth: 23 },
       3: { cellWidth: 13, halign: "center" },
       4: { cellWidth: 20 },
-      5: { cellWidth: 22, halign: "right" },
-      6: { cellWidth: 22, halign: "right" },
-      7: { cellWidth: 32, halign: "center" },
+      5: { cellWidth: 20, halign: "right" },
+      6: { cellWidth: 20, halign: "right" },
+      7: { cellWidth: 28, halign: "center" },
       8: { cellWidth: 23, halign: "center" },
-      9: { cellWidth: 22, halign: "right" },
-      10: { cellWidth: 19, halign: "right", fontStyle: "bold" },
-      11: { cellWidth: 18, textColor: SOFT },
+      9: { cellWidth: 13, halign: "center" },
+      10: { cellWidth: 22, halign: "right" },
+      11: { cellWidth: 19, halign: "right", fontStyle: "bold" },
+      12: { cellWidth: 18, textColor: SOFT },
     },
     didParseCell: (data: CellHookData) => {
       if (data.section === "head" && moduleHead[data.column.index]) data.cell.styles.textColor = moduleHead[data.column.index];
@@ -352,6 +386,7 @@ function classPage(doc: jsPDF, summary: ClassSummary) {
       if (!item.started) data.cell.styles.textColor = FAINT;
       const position = shareColumn[data.column.index];
       if (position === undefined || barColumn[data.column.index]) return;
+      if (data.column.index === 9 && !inRepair(item)) return;
       const tint = tintFor(shares[data.row.index][position]);
       if (tint) data.cell.styles.fillColor = tint;
     },
@@ -455,6 +490,7 @@ function studentPage(doc: jsPDF, item: StudentProgress) {
     ? [
         { label: "01 · QUIZ", value: `${record.quizRight} right · ${record.quizAnswered}/${FINAL_QUESTIONS} answered`, share: final.parts[0] },
         { label: "02 · SWITCHYARD", value: `${record.levels.length}/${FINAL_LEVELS} levels · ${record.stars} stars`, share: final.parts[1] },
+        ...(inRepair(item) ? [{ label: "03 · REPAIR SHOP", value: `${record.repairLevels.length}/${FINAL_REPAIR} levels · ${record.repairFixed} ${record.repairFixed === 1 ? "repair" : "repairs"}`, share: repairShare(item) }] : []),
       ]
     : [{ label: "STATUS", value: "not opened yet", share: 0 }]);
 
@@ -489,46 +525,67 @@ function studentPage(doc: jsPDF, item: StudentProgress) {
     y += h + 6;
   }
 
-  codeSection(doc, item, y);
+  y = bossCode(doc, item, y);
+  if (record) y = switchyardCode(doc, item, y + 8);
+  if (record && inRepair(item)) repairCode(doc, item, y + 8);
 }
 
-function codeSection(doc: jsPDF, item: StudentProgress, startY: number) {
-  const { bosses, student } = item;
-  const submitted = finalBosses.filter((boss) => bosses.codes[String(boss.id)]?.trim());
+/** One card in a grid of code: a header strip with a title and a status, then the program. */
+type CodeCard = { title: string; status: string; tone: "done" | "progress" | "draft"; code: string };
+
+const toneInk = { done: DONE, progress: PROGRESS, draft: FAINT } as const;
+const toneWash = { done: DONE_SOFT, progress: PROGRESS_SOFT, draft: WASH } as const;
+
+function printable(code: string) {
+  const lines = latin(code.replace(/\r\n?/g, "\n").trimEnd()).split("\n");
+  return lines.length > MAX_CODE_LINES
+    ? [...lines.slice(0, MAX_CODE_LINES), `// ... ${lines.length - MAX_CODE_LINES} more lines`].join("\n")
+    : lines.join("\n");
+}
+
+/** Text cut with "..." so it fits a width at the current font. */
+function fit(doc: jsPDF, text: string, width: number) {
+  if (doc.getTextWidth(text) <= width) return text;
+  let cut = text;
+  while (cut.length > 1 && doc.getTextWidth(`${cut}...`) > width) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}...`;
+}
+
+/**
+ * A titled section of code cards, `columns` to a row, that continues onto new pages.
+ * empty: the line shown when there are no cards. Returns where the next section can start.
+ */
+function codeGrid(doc: jsPDF, item: StudentProgress, startY: number, title: string, color: RGB, cards: CodeCard[], columns: number, empty: string) {
+  const { student } = item;
   let y = startY;
   if (y > PAGE_H - 30) {
     doc.addPage();
     continuationBand(doc, student.name);
     y = 20;
   }
-  sectionTitle(doc, `FINAL BOSSES · SUBMITTED CODE (${submitted.length})`, y, MODULE_RGB.bosses);
-  if (!submitted.length) {
+  sectionTitle(doc, title, y, color);
+  if (!cards.length) {
     setText(doc, 8, FAINT);
-    doc.text("No Final Bosses code submitted yet.", MARGIN, y + 6);
-    return;
+    const lines = doc.splitTextToSize(latin(empty), CONTENT_W);
+    doc.text(lines, MARGIN, y + 6);
+    return y + 6 + lines.length * 3.6;
   }
 
-  const columns = 3;
-  const rows: (typeof submitted)[] = [];
-  for (let index = 0; index < submitted.length; index += columns) rows.push(submitted.slice(index, index + columns));
-  const codeOf = (bossId: number) => {
-    const lines = latin(bosses.codes[String(bossId)].replace(/\r\n?/g, "\n").trimEnd()).split("\n");
-    return lines.length > MAX_CODE_LINES
-      ? [...lines.slice(0, MAX_CODE_LINES), `// ... ${lines.length - MAX_CODE_LINES} more lines`].join("\n")
-      : lines.join("\n");
-  };
-
+  const rows: CodeCard[][] = [];
+  for (let index = 0; index < cards.length; index += columns) rows.push(cards.slice(index, index + columns));
   // A long row continues on the next page as a new row with the same raw cells.
-  const body = rows.map((row) => Array.from({ length: columns }, (_, index) => (row[index] ? codeOf(row[index].id) : "")));
-  const bossesOf = new Map<unknown, (typeof submitted)>(body.map((cells, index) => [cells, rows[index]]));
-  const bossAt = (data: CellHookData) => bossesOf.get(data.row.raw)?.[data.column.index];
+  const body = rows.map((row) => Array.from({ length: columns }, (_, index) => (row[index] ? printable(row[index].code) : "")));
+  const cardsOf = new Map<unknown, CodeCard[]>(body.map((cells, index) => [cells, rows[index]]));
+  const cardAt = (data: CellHookData) => cardsOf.get(data.row.raw)?.[data.column.index];
+  const columnStyles = Object.fromEntries(Array.from({ length: columns }, (_, index) => [index, { cellWidth: CONTENT_W / columns }]));
 
   autoTable(doc, {
     startY: y + 3,
     margin: { left: MARGIN, right: MARGIN, top: 18, bottom: 12 },
     body,
     theme: "plain",
-    rowPageBreak: "auto",
+    // A card moves to the next page whole, unless it is taller than a page.
+    rowPageBreak: "avoid",
     styles: {
       font: "courier",
       fontSize: 6.8,
@@ -540,28 +597,84 @@ function codeSection(doc: jsPDF, item: StudentProgress, startY: number) {
       fillColor: [248, 249, 252],
       valign: "top",
     },
-    columnStyles: { 0: { cellWidth: CONTENT_W / 3 }, 1: { cellWidth: CONTENT_W / 3 }, 2: { cellWidth: CONTENT_W / 3 } },
+    columnStyles,
     didParseCell: (data: CellHookData) => {
-      if (!bossAt(data)) data.cell.styles.fillColor = [255, 255, 255];
+      if (!cardAt(data)) data.cell.styles.fillColor = [255, 255, 255];
     },
     didDrawCell: (data: CellHookData) => {
-      const boss = bossAt(data);
-      if (!boss) return;
-      const passed = bosses.passed.includes(boss.id);
-      const tries = bosses.attempts[String(boss.id)] ?? 0;
+      const card = cardAt(data);
+      if (!card) return;
       const x = data.cell.x + 0.6;
       const w = data.cell.width - 1.2;
-      doc.setFillColor(...(passed ? DONE_SOFT : tries > 0 ? PROGRESS_SOFT : WASH));
+      doc.setFillColor(...toneWash[card.tone]);
       doc.rect(x, data.cell.y + 0.6, w, 7.4, "F");
+      setText(doc, 6.4, toneInk[card.tone], "bold");
+      const status = latin(card.status);
+      const statusW = doc.getTextWidth(status);
+      doc.text(status, x + w - 2.4, data.cell.y + 5.2, { align: "right" });
       setText(doc, 7.2, INK, "bold");
-      doc.text(latin(`Boss ${String(boss.id).padStart(2, "0")} · ${boss.title}`), x + 2.4, data.cell.y + 5.2);
-      setText(doc, 6.4, passed ? DONE : tries > 0 ? PROGRESS : FAINT, "bold");
-      doc.text(`${passed ? "PASSED" : tries > 0 ? "NOT PASSED YET" : "DRAFT"} · ${tries} attempt${tries === 1 ? "" : "s"}`, x + w - 2.4, data.cell.y + 5.2, { align: "right" });
+      doc.text(fit(doc, latin(card.title), w - statusW - 7), x + 2.4, data.cell.y + 5.2);
     },
     didDrawPage: (data: HookData) => {
       if (data.pageNumber > 1) continuationBand(doc, student.name);
     },
   });
+  return lastY(doc);
+}
+
+function bossCode(doc: jsPDF, item: StudentProgress, startY: number) {
+  const { bosses } = item;
+  const cards: CodeCard[] = finalBosses
+    .filter((boss) => bosses.codes[String(boss.id)]?.trim())
+    .map((boss) => {
+      const passed = bosses.passed.includes(boss.id);
+      const tries = bosses.attempts[String(boss.id)] ?? 0;
+      return {
+        title: `Boss ${String(boss.id).padStart(2, "0")} · ${boss.title}`,
+        status: `${passed ? "PASSED" : tries > 0 ? "NOT PASSED YET" : "DRAFT"} · ${tries} attempt${tries === 1 ? "" : "s"}`,
+        tone: passed ? "done" : tries > 0 ? "progress" : "draft",
+        code: bosses.codes[String(boss.id)],
+      };
+    });
+  return codeGrid(doc, item, startY, `FINAL BOSSES · SUBMITTED CODE (${cards.length})`, MODULE_RGB.bosses, cards, 3, "No Final Bosses code submitted yet.");
+}
+
+/** "Level 3", "Mystery 1", "Blaster 2": a Switchyard level as the student sees it, from its number (from 1). */
+function yardName(n: number) {
+  const index = n - 1;
+  return index < levelCount ? `Level ${n}` : index < mysteryEnd ? `Mystery ${index - levelCount + 1}` : `Blaster ${index - mysteryEnd + 1}`;
+}
+
+function switchyardCode(doc: jsPDF, item: StudentProgress, startY: number) {
+  const record = item.final.record!;
+  const codes = record.yardCodes ?? {};
+  const cards: CodeCard[] = Object.keys(codes)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((n) => ({
+      title: `${yardName(n)} · ${yardLevels[n - 1]?.title ?? ""}`,
+      status: "SHIPPED",
+      tone: "done",
+      code: codes[String(n)],
+    }));
+  const empty = record.levels.length
+    ? "The programs of the levels shipped reach this report the next time the student opens the Final Project."
+    : "No Switchyard level shipped yet.";
+  return codeGrid(doc, item, startY, `FINAL PROJECT · SWITCHYARD CODE (${cards.length})`, MODULE_RGB.final, cards, 4, empty);
+}
+
+function repairCode(doc: jsPDF, item: StudentProgress, startY: number) {
+  const record = item.final.record!;
+  const robot = FINAL_REPAIR;
+  const code = record.repairCode?.trim();
+  // The Robot's chip is wiped: only `int battery = ?;` is printed; the student writes everything after it.
+  const cards: CodeCard[] = code
+    ? [{ title: `Level ${robot} · Robot · hand-written if / else`, status: "ALL TESTS PASS", tone: "done", code: `int battery = ?;\n\n${code}` }]
+    : [];
+  const empty = record.repairLevels.includes(robot)
+    ? `The Robot (level ${robot}) was fixed before the report kept its code. It shows here once the student plays level ${robot} again.`
+    : `Not reached yet: the final round is level ${robot}, the Robot. ${record.repairLevels.length ? `Levels cleared: ${repairNames(record.repairLevels)}.` : "No level cleared yet."}`;
+  return codeGrid(doc, item, startY, "FINAL PROJECT · REPAIR SHOP FINAL ROUND", REPAIR, cards, 2, empty);
 }
 
 /* Assembly */

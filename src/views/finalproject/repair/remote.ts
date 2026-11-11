@@ -7,16 +7,17 @@ import { allMachines, loadShop, saveShop, type Shop } from "./logic";
  * A student who changes tablet gets those levels back, so the copy (and the dashboard) never goes down.
  */
 
-/** Levels cleared elsewhere come back. It only ever adds: levels, repairs and the tutorial being done. */
-export function mergeRepair(shop: Shop, levels: number[], fixed: number): Shop {
+/** Levels cleared elsewhere come back. It only ever adds: levels, repairs, the tutorial being done and the final round's code if this device has none. */
+export function mergeRepair(shop: Shop, levels: number[], fixed: number, code = ""): Shop {
   const made = { ...shop.made };
-  let changed = fixed > shop.fixed;
+  const finalCode = shop.finalCode || code;
+  let changed = fixed > shop.fixed || finalCode !== shop.finalCode;
   for (const n of levels) {
     const m = allMachines[n - 1];
     if (m && !(made[m] ?? 0)) { made[m] = 1; changed = true; }
   }
   if (!changed) return shop;
-  return { ...shop, made, fixed: Math.max(shop.fixed, fixed), tutorial: shop.tutorial || levels.length > 0 };
+  return { ...shop, made, fixed: Math.max(shop.fixed, fixed), tutorial: shop.tutorial || levels.length > 0, finalCode };
 }
 
 const restoring = new Map<string, Promise<Shop | null>>();
@@ -27,7 +28,7 @@ export function restoreRepair(login: string): Promise<Shop | null> {
     done = loadRemote(login).then((row) => {
       const remote = parseFinalProjectSync(row?.codes?.finalProject);
       if (!remote) return null;
-      const shop = loadShop(login), merged = mergeRepair(shop, remote.repairLevels, remote.repairFixed);
+      const shop = loadShop(login), merged = mergeRepair(shop, remote.repairLevels, remote.repairFixed, remote.repairCode);
       if (merged === shop) return null;
       saveShop(login, merged);
       return merged;

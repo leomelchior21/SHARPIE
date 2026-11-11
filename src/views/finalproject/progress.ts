@@ -2,8 +2,9 @@ import { freshShop, loadShop, repairSummary } from "./repair/logic";
 import { questions } from "./content";
 import { adoptLegacyBackroom } from "./backroomStore";
 import { blasterCount, levelCount, levels, mysteryCount, mysteryEnd } from "./switchyard/levels";
+import { buildYard, yardCode } from "./switchyard/yard";
 const allLevels = levels.length;
-import type { FinalProjectSyncState } from "../../lib/finalProjectSync";
+import { MAX_CODE, type FinalProjectSyncState } from "../../lib/finalProjectSync";
 import type { ClassCode } from "../../data/roster";
 // lab is the Switchyard hub; yard is the Switchyard game inside it.
 // repair is the Repair Shop: stage 03, saved on the device (repair/logic.ts), only for repairClasses.
@@ -104,7 +105,26 @@ export function saveProgress(student:string,p:Progress):boolean {
   try {localStorage.setItem(storageKey(student),JSON.stringify(p));return true;} catch{return false;}
 }
 export const xp = (p:Progress) => Object.values(p.awards).reduce((a,b)=>a+b,0);
-// What the teacher dashboard sees: quiz answers, Switchyard levels and stars, the Repair Shop levels, and the audit fields.
+/**
+ * A Switchyard level's program as C#, for the teacher's report: line 1 declares the variable
+ * (its value changes with every train, so it shows ?), then the if / else the student made. "" if there is none.
+ */
+export function levelProgram(index:number,p:Progress):string {
+  const level=levels[index];
+  if(!level)return "";
+  const draft=p.yardDrafts[level.id];
+  const decl=`${typeof level.spotlight==="boolean"?"bool":"int"} ${level.variable} = ?;`;
+  if(level.tool==="write")return draft?.[0]?.trim()?`${decl}\n\n${draft[0].replace(/\r/g,"").trim()}`:"";
+  const lines=level.preset.map((line,slot)=>level.given.includes(slot)?line:draft?.[slot]??line);
+  const yard=buildYard(lines);
+  if(!yard.condition)return "";
+  return [decl,...yardCode(level.variable,0,yard).split("\n").slice(1)].join("\n");
+}
+/** Every shipped level's program, by level number from 1. */
+export const shippedPrograms = (p:Progress):Record<string,string> => Object.fromEntries(
+  p.yardShipped.map(i=>[String(i+1),levelProgram(i,p).slice(0,MAX_CODE)] as const).filter(([,code])=>code),
+);
+// What the teacher dashboard sees: quiz answers, Switchyard levels, stars and programs, the Repair Shop levels and final round, and the audit fields.
 // login: whose Repair Shop save to read (it lives on the device, apart from this save).
 export const syncSummary = (p:Progress, login?:string): FinalProjectSyncState => ({
   xp:xp(p),
@@ -115,6 +135,7 @@ export const syncSummary = (p:Progress, login?:string): FinalProjectSyncState =>
   levels:p.yardShipped.filter(i=>i<levelCount).map(i=>i+1), stars:p.yardStars.slice(0,levelCount).reduce((a,b)=>a+b,0),
   mystery:p.yardShipped.filter(i=>i>=levelCount&&i<mysteryEnd).length,
   blaster:p.yardShipped.filter(i=>i>=mysteryEnd).length,
+  yardCodes:shippedPrograms(p),
   policies:p.repaired.length, ...repairSummary(login?loadShop(login):freshShop()), reportDone:!!p.completedAt, reflection:p.reflection, updatedAt:new Date().toISOString(),
 });
 /** Every quiz question answered, right or wrong: the Switchyard game opens. */

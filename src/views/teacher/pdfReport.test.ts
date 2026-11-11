@@ -25,10 +25,25 @@ const students = buildClassProgress(
       updatedAt: "2026-10-26T11:00:00Z",
       finalProject: {
         xp: 640, quizAnswered: 20, quizRight: 17, quizMissed: [4], levels: [1, 2], stars: 5, mystery: 0, blaster: 0, policies: 4, repairLevels: [1, 2, 3, 4, 5, 6, 7], repairFixed: 9, reportDone: true,
+        yardCodes: {
+          "1": 'int age = ?;\n\nif (age <= 12)\n{\n    Console.WriteLine("Discount");\n}\nelse\n{\n    Console.WriteLine("Regular");\n}',
+          "2": 'int temperature = ?;\n\nif (temperature > 30)\n{\n    Console.WriteLine("Fan on");\n}\nelse\n{\n    Console.WriteLine("Fan off");\n}',
+          "11": 'int x = ?;\n\nif (x >= 5) { Console.WriteLine("A"); } else { Console.WriteLine("B"); }',
+          "14": 'int meow = ?;\n\nif (meow == 9)\n{\n    Console.WriteLine("MEOW");\n}',
+          "15": 'int y = ?;\n\nif (y < 3)\n{\n    Console.WriteLine("Left");\n}\nelse\n{\n    Console.WriteLine("Right");\n}',
+        },
+        repairCode: 'if (battery >= 20)\n{\n    Console.WriteLine("Ready to work!");\n}\nelse\n{\n    Console.WriteLine("Battery low");\n}',
         reflection: "Regras “justas” — nem sempre são.", updatedAt: "2026-10-26T11:00:00Z",
       },
     }),
     row("linus", "Linus Torvalds", "9C"),
+    row("mary", "Mary Jackson", "9C", {
+      updatedAt: "2026-11-09T09:00:00Z",
+      finalProject: {
+        xp: 90, quizAnswered: 20, quizRight: 15, quizMissed: [], levels: [1], stars: 3, mystery: 0, blaster: 0, policies: 0, repairLevels: [1, 2], repairFixed: 2, reportDone: false,
+        reflection: "", updatedAt: "2026-11-09T09:00:00Z",
+      },
+    }),
   ],
   [],
   [],
@@ -50,6 +65,27 @@ describe("class PDF report", () => {
     expect(text).not.toContain("(Joao Pedro Dedivitis)");
     expect(text).not.toContain("(Linus Torvalds)");
     expect(text).not.toContain("(Class 9D)");
+    expect(text).toContain("(Mary Jackson)");
+  });
+
+  it("prints the Switchyard and Repair Shop code on the student pages", () => {
+    const doc = buildClassReport(students, new Date("2026-10-26T14:30:00"));
+    // Each code card starts its program on its own line of text.
+    const pages = Array.from({ length: doc.getNumberOfPages() }, (_, index) => {
+      doc.setPage(index + 1);
+      return (doc.internal as unknown as { pages: string[][] }).pages[index + 1].join("\n");
+    }).join("\n");
+    expect(pages).toContain("SWITCHYARD CODE \\(5\\)");
+    expect(pages).toContain("Mystery 1");
+    expect(pages).toContain("Blaster 1");
+    expect(pages).toContain("REPAIR SHOP FINAL ROUND");
+    expect(pages).toContain("(int battery = ?;)");
+    expect(pages).toContain("Ready to work!");
+    // A student who has not reached the Robot gets a line, not a card.
+    expect(pages).toContain("Not reached yet: the final round is level 7, the Robot.");
+    // Repair Shop columns on the overview and the class pages.
+    expect(pages).toContain("Repair Shop");
+    expect(pages).toContain("REPAIR SHOP · 7/7");
   });
 
   it("keeps text inside the PDF fonts' Latin-1 range", () => {

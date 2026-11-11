@@ -7,6 +7,8 @@ import { canSyncProgress, saveProgress } from "./progressStore";
 // Switchyard, so `flows` and `built` from older summaries are ignored.
 // The Repair Shop keeps its full save on the device too; only the levels cleared and
 // the number of repairs travel, so the teacher can see how far each student got.
+// The code travels too, for the PDF report: each shipped Switchyard level's program and
+// the Robot's hand-written final round.
 export type FinalProjectSyncState = {
   xp: number;
   quizAnswered: number;
@@ -23,6 +25,10 @@ export type FinalProjectSyncState = {
   /** Repair Shop levels cleared, numbered from 1 (1 Arcade … 7 Robot), and repairs paid in all. */
   repairLevels: number[];
   repairFixed: number;
+  /** The program of every Switchyard level shipped, by level number from 1 (11 to 13 Mystery, 14 to 16 Blaster), ready to print. */
+  yardCodes?: Record<string, string>;
+  /** The Repair Shop final round: the if / else the student hand-wrote for the Robot, after `int battery = ?;`. */
+  repairCode?: string;
   reportDone: boolean;
   reflection: string;
   updatedAt: string | null;
@@ -49,6 +55,19 @@ function numbers(value: unknown, max: number): number[] {
   return Array.isArray(value) ? [...new Set(value.map((item) => count(item, max)).filter((item) => item > 0))].sort((a, b) => a - b) : [];
 }
 
+/** The longest program kept for one level: a typed Switchyard level or the Robot's final round. */
+export const MAX_CODE = 2000;
+const MAX_YARD_LEVELS = 30;
+function codes(value: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  for (const [key, code] of Object.entries(value as Record<string, unknown>)) {
+    const n = Number(key);
+    if (Number.isInteger(n) && n >= 1 && n <= MAX_YARD_LEVELS && typeof code === "string" && code.trim()) out[String(n)] = code.slice(0, MAX_CODE);
+  }
+  return out;
+}
+
 export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -64,6 +83,8 @@ export function parseFinalProjectSync(value: unknown): FinalProjectSyncState | n
     policies: count(raw.policies, FINAL_POLICIES),
     repairLevels: numbers(raw.repairLevels, FINAL_REPAIR),
     repairFixed: count(raw.repairFixed, 99_999),
+    yardCodes: codes(raw.yardCodes),
+    repairCode: typeof raw.repairCode === "string" ? raw.repairCode.slice(0, MAX_CODE) : "",
     reportDone: raw.reportDone === true,
     reflection: typeof raw.reflection === "string" ? raw.reflection.slice(0, 600) : "",
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,

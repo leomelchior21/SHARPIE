@@ -65,7 +65,7 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
   useEffect(() => {
     if (teacher || preview) return;
     let live = true;
-    void restoreRepair(studentKey).then((back) => { if (live && back) setShopState((now) => mergeRepair(now, repairSummary(back).repairLevels, back.fixed)); });
+    void restoreRepair(studentKey).then((back) => { if (live && back) setShopState((now) => mergeRepair(now, repairSummary(back).repairLevels, back.fixed, back.finalCode)); });
     return () => { live = false; };
   }, [teacher, preview, studentKey]);
   const ticketFor = (machine?: MachineId, from = shop): Ticket => {
@@ -311,7 +311,9 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
     if (w) w.insertCoins(w.token() === "tap" ? 1 : job.machine === "arcade" ? value : job.price, finish); else finish();
   };
   const takeJob = () => { setSay(""); scene.current?.setMood("idle"); setPhase("find"); };
-  const chipFixed = () => { setOpen(null); sfx.flash(); flash("Chip reprogrammed!"); setPhase("close"); };
+  // The final round's program, kept once its tests pass; it is saved with the paid ticket.
+  const writtenCode = useRef("");
+  const chipFixed = (code?: string) => { writtenCode.current = code ?? ""; setOpen(null); sfx.flash(); flash("Chip reprogrammed!"); setPhase("close"); };
 
   /** The pay flies from the card to the coin counter, and the counter counts up. */
   const payAnimation = (from: number, to: number) => {
@@ -341,7 +343,7 @@ export function RepairShop({ name, studentKey, progress: _progress, teacher, pre
       window.setTimeout(() => {
         sfx.cash();
         coinsBefore.current = shop.coins;
-        const next = afterTicket(shop, money.total, job.machine);
+        const next = afterTicket(shop, money.total, job.machine, job.chip.mode === "write" ? writtenCode.current : undefined);
         setUnlockNote(unlockedBy(shop, job.machine));
         setBossDone(job.machine === "robot" && !cleared(shop, "robot"));
         setShop(next);
@@ -778,7 +780,7 @@ function TypedLine({ value, onChange, onEnter, label, placeholder, autoFocus, li
  * pick the sign (after predicting), build the condition from pieces, type it, type it and write the else line,
  * and in the final round write the whole if / else after line 1.
  */
-function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip: () => void; onHelp: () => void; onClose: () => void; onDone: () => void }) {
+function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip: () => void; onHelp: () => void; onClose: () => void; onDone: (code?: string) => void }) {
   const chip = job.chip, v = chip.variable, n = chip.right.n;
   const [step, setStep] = useState<"predict" | "fix" | "flash">(chip.predict ? "predict" : "fix");
   const [mode, setMode] = useState<"pick" | "tokens" | "typed">(chip.mode === "pick" ? "pick" : chip.mode === "tokens" ? "tokens" : "typed");
@@ -840,7 +842,8 @@ function ChipBench({ job, onSlip, onHelp, onClose, onDone }: { job: Job; onSlip:
   useEffect(() => {
     if (step !== "flash") return;
     const id = window.setInterval(() => setProgress((p) => { if (p >= 1) { window.clearInterval(id); return 1; } return p + 0.05; }), 40);
-    const done = window.setTimeout(() => doneRef.current(), 1500);
+    // The final round hands its program back, so the teacher's report can show it.
+    const done = window.setTimeout(() => doneRef.current(write ? written : undefined), 1500);
     return () => { window.clearInterval(id); window.clearTimeout(done); };
   }, [step]);
 
