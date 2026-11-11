@@ -9,7 +9,7 @@ import { answerCode, jokeText, makeJob, shopKey } from "./logic";
 vi.mock("./workshop", () => ({ webglAvailable: () => false, Workshop: class {}, headColors: { cross: "#e5484d", flat: "#ffd23f", star: "#3d8bff" } }));
 vi.mock("../../../lib/progressStore", () => ({ loadProgress: vi.fn(async () => null), saveProgress: vi.fn(async () => undefined), canSyncProgress: () => false }));
 
-// Real logins from the roster: the Repair Shop is for 9B, 9C and 9D only, for now.
+// Real logins from the roster: the Repair Shop is for all four classes, 9A to 9D.
 const nineA = "anazancaner", nineB = "anawerneck", nineC = "alinesako", nineD = "carolinaramos";
 // Every ticket's seed comes from Math.random: a fixed value makes the machine known in advance.
 const SEED = 500000000;
@@ -67,15 +67,23 @@ describe("Repair Shop: which classes get it", () => {
     expect(findStudent(nineD)?.classCode).toBe("9D");
   });
 
-  it("a 9A student doesn't see the Repair Shop at all, and an old save inside it falls back to the stage list", () => {
+  it("a 9A student sees stage 03 too, and a save inside it opens straight back into the shop", () => {
     localStorage.setItem(storageKey(nineA), JSON.stringify({ version: 1, activity: "repair" }));
     mount(nineA);
+    expect(document.querySelector(".fp-header-title b")).toHaveTextContent("REPAIR SHOP");
+  });
+
+  it("a login outside the roster with an old save inside the shop falls back to the stage list", () => {
+    localStorage.setItem(storageKey("someone-new"), JSON.stringify({ version: 1, activity: "repair" }));
+    mount("someone-new");
     expect(document.querySelector(".fp-header-title b")).toHaveTextContent("FINAL PROJECT");
-    expect(screen.queryByRole("button", { name: /Repair Shop/ })).toBeNull();
     expect(cards()).toEqual(["01 Backrooms Run", "02 Switchyard"]);
   });
 
-  it("a 9B student sees stage 03 and opens it", () => {
+  it("9A and 9B students see stage 03 and open it", () => {
+    mount(nineA);
+    expect(cards()).toEqual(["01 Backrooms Run", "02 Switchyard", "03 Repair Shop"]);
+    cleanup();
     mount(nineB);
     expect(cards()).toEqual(["01 Backrooms Run", "02 Switchyard", "03 Repair Shop"]);
     click(/Repair Shop.*Open stage/);

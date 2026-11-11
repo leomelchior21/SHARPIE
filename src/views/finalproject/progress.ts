@@ -148,10 +148,10 @@ export const megaCat = (p:Progress) => p.yardShipped.filter(i=>i>=mysteryEnd).le
 export const stageTwoDone = (p:Progress) => quizDone(p) && mainShipped(p)===levelCount;
 export const stageThreeDone = (p:Progress) => [0,1,2,3].every(i=>p.repaired.includes(i));
 /*
- * The classes that get the Repair Shop. Its logic chip builds on the Switchyard, which 9A has not had yet:
- * add "9A" here when it has. Students outside these classes (and logins not in the roster) never see it.
+ * The classes that get the Repair Shop: all four since 2026-11-11 (9A joined last).
+ * Students outside these classes (and logins not in the roster) never see it.
  */
-export const repairClasses: ClassCode[] = ["9B","9C","9D"];
+export const repairClasses: ClassCode[] = ["9A","9B","9C","9D"];
 export const repairOpen = (classCode:ClassCode|undefined,allOpen:boolean) => allOpen||(!!classCode&&repairClasses.includes(classCode));
 // allOpen: the teacher, or the teacher preview. classCode: the student's class from the roster.
 export function canOpen(activity:Activity,p:Progress,allOpen:boolean,classCode?:ClassCode) {

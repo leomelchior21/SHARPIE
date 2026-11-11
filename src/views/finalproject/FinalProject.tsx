@@ -46,7 +46,7 @@ export function FinalProject({name,studentKey,isTeacher,onBack,classCode=findStu
   const repairChanged=useCallback(()=>{if(!isTeacher&&!preview)queueFinalProjectSync(studentKey,()=>syncSummary(loadProgress(studentKey).progress,studentKey));},[isTeacher,preview,studentKey]);
   // Teachers always have the quiz and every Switchyard level open, preview or not.
   const allOpen=preview||isTeacher;
-  // A save left inside a stage this student cannot open (e.g. the Repair Shop in 9A) falls back to the stage list.
+  // A save left inside a stage this student cannot open (e.g. the Repair Shop for a login outside the roster) falls back to the stage list.
   const activity=canOpen(active.activity,active,allOpen,classCode)?active.activity:"overview";
   const go=(next:Activity)=>{if(canOpen(next,active,allOpen,classCode))update(p=>({...p,activity:next}));};
   // The Repair Shop (only some classes) keeps its coins and tools on this device.

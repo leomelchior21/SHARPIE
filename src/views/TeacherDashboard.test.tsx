@@ -172,8 +172,9 @@ describe("Teacher dashboard", () => {
     expect(screen.queryByText(/SHADOW FEED|LIVE FLOW/)).not.toBeInTheDocument();
     expect(screen.getByText("Q4 · Q13 · Q16")).toBeInTheDocument();
     expect(screen.getByText("A rule can be followed and still be unfair.")).toBeInTheDocument();
-    // 9A has no Repair Shop: no row for it.
-    expect(screen.queryByText("03 · REPAIR SHOP")).not.toBeInTheDocument();
+    // 9A has the Repair Shop too: its row shows, empty.
+    expect(screen.getByText("03 · REPAIR SHOP")).toBeInTheDocument();
+    expect(screen.getByText("0 / 7 levels · 0 repairs")).toBeInTheDocument();
   });
 
   it("records the Repair Shop levels each student cleared", async () => {
